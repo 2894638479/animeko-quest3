@@ -45,11 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import me.him188.ani.app.navigation.LocalNavigator
+import me.him188.ani.app.ui.foundation.PanelManager
+import me.him188.ani.app.ui.foundation.VrPanelDialog
 import me.him188.ani.app.ui.lang.Lang
 import me.him188.ani.app.ui.lang.person_details_open_full_page
 import org.jetbrains.compose.resources.stringResource
@@ -108,45 +108,33 @@ private fun PeoplePreviewSideSheet(
     onDismissRequest: () -> Unit,
 ) {
     val navigator = LocalNavigator.current
-    Dialog(
+    VrPanelDialog(
         onDismissRequest = onDismissRequest,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        position = PanelManager.PanelPosition.RIGHT,
     ) {
-        Box(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.32f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismissRequest,
-                    ),
-            )
-            Surface(
-                Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(412.dp),
-                shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-            ) {
-                when (target) {
-                    is PeoplePreviewTarget.Person -> PersonPreviewContent(
-                        target.personId,
-                        onOpenFullPage = {
-                            onDismissRequest()
-                            navigator.navigatePersonDetails(target.personId)
-                        },
-                        onDismissRequest = onDismissRequest,
-                    )
+        Surface(
+            Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            when (target) {
+                is PeoplePreviewTarget.Person -> PersonPreviewContent(
+                    target.personId,
+                    onOpenFullPage = {
+                        onDismissRequest()
+                        navigator.navigatePersonDetails(target.personId)
+                    },
+                    onDismissRequest = onDismissRequest,
+                )
 
-                    is PeoplePreviewTarget.Character -> CharacterPreviewContent(
-                        target.characterId,
-                        onOpenFullPage = {
-                            onDismissRequest()
-                            navigator.navigateCharacterDetails(target.characterId)
-                        },
-                        onDismissRequest = onDismissRequest,
-                    )
-                }
+                is PeoplePreviewTarget.Character -> CharacterPreviewContent(
+                    target.characterId,
+                    onOpenFullPage = {
+                        onDismissRequest()
+                        navigator.navigateCharacterDetails(target.characterId)
+                    },
+                    onDismissRequest = onDismissRequest,
+                )
             }
         }
     }

@@ -36,8 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import me.him188.ani.app.ui.foundation.VrPanelDialog
 import me.him188.ani.app.data.models.preference.EpisodeListProgressTheme
 import me.him188.ani.app.ui.foundation.ProvideCompositionLocalsForPreview
 import me.him188.ani.app.ui.lang.*
@@ -54,9 +53,8 @@ fun EpisodeListDialog(
     onEpisodeClick: (episode: EpisodeListItem) -> Unit,
     onCollectionUpdate: (episode: EpisodeListItem) -> Unit,
     onSubjectDetailsClick: (() -> Unit)? = null,
-    properties: DialogProperties = DialogProperties(),
 ) {
-    Dialog(onDismissRequest, properties) {
+    VrPanelDialog(onDismissRequest = onDismissRequest) {
         Card {
             Box {
                 Column(Modifier.padding(16.dp)) {

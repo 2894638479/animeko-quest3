@@ -78,7 +78,7 @@ fun ModalSideSheet(
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
-    val panelManager = LocalPanelManager.current
+    val panelManager = LocalPanelManager.current ?: return
     var panelId by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(state.dismissed) {
         if (state.dismissed) {

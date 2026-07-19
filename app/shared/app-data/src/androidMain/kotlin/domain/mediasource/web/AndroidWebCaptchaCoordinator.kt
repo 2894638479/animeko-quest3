@@ -43,8 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -199,15 +197,9 @@ class AndroidWebCaptchaCoordinator(
             interactiveSolveState = null
         }
         BackHandler(onBack = dismiss)
-        Dialog(
-            onDismissRequest = dismiss,
-            properties = DialogProperties(
-                dismissOnBackPress = false,
-                dismissOnClickOutside = false,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-        ) {
+        // Use inline Box instead of Dialog() to avoid "Window type mismatch"
+        // crash on Meta Quest (window type 2037 vs LayoutParams type 2).
+        Box(Modifier.fillMaxSize()) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = Color.Black,

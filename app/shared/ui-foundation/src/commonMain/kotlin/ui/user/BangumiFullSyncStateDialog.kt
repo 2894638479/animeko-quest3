@@ -13,17 +13,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import me.him188.ani.app.data.models.bangumi.BangumiSyncState
 import me.him188.ani.app.ui.foundation.ProvideCompositionLocalsForPreview
+import me.him188.ani.app.ui.foundation.VrPanelDialog
 import me.him188.ani.app.ui.lang.Lang
 import me.him188.ani.app.ui.lang.foundation_bangumi_sync_continue_background
 import me.him188.ani.app.ui.lang.foundation_bangumi_sync_description
@@ -44,29 +48,34 @@ fun BangumiFullSyncStateDialog(
     state: BangumiSyncState?,
     onDismissRequest: () -> Unit,
 ) {
-    AlertDialog(
-        title = { Text(stringResource(Lang.foundation_bangumi_sync_title)) },
-        text = {
-            Column {
+    VrPanelDialog(onDismissRequest = onDismissRequest) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+        ) {
+            Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    stringResource(Lang.foundation_bangumi_sync_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(renderBangumiSyncState(state))
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 if (state?.finished == false) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 } else {
                     LinearProgressIndicator({ 1f }, modifier = Modifier.fillMaxWidth())
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(stringResource(Lang.foundation_bangumi_sync_description))
+                Spacer(modifier = Modifier.height(20.dp))
+                TextButton(onDismissRequest) {
+                    Text(stringResource(Lang.foundation_bangumi_sync_continue_background))
+                }
             }
-        },
-        onDismissRequest = onDismissRequest,
-        confirmButton = {
-            TextButton(onDismissRequest) {
-                Text(stringResource(Lang.foundation_bangumi_sync_continue_background))
-            }
-        },
-        properties = DialogProperties(dismissOnClickOutside = false),
-    )
+        }
+    }
 }
 
 @Composable

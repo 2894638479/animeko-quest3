@@ -59,7 +59,7 @@ fun PlayerDanmakuHost(
     }
 
 
-    val panelManager = LocalPanelManager.current
+    val panelManager = LocalPanelManager.current ?: return
     var panelId by remember { mutableStateOf<Int?>(null) }
     DisposableEffect(Unit) {
         panelId = panelManager.openPanel(PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, PanelManager.PanelPosition.MIDDLE, PanelManager.PanelHittable.FALSE)) {

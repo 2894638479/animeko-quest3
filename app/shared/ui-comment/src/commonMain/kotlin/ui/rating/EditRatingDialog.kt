@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarOutline
@@ -54,8 +56,8 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import me.him188.ani.app.ui.foundation.ProvideCompositionLocalsForPreview
+import me.him188.ani.app.ui.foundation.VrPanelDialog
 import me.him188.ani.app.ui.foundation.icons.EditSquare
 import me.him188.ani.app.ui.lang.Lang
 import me.him188.ani.app.ui.lang.rating_comment_hint
@@ -123,84 +125,99 @@ fun RatingEditorDialog(
     val cancelText = stringResource(Lang.settings_mediasource_cancel)
     var showConfirmCancelDialog by remember { mutableStateOf(false) }
     if (showConfirmCancelDialog) {
-        AlertDialog(
-            onDismissRequest = { showConfirmCancelDialog = false },
-            title = { Text(discardEditTitle) },
-            text = { Text(discardEditMessage) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showConfirmCancelDialog = false
-                        onDismissRequest()
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Text(discardText)
+        VrPanelDialog(onDismissRequest = { showConfirmCancelDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+            ) {
+                Column(Modifier.padding(24.dp)) {
+                    Text(discardEditTitle, style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(16.dp))
+                    Text(discardEditMessage)
+                    Spacer(Modifier.height(24.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showConfirmCancelDialog = false }) {
+                            Text(continueEditingText)
+                        }
+                        TextButton(
+                            onClick = {
+                                showConfirmCancelDialog = false
+                                onDismissRequest()
+                            },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) {
+                            Text(discardText)
+                        }
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showConfirmCancelDialog = false },
-                ) {
-                    Text(continueEditingText)
-                }
-            },
-        )
+            }
+        }
     }
     val focusManager = LocalFocusManager.current
 
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        icon = { Icon(Icons.Rounded.EditSquare, null) },
-        title = { Text(editRatingText) },
-        text = {
-            RatingEditor(
-                state.score, { state.score = it },
-                state.comment, { state.comment = it },
-                state.isPrivate, { state.isPrivate = it },
-                enabled = !isLoading,
-            )
-        },
-        confirmButton = {
-            if (isLoading) {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(24.dp))
-                }
-            } else {
-                TextButton(
-                    onClick = {
-                        onRate(RateRequest(state.score, state.comment, state.isPrivate))
+    VrPanelDialog(onDismissRequest = onDismissRequest) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+        ) {
+            Column(
+                Modifier
+                    .padding(24.dp)
+                    .then(modifier)
+                    .clickable(remember { MutableInteractionSource() }, indication = null) {
+                        focusManager.clearFocus()
                     },
-                ) {
-                    Text(confirmText)
+            ) {
+                Icon(
+                    Icons.Rounded.EditSquare,
+                    null,
+                    Modifier.padding(bottom = 16.dp).align(Alignment.CenterHorizontally),
+                )
+                Text(
+                    editRatingText,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 20.dp).align(Alignment.CenterHorizontally),
+                )
+                RatingEditor(
+                    state.score, { state.score = it },
+                    state.comment, { state.comment = it },
+                    state.isPrivate, { state.isPrivate = it },
+                    enabled = !isLoading,
+                )
+                Spacer(Modifier.height(24.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(
+                        {
+                            if (state.hasModifiedComment) {
+                                showConfirmCancelDialog = true
+                            } else {
+                                onDismissRequest()
+                            }
+                        },
+                    ) {
+                        Text(cancelText)
+                    }
+                    if (isLoading) {
+                        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(24.dp))
+                        }
+                    } else {
+                        TextButton(
+                            onClick = {
+                                onRate(RateRequest(state.score, state.comment, state.isPrivate))
+                            },
+                        ) {
+                            Text(confirmText)
+                        }
+                    }
                 }
             }
-        },
-        dismissButton = {
-            TextButton(
-                {
-                    if (state.hasModifiedComment) {
-                        showConfirmCancelDialog = true
-                    } else {
-                        onDismissRequest()
-                    }
-                },
-            ) {
-                Text(cancelText)
-            }
-        },
-        properties = DialogProperties(
-            // 当有修改之后必须点击 "取消" 才能关闭
-            dismissOnBackPress = !state.hasModified,
-            dismissOnClickOutside = !state.hasModified,
-        ),
-        modifier = modifier
-            .clickable(remember { MutableInteractionSource() }, indication = null) {
-                focusManager.clearFocus() // 点击编辑框外面关闭键盘
-            },
-    )
+        }
+    }
 }
 
 @Composable

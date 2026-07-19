@@ -41,4 +41,8 @@ interface PanelManager {
     }
 }
 
-val LocalPanelManager = staticCompositionLocalOf<PanelManager> { error("no panelManager") }
+/**
+ * The [PanelManager] for the current VR spatial panel host, or `null` if not
+ * running in a VR environment (regular Android / Desktop).
+ */
+val LocalPanelManager = staticCompositionLocalOf<PanelManager?> { null }
