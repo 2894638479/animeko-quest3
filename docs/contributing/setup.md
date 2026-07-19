@@ -5,7 +5,9 @@
 
 ## 主流程
 
-第一次参与开发时，只需要完成下面几步：
+Animeko 使用 Gradle 构建，就是通常的 Kotlin/Android 构建方式。如果你熟悉，可以直接 clone 导入项目就行。但是要注意必须使用 JetBrains Runtime JDK (附带 JCEF 的版本)，版本必须为 21，否则会无法构建桌面端。可以参考下文[教程](#无法构建桌面端-jdk-不兼容--找不到-cef-相关类)。
+
+若你不熟悉 Kotlin/Android 开发，可以参考以下步骤：
 
 1. [准备 IDE](#准备-ide)
 2. [配置 Android SDK](#配置-android-sdk)
@@ -23,27 +25,14 @@
 
 ## 准备 IDE
 
-强烈建议使用最新的正式版 Android Studio (AS) 或者 IntelliJ IDEA。
-
-必须安装如下 IDE 插件:
-
-- Jetpack Compose (AS 已内置)
-- Android Design Tools (AS 已内置)
-- Compose Multiplatform IDE Support
-
-建议也安装:
-
-- Compose colors preview (用于预览颜色)
-- Kotlin Multiplatform (如果你需要运行 iOS APP)
-- JSONPath (用于高亮 JSONPath 语法)
-- ANTLR v4 (如果你要修改 BBCode 解析模块)
+使用最新的正式版 Android Studio (AS) 或者 IntelliJ IDEA 即可。
 
 ## 配置 Android SDK
 
 1. 打开 SDK Manager
     - Android Studio 中为 Tools -> SDK Manager
     - IntelliJ 中 Tools -> Android -> SDK Manager
-2. 安装 SDK 版本 35
+2. 安装 SDK 版本 36 或以上
 
 ## Clone 仓库
 
@@ -66,46 +55,24 @@ git clone --recursive https://github.com/open-ani/animeko.git
 >   git config core.filemode false
 >   ```
 
-Clone 后第一次导入项目可能需要 1 小时。导入项目后别着急编译，先阅读 [优化编译速度](#优化编译速度)。
+Clone 后第一次导入项目可能需要 30 分钟下载依赖。
 
-## 按需配置
+## 问题排查
 
-下面这些内容只在你有特定需求时才需要。
+下面这些内容只在以上流程不工作时才需要。
 
-### JDK 自动配置与手动配置
+### 无法构建桌面端 (JDK 不兼容 / 找不到 CEF 相关类)
 
 由于 PC 端使用 [JCEF](https://github.com/jetbrains/jcef) (内置浏览器)，JDK 必须使用 JetBrains
-Runtime (JCEF)，版本必须为 21，下文简称 JBR。
+Runtime (附带 JCEF 的版本)，版本必须为 21，下文简称 JBR。
 
-> [!TIP]
-> 本仓库已配置 [gradle-daemon-jvm.properties](../../gradle/gradle-daemon-jvm.properties)。在执行
-> `./gradlew` 命令时，Gradle 会自动下载并使用正确的 JBR 21。
-
-> - 下载位置：默认存于 `$GRADLE_USER_HOME/jdks/`
-> - 配置生成：`./gradlew updateDaemonJvm --jvm-version=21 --jvm-vendor=jbr`
-> - 优势：自动下载的版本（来自 api.foojay.io）已确认包含 JCEF，可避免手动配置错误
->
-> 如果你只是正常导入和构建项目，到这里为止通常不需要再做任何事。
-
-如果你怀疑 JDK 不对，可以这样检查：
-
-```shell
-# 确认下载的 JDK 版本包含 JCEF。
-find ~/.gradle/jdks/jetbrains_s_r_o_-21-amd64-linux.2/ -name jcef.jmod
-# Output: ~/.gradle/jdks/jetbrains_s_r_o_-21-amd64-linux.2/jmods/jcef.jmod
-
-# 也可用 SDKMAN!。
-find ~/.sdkman/candidates/java/21.0.10-jbr/ -name jcef.jmod
-# Output: ~/.sdkman/candidates/java/21.0.10-jbr/jmods/jcef.jmod
-```
-
-如果自动下载在你的环境里不可用，也可以自行安装 JBR。在 Android Studio 或 IntelliJ IDEA 中，可打开设置
+可以自行安装 JBR。在 Android Studio 或 IntelliJ IDEA 中，可打开设置
 `Build, Execution, Deployment -> Build Tools -> Gradle`，将 Gradle JDK 改为 JBR (JCEF) 21。
 
 <img src="images/idea-settings-download-jdk.png" alt="download jbr" width="400"/>
 <img src="images/idea-settings-download-jdk-version.png" alt="choose version" width="200"/>
 
-### 准备 iOS 构建（仅 macOS）
+### 构建 iOS（仅 macOS）
 
 默认情况下，仓库不会启用 iOS 编译目标，也不会构建 framework。只有在你确实要运行或打包 iOS APP 时，才需要做这一节。
 
@@ -122,32 +89,17 @@ ani.build.framework=true
 2. 安装 Cocoapods。有多种安装方式，参考 Kotlin
    官方文档 [CocoaPods](https://kotlinlang.org/docs/native-cocoapods.html#set-up-an-environment-to-work-with-cocoapods)。
 
-### 优化编译速度
+### 切换安卓 ABI
 
-*编译整个项目是对你的电脑的一个考验 :P*
+默认配置是只构建 `arm64-v8a`，这是大多数真机开发最省时的配置。你可以用如下配置切换架构：
 
-在高性能个人机器上 (Apple M2 Max / AMD Ryzen 7 5800X / Intel i9-12900H + 64 GB 内存) 编译和测试整个项目仍然可能需要
-10 分钟以上。
+```properties
+# 默认值，不写也一样
+ani.android.abis=arm64-v8a
 
-#### 切换安卓 ABI
+# 如果你要给 x86_64 模拟器跑
+ani.android.abis=x86_64
 
-默认已经只构建 `arm64-v8a`，这是大多数真机开发最省时的配置。
-
-> [!TIP]
-> **切换 Android ABI**
->
-> ```properties
-> # 默认值，不写也一样
-> ani.android.abis=arm64-v8a
->
-> # 如果你要给 x86_64 模拟器跑
-> ani.android.abis=x86_64
->
-> # 如果你需要完整产物
-> ani.android.abis=all
-> ```
-
-#### macOS 优化
-
-默认已经关闭 iOS 目标和 framework 构建，所以大多数 macOS 用户不需要额外优化。
-只有在你要开发 iOS 时，再按上面的步骤显式开启即可。
+# 如果你需要完整产物
+ani.android.abis=all
+```

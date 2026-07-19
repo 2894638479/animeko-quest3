@@ -41,6 +41,7 @@ kotlin {
         implementation(libs.androidx.media3.exoplayer)
         implementation(libs.androidx.media3.exoplayer.dash)
         implementation(libs.androidx.media3.exoplayer.hls)
+        implementation(libs.libass.media)
         api(libs.mediamp.exoplayer)
     }
     sourceSets.desktopMain.dependencies {
@@ -49,7 +50,10 @@ kotlin {
         }
 
         api(libs.kotlinx.coroutines.swing)
-        implementation(libs.vlcj)
+        // desktopMain 是所有桌面平台共用的 source set, 需同时引入两种后端的 API,
+        // 运行时按平台加载对应 native library (见 app/desktop). mpv: Windows x64 / macOS arm64,
+        // VLC: Linux x64 / macOS x64.
+        api(libs.mediamp.mpv)
         api(libs.mediamp.vlc)
     }
     sourceSets.appleMain.dependencies {

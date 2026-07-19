@@ -29,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.him188.ani.app.data.models.danmaku.DanmakuFilterConfig
+import me.him188.ani.app.data.models.preference.DesktopCloseBehavior
 import me.him188.ani.app.data.models.preference.EpisodeListProgressTheme
 import me.him188.ani.app.data.models.preference.FullscreenSwitchMode
 import me.him188.ani.app.data.models.preference.NsfwMode
@@ -44,12 +45,12 @@ import me.him188.ani.app.platform.currentAniBuildConfig
 import me.him188.ani.app.ui.foundation.LocalPlatform
 import me.him188.ani.app.ui.foundation.animation.AniAnimatedVisibility
 import me.him188.ani.app.ui.lang.Lang
-import me.him188.ani.app.ui.lang.SupportedLocales
+import me.him188.ani.app.ui.lang.settings_app_close_behavior
+import me.him188.ani.app.ui.lang.settings_app_close_behavior_exit
+import me.him188.ani.app.ui.lang.settings_app_close_behavior_minimize_to_tray
 import me.him188.ani.app.ui.lang.settings_app_episode_playback
 import me.him188.ani.app.ui.lang.settings_app_initial_page
 import me.him188.ani.app.ui.lang.settings_app_initial_page_description
-import me.him188.ani.app.ui.lang.settings_app_language
-import me.him188.ani.app.ui.lang.settings_app_language_restart
 import me.him188.ani.app.ui.lang.settings_app_light_up_mode
 import me.him188.ani.app.ui.lang.settings_app_light_up_mode_description
 import me.him188.ani.app.ui.lang.settings_app_list_animation
@@ -61,8 +62,7 @@ import me.him188.ani.app.ui.lang.settings_app_nsfw_content
 import me.him188.ani.app.ui.lang.settings_app_nsfw_display
 import me.him188.ani.app.ui.lang.settings_app_nsfw_hide
 import me.him188.ani.app.ui.lang.settings_app_search
-import me.him188.ani.app.ui.lang.settings_app_use_new_search_api
-import me.him188.ani.app.ui.lang.settings_app_use_new_search_api_description
+import me.him188.ani.app.ui.lang.settings_app_language_system
 import me.him188.ani.app.ui.lang.settings_player
 import me.him188.ani.app.ui.lang.settings_player_auto_fullscreen_on_landscape
 import me.him188.ani.app.ui.lang.settings_player_auto_mark_done
@@ -70,7 +70,11 @@ import me.him188.ani.app.ui.lang.settings_player_auto_play_next
 import me.him188.ani.app.ui.lang.settings_player_auto_skip_op_ed
 import me.him188.ani.app.ui.lang.settings_player_auto_skip_op_ed_description
 import me.him188.ani.app.ui.lang.settings_player_auto_switch_media_on_error
+import me.him188.ani.app.ui.lang.settings_player_experimental_hls_segment_filter
+import me.him188.ani.app.ui.lang.settings_player_experimental_hls_segment_filter_description
 import me.him188.ani.app.ui.lang.settings_player_enable_regex_filter
+import me.him188.ani.app.ui.lang.settings_player_frame_preview
+import me.him188.ani.app.ui.lang.settings_player_frame_preview_description
 import me.him188.ani.app.ui.lang.settings_player_fullscreen_always_show
 import me.him188.ani.app.ui.lang.settings_player_fullscreen_auto_hide
 import me.him188.ani.app.ui.lang.settings_player_fullscreen_button
@@ -123,7 +127,6 @@ import me.him188.ani.app.ui.update.AppUpdateViewModel
 import me.him188.ani.app.ui.update.NewVersion
 import me.him188.ani.app.ui.update.UpdateNotifier
 import me.him188.ani.utils.platform.annotations.TestOnly
-import me.him188.ani.utils.platform.isAndroid
 import me.him188.ani.utils.platform.isDesktop
 import me.him188.ani.utils.platform.isIos
 import me.him188.ani.utils.platform.isMobile
@@ -171,23 +174,7 @@ fun SettingsScope.AppearanceGroup(
 ) {
     val uiSettings by state
 
-    if (LocalPlatform.current.isDesktop() || LocalPlatform.current.isAndroid()) {
-        DropdownItem(
-            selected = { uiSettings.appLanguage },
-            values = { SupportedLocales },
-            itemText = {
-                Text(renderLocale(it))
-            },
-            onSelect = {
-                state.update(uiSettings.copy(appLanguage = it))
-            },
-            title = { Text(stringResource(Lang.settings_app_language)) },
-            description = if (LocalPlatform.current.isDesktop()) {
-                { Text(stringResource(Lang.settings_app_language_restart)) }
-            } else null,
-        )
-    }
-    IosLanguageSettings()
+    LanguageSettingsPlatform(state)
 
     DropdownItem(
         selected = { uiSettings.mainSceneInitialPage },
@@ -200,22 +187,24 @@ fun SettingsScope.AppearanceGroup(
         title = { Text(stringResource(Lang.settings_app_initial_page)) },
         description = { Text(stringResource(Lang.settings_app_initial_page_description)) },
     )
+    if (LocalPlatform.current.isDesktop()) {
+        DropdownItem(
+            selected = { uiSettings.desktopCloseBehavior },
+            values = { listOf(DesktopCloseBehavior.EXIT, DesktopCloseBehavior.MINIMIZE) },
+            itemText = {
+                Text(it.renderText())
+            },
+            exposedItemText = {
+                Text(it.renderText())
+            },
+            onSelect = {
+                state.update(uiSettings.copy(desktopCloseBehavior = it))
+            },
+            title = { Text(stringResource(Lang.settings_app_close_behavior)) },
+        )
+    }
 
     Group(title = { Text(stringResource(Lang.settings_app_search)) }, useThinHeader = true) {
-        SwitchItem(
-            checked = uiSettings.searchSettings.enableNewSearchSubjectApi,
-            onCheckedChange = {
-                state.update(
-                    uiSettings.copy(
-                        searchSettings = uiSettings.searchSettings.copy(
-                            enableNewSearchSubjectApi = !uiSettings.searchSettings.enableNewSearchSubjectApi,
-                        ),
-                    ),
-                )
-            },
-            title = { Text(stringResource(Lang.settings_app_use_new_search_api)) },
-            description = { Text(stringResource(Lang.settings_app_use_new_search_api_description)) },
-        )
         SwitchItem(
             checked = uiSettings.searchSettings.ignoreDoneAndDroppedSubjects,
             onCheckedChange = {
@@ -521,6 +510,26 @@ fun SettingsScope.PlayerGroup(
             title = { Text(stringResource(Lang.settings_player_auto_switch_media_on_error)) },
         )
         HorizontalDividerItem()
+        if (!LocalPlatform.current.isIos()) {
+            SwitchItem(
+                checked = config.enableExperimentalHlsSegmentFiltering,
+                onCheckedChange = {
+                    videoScaffoldConfig.update(config.copy(enableExperimentalHlsSegmentFiltering = it))
+                },
+                title = { Text(stringResource(Lang.settings_player_experimental_hls_segment_filter)) },
+                description = { Text(stringResource(Lang.settings_player_experimental_hls_segment_filter_description)) },
+            )
+            HorizontalDividerItem()
+        }
+        HorizontalDividerItem()
+        SwitchItem(
+            checked = config.enableFramePreview,
+            onCheckedChange = {
+                videoScaffoldConfig.update(config.copy(enableFramePreview = it))
+            },
+            title = { Text(stringResource(Lang.settings_player_frame_preview)) },
+            description = { Text(stringResource(Lang.settings_player_frame_preview_description)) },
+        )
         DropdownItem(
             selected = { config.fastForwardSpeed },
             values = { listOf(1.5f, 2f, 2.5f, 3f) },
@@ -536,10 +545,20 @@ fun SettingsScope.PlayerGroup(
 }
 
 @Composable
-internal expect fun SettingsScope.IosLanguageSettings()
+internal expect fun SettingsScope.LanguageSettingsPlatform(
+    state: SettingsState<UISettings>,
+)
 
 @Composable
 internal expect fun SettingsScope.AppSettingsTabPlatform()
+
+@Composable
+private fun DesktopCloseBehavior.renderText(): String {
+    return when (this) {
+        DesktopCloseBehavior.EXIT -> stringResource(Lang.settings_app_close_behavior_exit)
+        DesktopCloseBehavior.MINIMIZE -> stringResource(Lang.settings_app_close_behavior_minimize_to_tray)
+    }
+}
 
 @Composable
 internal expect fun SettingsScope.PlayerGroupPlatform(
@@ -547,9 +566,9 @@ internal expect fun SettingsScope.PlayerGroupPlatform(
 )
 
 @Composable
-private fun renderLocale(it: Locale?): String {
+internal fun renderLocale(it: Locale?): String {
     if (it == null) {
-        return "系统语言"
+        return stringResource(Lang.settings_app_language_system)
     }
 
     // The following code does not need to be localized

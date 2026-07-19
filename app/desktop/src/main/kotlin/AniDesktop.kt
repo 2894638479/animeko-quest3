@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,13 +43,15 @@ import com.sun.jna.platform.win32.Advapi32Util
 import com.sun.jna.platform.win32.WinReg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import me.him188.ani.app.data.models.preference.DarkMode
+import me.him188.ani.app.data.models.preference.UISettings
 import me.him188.ani.app.data.repository.SavedWindowState
 import me.him188.ani.app.data.repository.WindowStateRepository
 import me.him188.ani.app.data.repository.user.SettingsRepository
@@ -105,15 +108,25 @@ import me.him188.ani.utils.analytics.Analytics
 import me.him188.ani.utils.analytics.AnalyticsConfig
 import me.him188.ani.utils.analytics.AnalyticsImpl
 import me.him188.ani.utils.analytics.AnalyticsSecrets
+import me.him188.ani.utils.logging.debug
 import me.him188.ani.utils.logging.error
 import me.him188.ani.utils.logging.info
 import me.him188.ani.utils.logging.logger
 import me.him188.ani.utils.logging.trace
+import me.him188.ani.utils.logging.warn
 import me.him188.ani.utils.platform.currentPlatform
+import me.him188.ani.utils.platform.currentPlatformDesktop
+import me.him188.ani.utils.platform.isMacOS
 import me.him188.ani.utils.platform.isWindows
 import org.jetbrains.compose.resources.painterResource
 import org.koin.core.context.startKoin
+import org.openani.mediamp.ffmpeg.FFmpegKit
+import org.openani.mediamp.mpv.MPVHandle
 import org.openani.mediamp.vlc.VlcMediampPlayer
+import java.awt.Desktop
+import java.awt.Frame
+import java.io.File
+import java.nio.file.Paths
 import java.util.Locale
 import kotlin.io.path.absolutePathString
 import kotlin.system.exitProcess
@@ -255,6 +268,13 @@ object AniDesktop {
         val settingsRepository = koin.koin.get<SettingsRepository>()
         val userRepository = koin.koin.get<UserRepository>()
 
+        coroutineScope.launch {
+            settingsRepository.videoResolverSettings.flow
+                .map { it.effectiveDataSourceBrowserConcurrency }
+                .distinctUntilChanged()
+                .collect { AniCefApp.configureDataSourceBrowserLimit(it) }
+        }
+
         val setLocaleJob = coroutineScope.launch {
             settingsRepository.uiSettings.flow.first().appLanguage?.platformLocale?.let {
                 logger.info { "Set locale to $it" }
@@ -300,30 +320,80 @@ object AniDesktop {
             }
         }
 
-        val loadAnitorrentJob = coroutineScope.launch(Dispatchers.IO) {
+        val loadLibraryJob = coroutineScope.launch(Dispatchers.IO) {
             try {
                 AnitorrentLibraryLoader.loadLibraries()
+                logger.info { "Anitorrent is loaded." }
             } catch (e: Throwable) {
                 logger.error(e) { "Failed to load anitorrent libraries" }
             }
+
+            // 为什么是这个目录?
+            // CMP 打包 task 会把 resource dir 放到 jar 包的目录里
+            // 我们 hack 打包 task 把包含 runtime library 的 jar 包解压到那一堆 jar 包的目录
+            val composeResDir = File(System.getProperty("compose.application.resources.dir"))
+                .parentFile.absolutePath
+
+            try {
+                if (currentProcessName()?.contains("java") == true) {
+                    FFmpegKit.useDefaultRuntimeLibraryDirectory()
+                } else {
+                    FFmpegKit.setRuntimeLibraryDirectory(composeResDir, false)
+                }
+                logger.info { "FFmpegKit is loaded." }
+            } catch (e: Throwable) {
+                logger.error(e) { "Failed to load FFmpeg component of mediamp." }
+            }
+
+            if (currentPlatformDesktop().usesMpv()) {
+                try {
+                    if (currentProcessName()?.contains("java") == true) {
+                        MPVHandle.useDefaultRuntimeLibraryDirectory()
+                    } else {
+                        MPVHandle.setRuntimeLibraryDirectory(composeResDir, false)
+                    }
+                    val mpvLogger = logger<MPVHandle>()
+                    // mpv_log_level in https://github.com/mpv-player/mpv/blob/master/include/mpv/client.h
+                    MPVHandle.setLogHandler {
+                        val prefix = it.prefix.padStart(9, ' ')
+                        val handle = "0x${it.instanceHandle.toHexString().trimStart('0')}"
+                        if (it.level in 1..20) {
+                            mpvLogger.error { "[$prefix@$handle] ${it.line}" }
+                        } else if (it.level <= 30) {
+                            mpvLogger.warn { "[$prefix@$handle] ${it.line}" }
+                        } else if (it.level <= 40) {
+                            mpvLogger.info { "[$prefix@$handle] ${it.line}" }
+                        } else if (it.level <= 50) {
+                            mpvLogger.debug { "[$prefix@$handle] ${it.line}" }
+                        } else {
+                            mpvLogger.trace { "[$prefix@$handle] ${it.line}" }
+                        }
+                    }
+                } catch (e: Throwable) {
+                    logger.error(e) { "Failed to load libmpv component of mediamp." }
+                }
+                logger.info { "libmpv is loaded." }
+            } else {
+                VlcMediampPlayer.prepareLibraries()
+            }
+
         }
 
         // Initialize CEF application.
         coroutineScope.launch {
-            logger.info { "[JCEF init] waiting for anitorrent load" }
+            logger.info { "[JCEF init] awaiting anitorrent, FFmpegKit and VLC/libmpv loaded." }
             try {
                 analyticsInitializer.join()
-                loadAnitorrentJob.join()
+                loadLibraryJob.join()
             } catch (_: Throwable) {
             }
-            logger.info { "[JCEF init] anitorrent loaded" }
             // Load anitorrent libraries before JCEF, so they won't load at the same time.
             // We suspect concurrent loading of native libraries may cause some issues #1121.
 
             val proxySettings = koin.koin.get<ProxyProvider>()
                 .proxy.first()
 
-            logger.info { "[JCEF init] Calling AniCefApp.initialize" }
+            logger.info { "[JCEF init] initializing AniCefApp." }
 
             AniCefApp.initialize(
                 logDir = dataDir.toFile().resolve("logs"),
@@ -333,18 +403,7 @@ object AniDesktop {
                 proxyAuthPassword = proxySettings?.authorization?.password,
             )
 
-            logger.info { "[JCEF init] Initialize done, now prepare VLC libraries" }
-
-            // 预先加载 VLC, https://github.com/open-ani/ani/issues/618
-            kotlin.runCatching {
-                withContext(Dispatchers.IO) {
-                    VlcMediampPlayer.prepareLibraries()
-                }
-            }.onFailure {
-                logger.error(it) { "Failed to prepare VLC" }
-            }
-
-            logger.info { "[JCEF init] VLC libraries prepared." }
+            logger.info { "[JCEF init] AniCefApp is initialized." }
         }
 
         coroutineScope.launch {
@@ -403,29 +462,71 @@ object AniDesktop {
                     "\nTotal time: ${startupTimeMonitor.getTotalDuration().inWholeMilliseconds}ms"
         }
         val savedWindowState: SavedWindowState? = savedWindowStateDeferred.getCompleted()
+        restoreWindowState(windowState, savedWindowState)
 
         application {
-            WindowStateRecorder(
-                windowState = windowState,
-                saved = savedWindowState,
-                update = {
-                    runBlocking {
-                        windowStateRepository.update(it)
+            val saveCurrentWindowState = remember(windowState, windowStateRepository) {
+                {
+                    saveWindowState(windowState) {
+                        runBlocking {
+                            windowStateRepository.update(it)
+                        }
                     }
-                },
+                }
+            }
+            val exitApplicationSavingWindowState = remember(saveCurrentWindowState) {
+                {
+                    saveCurrentWindowState()
+                    AniCefApp.disposeBlocking()
+                    exitApplication()
+                }
+            }
+
+            DisposableEffect(saveCurrentWindowState) {
+                onDispose {
+                    saveCurrentWindowState()
+                }
+            }
+            MacOSQuitHandler(
+                saveCurrentWindowState = saveCurrentWindowState,
+                exitApplication = exitApplicationSavingWindowState,
+            )
+
+            val uiSettings by settingsRepository.uiSettings.flow.collectAsState(UISettings.Default)
+            val trayState = rememberAniTrayState()
+            val appIcon = painterResource(Res.drawable.a_round)
+
+            AniSystemTray(
+                state = trayState,
+                icon = appIcon,
+                tooltip = "Ani",
+                onExit = exitApplicationSavingWindowState,
             )
 
             Window(
-                onCloseRequest = { exitApplication() },
+                visible = !trayState.isWindowHiddenToTray,
+                onCloseRequest = {
+                    trayState.handleCloseRequest(
+                        closeBehavior = uiSettings.desktopCloseBehavior,
+                        onExit = exitApplicationSavingWindowState,
+                    )
+                },
                 state = windowState,
                 title = "Ani",
-                icon = painterResource(Res.drawable.a_round),
+                icon = appIcon,
             ) {
                 // In dev mode this enables hot reload,
                 // In release mode this just executes the content
                 val lifecycleOwner = LocalLifecycleOwner.current
                 val backPressedDispatcherOwner = remember {
                     SkikoOnBackPressedDispatcherOwner(navigator, lifecycleOwner)
+                }
+
+                DisposableEffect(Unit) {
+                    window.extendedState = window.extendedState and Frame.ICONIFIED.inv()
+                    window.toFront()
+                    window.requestFocus()
+                    onDispose {}
                 }
 
                 SideEffect {
@@ -469,7 +570,12 @@ object AniDesktop {
                         HandleWindowsWindowProc()
                         WindowFrame(
                             windowState = windowState,
-                            onCloseRequest = { exitApplication() },
+                            onCloseRequest = {
+                                trayState.handleCloseRequest(
+                                    closeBehavior = uiSettings.desktopCloseBehavior,
+                                    onExit = exitApplicationSavingWindowState,
+                                )
+                            },
                         ) {
                             MainWindowContent(navigator)
                         }
@@ -479,6 +585,14 @@ object AniDesktop {
 
         }
         // unreachable here
+    }
+
+    fun currentProcessName(): String? {
+        return ProcessHandle.current()
+            .info()
+            .command()
+            .map { Paths.get(it).fileName.toString() }
+            .orElse(null)
     }
 }
 
@@ -542,59 +656,83 @@ private fun FrameWindowScope.MainWindowContent(aniNavigator: AniNavigator) {
 }
 
 @Composable
-private fun WindowStateRecorder(
-    windowState: WindowState,
-    saved: SavedWindowState?,
-    update: (SavedWindowState) -> Unit,
+private fun MacOSQuitHandler(
+    saveCurrentWindowState: () -> Unit,
+    exitApplication: () -> Unit,
 ) {
-    // 记录窗口大小
-    DisposableEffect(Unit) {
-        if (saved != null && !saved.hasUnspecified()) {
-            val savedWindowState = WindowState(
-                position = WindowPosition(
-                    x = saved.x,
-                    y = saved.y,
-                ),
-                size = DpSize(
-                    width = saved.width,
-                    height = saved.height,
-                ),
-            )
-            //保存的窗口尺寸和大小全都合规时，才使用，否则使用默认设置
+    DisposableEffect(saveCurrentWindowState, exitApplication) {
+        if (!currentPlatformDesktop().isMacOS()) {
+            return@DisposableEffect onDispose {}
+        }
+        if (!Desktop.isDesktopSupported()) {
+            return@DisposableEffect onDispose {}
+        }
 
-            if (isWindowStateValid(savedWindowState.size, savedWindowState.position)) {
-                windowState.apply {
-                    position = savedWindowState.position
-                    size = savedWindowState.size
-                }
-            }
+        val desktop = Desktop.getDesktop()
+        if (!desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
+            return@DisposableEffect onDispose {}
+        }
+
+        desktop.setQuitHandler { _, response ->
+            saveCurrentWindowState()
+            exitApplication()
+            response.performQuit()
         }
 
         onDispose {
-            val newState = SavedWindowState(
-                x = windowState.position.x,
-                y = windowState.position.y,
-                width = windowState.size.width,
-                height = windowState.size.height,
-            )
-            if (isWindowStateValid(
-                    DpSize(width = newState.width, height = newState.height),
-                    WindowPosition(x = newState.x, y = newState.y),
-                )
-            ) {
-                update(newState)
-            }
+            desktop.setQuitHandler(null)
         }
     }
 }
 
-private fun isWindowStateValid(
+private fun saveWindowState(
+    windowState: WindowState,
+    update: (SavedWindowState) -> Unit,
+) {
+    val newState = SavedWindowState(
+        x = windowState.position.x,
+        y = windowState.position.y,
+        width = windowState.size.width,
+        height = windowState.size.height,
+    )
+    if (isWindowSizeValid(DpSize(width = newState.width, height = newState.height))) {
+        update(newState)
+    }
+}
+
+private fun restoreWindowState(
+    windowState: WindowState,
+    saved: SavedWindowState?,
+) {
+    if (saved == null) {
+        return
+    }
+
+    val savedWindowPosition = WindowPosition(
+        x = saved.x,
+        y = saved.y,
+    )
+    val savedWindowSize = DpSize(
+        width = saved.width,
+        height = saved.height,
+    )
+    if (isWindowSizeValid(savedWindowSize)) {
+        windowState.size = savedWindowSize
+    }
+    if (isWindowPositionValid(savedWindowPosition)) {
+        windowState.position = savedWindowPosition
+    }
+}
+
+private fun isWindowSizeValid(
     windowSize: DpSize,
-    windowPosition: WindowPosition,
     minimumSize: DpSize = DpSize(400.dp, 400.dp),
+): Boolean = windowSize.width >= minimumSize.width && windowSize.height >= minimumSize.height
+
+private fun isWindowPositionValid(
+    windowPosition: WindowPosition,
     // In headless testing this will throw NoClassDefFoundError, see https://github.com/open-ani/animeko/runs/40761327501
     //  so we use runCatching to avoid this
     screenSize: DpSize = runCatching { ScreenUtils.getScreenSize() }.getOrElse { DpSize(1280.dp, 720.dp) },
-): Boolean = ((windowSize.width >= minimumSize.width && windowSize.height >= minimumSize.height)
-        && windowPosition.x > 0.dp && windowPosition.y > 0.dp
+): Boolean = (windowPosition.x > 0.dp && windowPosition.y > 0.dp
         && windowPosition.x < screenSize.width - 200.dp && windowPosition.y < screenSize.height - 200.dp)

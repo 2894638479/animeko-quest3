@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -74,10 +74,25 @@ import androidx.compose.ui.unit.sp
 import me.him188.ani.app.ui.foundation.Res
 import me.him188.ani.app.ui.foundation.a
 import me.him188.ani.app.ui.foundation.lists.LazyListVerticalScrollbar
+import me.him188.ani.app.ui.lang.Lang
+import me.him188.ani.app.ui.lang.subject_episode_collapse
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_list_empty
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_list_empty_filtered
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_list_title
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_rematch
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_service_baha_short
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_service_bilibili_short
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_service_dandanplay_short
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_time_shift_item
+import me.him188.ani.app.ui.lang.subject_episode_disable
+import me.him188.ani.app.ui.lang.subject_episode_enable
+import me.him188.ani.app.ui.lang.subject_episode_expand
+import me.him188.ani.app.ui.lang.subject_episode_more_options
 import me.him188.ani.app.ui.subject.episode.details.components.formatDanmakuShiftMillis
 import me.him188.ani.app.ui.subject.episode.details.components.renderDanmakuServiceId
 import me.him188.ani.danmaku.api.DanmakuServiceId
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * 弹幕列表区域组件，提供弹幕源选择和弹幕列表显示功能。
@@ -93,6 +108,9 @@ fun DanmakuListSection(
     onAdjustShift: (DanmakuServiceId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val listTitleText = stringResource(Lang.subject_episode_danmaku_list_title)
+    val collapseText = stringResource(Lang.subject_episode_collapse)
+    val expandText = stringResource(Lang.subject_episode_expand)
 
     Box(modifier = modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
         Column {
@@ -108,66 +126,13 @@ fun DanmakuListSection(
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth().offset(y = (-1).dp),
                 ) {
-                    Column(modifier = Modifier.padding(top = 64.dp)) {
-                        // 弹幕源chips
-                        if (state.sourceItems.isNotEmpty()) {
-                            DanmakuSourceChips(
-                                sourceItems = state.sourceItems,
-                                onToggleSource = onSetEnabled,
-                                onManualMatch = onManualMatch,
-                                onAdjustShift = onAdjustShift,
-                                modifier = Modifier.padding(horizontal = 8.dp),
-                            )
-                        }
-
-                        // 弹幕列表
-                        if (state.danmakuItems.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(120.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (state.isLoading) {
-                                    CircularProgressIndicator()
-                                } else {
-                                    Text(
-                                        text = if (state.isEmpty) "暂无弹幕数据" else "没有符合筛选条件的弹幕",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        } else {
-                            val listState = rememberLazyListState()
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 360.dp),
-                            ) {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier
-                                        .fillMaxSize(),
-                                ) {
-                                    items(
-                                        items = state.danmakuItems,
-                                        key = { it.randomId.toString() },
-                                    ) { danmaku ->
-                                        DanmakuListItemView(danmaku)
-                                    }
-                                }
-                                LazyListVerticalScrollbar(
-                                    state = listState,
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .padding(end = 4.dp)
-                                        .placeScrollbarToAbsoluteRight(),
-                                )
-                            }
-                        }
-                    }
+                    DanmakuListContent(
+                        state = state,
+                        onSetEnabled = onSetEnabled,
+                        onManualMatch = onManualMatch,
+                        onAdjustShift = onAdjustShift,
+                        modifier = Modifier.padding(top = 64.dp),
+                    )
                 }
             }
         }
@@ -180,7 +145,7 @@ fun DanmakuListSection(
         ) {
             ListItem(
                 headlineContent = {
-                    Text("弹幕列表")
+                    Text(listTitleText)
                 },
                 leadingContent = {
                     Icon(Icons.AutoMirrored.Outlined.FeaturedPlayList, contentDescription = null)
@@ -188,7 +153,7 @@ fun DanmakuListSection(
                 trailingContent = {
                     Icon(
                         if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                        contentDescription = if (expanded) "收起" else "展开",
+                        contentDescription = if (expanded) collapseText else expandText,
                     )
                 },
                 modifier = Modifier.clickable { onToggleExpanded() },
@@ -196,6 +161,86 @@ fun DanmakuListSection(
                     containerColor = Color.Transparent,
                 ),
             )
+        }
+    }
+}
+
+/**
+ * 弹幕列表的实际内容，不包含可收起标题栏。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DanmakuListContent(
+    state: DanmakuListState,
+    onSetEnabled: (DanmakuServiceId, Boolean) -> Unit,
+    onManualMatch: (DanmakuServiceId) -> Unit,
+    onAdjustShift: (DanmakuServiceId) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val emptyText = if (state.isEmpty) {
+        stringResource(Lang.subject_episode_danmaku_list_empty)
+    } else {
+        stringResource(Lang.subject_episode_danmaku_list_empty_filtered)
+    }
+
+    Column(modifier = modifier) {
+        // 弹幕源chips
+        if (state.sourceItems.isNotEmpty()) {
+            DanmakuSourceChips(
+                sourceItems = state.sourceItems,
+                onToggleSource = onSetEnabled,
+                onManualMatch = onManualMatch,
+                onAdjustShift = onAdjustShift,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+
+        // 弹幕列表
+        if (state.danmakuItems.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (state.isLoading) {
+                    CircularProgressIndicator()
+                } else {
+                    Text(
+                        text = emptyText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            val listState = rememberLazyListState()
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp),
+            ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize(),
+                ) {
+                    items(
+                        items = state.danmakuItems,
+                        key = { it.randomId.toString() },
+                    ) { danmaku ->
+                        DanmakuListItemView(danmaku)
+                    }
+                }
+                LazyListVerticalScrollbar(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(end = 4.dp)
+                        .placeScrollbarToAbsoluteRight(),
+                )
+            }
         }
     }
 }
@@ -240,6 +285,14 @@ private fun DanmakuSourceChip(
 ) {
     var showDropdown by rememberSaveable { mutableStateOf(false) }
     val isAnimeko = sourceItem.serviceId == DanmakuServiceId.Animeko
+    val moreOptionsText = stringResource(Lang.subject_episode_more_options)
+    val disableText = stringResource(Lang.subject_episode_disable)
+    val enableText = stringResource(Lang.subject_episode_enable)
+    val rematchText = stringResource(Lang.subject_episode_danmaku_rematch)
+    val timeShiftText = stringResource(
+        Lang.subject_episode_danmaku_time_shift_item,
+        formatDanmakuShiftMillis(sourceItem.shiftMillis),
+    )
 
     Box {
         FilterChip(
@@ -254,7 +307,7 @@ private fun DanmakuSourceChip(
 
                     Icon(
                         Icons.Outlined.ArrowDropDown,
-                        contentDescription = "更多选项",
+                        contentDescription = moreOptionsText,
                         modifier = Modifier
                             .offset(x = 8.dp)
                             .clickable { showDropdown = true },
@@ -307,7 +360,7 @@ private fun DanmakuSourceChip(
 
                 // 操作菜单项
                 DropdownMenuItem(
-                    text = { Text(if (sourceItem.enabled) "禁用" else "启用") },
+                    text = { Text(if (sourceItem.enabled) disableText else enableText) },
                     leadingIcon = {
                         Icon(
                             if (sourceItem.enabled) Icons.Outlined.Close else Icons.Outlined.CheckCircle,
@@ -321,7 +374,7 @@ private fun DanmakuSourceChip(
                 )
                 if (!isAnimeko) {
                     DropdownMenuItem(
-                        text = { Text("重新匹配") },
+                        text = { Text(rematchText) },
                         leadingIcon = { Icon(Icons.Outlined.Refresh, null) },
                         onClick = {
                             onManualMatch()
@@ -330,7 +383,7 @@ private fun DanmakuSourceChip(
                     )
                 }
                 DropdownMenuItem(
-                    text = { Text("时间校准 (${formatDanmakuShiftMillis(sourceItem.shiftMillis)})") },
+                    text = { Text(timeShiftText) },
                     leadingIcon = { Icon(Icons.Outlined.Schedule, null) },
                     onClick = {
                         onAdjustShift()
@@ -388,10 +441,10 @@ private fun DanmakuServiceIcon(
 @Composable
 private fun getDanmakuServiceIconInfo(serviceId: DanmakuServiceId): String {
     return when (serviceId) {
-        DanmakuServiceId.Bilibili -> "哔"
-        DanmakuServiceId.Dandanplay -> "弹"
+        DanmakuServiceId.Bilibili -> stringResource(Lang.subject_episode_danmaku_service_bilibili_short)
+        DanmakuServiceId.Dandanplay -> stringResource(Lang.subject_episode_danmaku_service_dandanplay_short)
         DanmakuServiceId.AcFun -> "Ac"
-        DanmakuServiceId.Baha -> "巴"
+        DanmakuServiceId.Baha -> stringResource(Lang.subject_episode_danmaku_service_baha_short)
         DanmakuServiceId.Tucao -> "TC"
         else -> "?"
     }

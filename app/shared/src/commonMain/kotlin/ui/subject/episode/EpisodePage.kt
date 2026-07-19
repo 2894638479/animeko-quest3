@@ -90,7 +90,6 @@ import me.him188.ani.app.platform.features.getComponentAccessors
 import me.him188.ani.app.tools.rememberUiMonoTasker
 import me.him188.ani.app.ui.comment.CommentEditorState
 import me.him188.ani.app.ui.comment.CommentState
-import me.him188.ani.app.ui.comment.createPreviewTurnstileState
 import me.him188.ani.app.ui.danmaku.DanmakuEditorState
 import me.him188.ani.app.ui.danmaku.DummyDanmakuEditor
 import me.him188.ani.app.ui.danmaku.PlayerDanmakuEditor
@@ -128,6 +127,13 @@ import me.him188.ani.app.ui.foundation.theme.LocalThemeSettings
 import me.him188.ani.app.ui.foundation.theme.weaken
 import me.him188.ani.app.ui.foundation.widgets.LocalToaster
 import me.him188.ani.app.ui.foundation.widgets.showLoadError
+import me.him188.ani.app.ui.lang.Lang
+import me.him188.ani.app.ui.lang.episode_comments
+import me.him188.ani.app.ui.lang.episode_comments_with_count
+import me.him188.ani.app.ui.lang.episode_send_danmaku
+import me.him188.ani.app.ui.lang.foundation_richtext_external_app_link_warning_prefix
+import me.him188.ani.app.ui.lang.foundation_richtext_open_failed_prefix
+import me.him188.ani.app.ui.lang.subject_details_tab_details
 import me.him188.ani.app.ui.richtext.RichTextDefaults
 import me.him188.ani.app.ui.subject.episode.comments.EpisodeCommentColumn
 import me.him188.ani.app.ui.subject.episode.comments.EpisodeEditCommentSheet
@@ -143,12 +149,14 @@ import me.him188.ani.app.ui.subject.episode.video.sidesheet.MediaSelectorSheet
 import me.him188.ani.app.ui.subject.episode.video.topbar.EpisodePlayerTitle
 import me.him188.ani.app.videoplayer.ui.PlaybackSpeedControllerState
 import me.him188.ani.app.videoplayer.ui.PlayerControllerState
+import me.him188.ani.app.videoplayer.ui.PlayerFocusState
 import me.him188.ani.app.videoplayer.ui.VideoAspectRatioControllerState
 import me.him188.ani.app.videoplayer.ui.gesture.LevelController
 import me.him188.ani.app.videoplayer.ui.gesture.NoOpLevelController
 import me.him188.ani.app.videoplayer.ui.gesture.asLevelController
 import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults
-import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults.randomDanmakuPlaceholder
+import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults.rememberRandomDanmakuPlaceholder
+import me.him188.ani.app.videoplayer.ui.progress.rememberMediaProgressFramePreviewState
 import me.him188.ani.app.videoplayer.ui.progress.rememberMediaProgressSliderState
 import me.him188.ani.danmaku.api.DanmakuContent
 import me.him188.ani.danmaku.api.DanmakuLocation
@@ -159,6 +167,7 @@ import me.him188.ani.utils.platform.isAndroid
 import me.him188.ani.utils.platform.isDesktop
 import me.him188.ani.utils.platform.isIos
 import me.him188.ani.utils.platform.isMobile
+import org.jetbrains.compose.resources.stringResource
 import org.openani.mediamp.features.AudioLevelController
 import org.openani.mediamp.features.PlaybackSpeed
 import org.openani.mediamp.features.Screenshots
@@ -374,7 +383,7 @@ private fun EpisodeScreenContent(
     if (showEditCommentSheet) {
         EpisodeEditCommentSheet(
             state = vm.commentEditorState,
-            turnstileState = remember { createPreviewTurnstileState() },
+            turnstileState = vm.turnstileState,
             onDismiss = {
                 showEditCommentSheet = false
                 vm.commentEditorState.cancelSend()
@@ -539,7 +548,6 @@ private fun EpisodeScreenTabletVeryWide(
                                             }
                                         }
                                     },
-                                    shareData = page.shareData,
                                     loadError = page.loadError,
                                     onRetryLoad = {
                                         page.loadError?.let { vm.retryLoad(it) }
@@ -575,6 +583,7 @@ private fun TabRow(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surface,
 ) {
+    val detailsText = stringResource(Lang.subject_details_tab_details)
     ScrollableTabRow(
         selectedTabIndex = pagerState.currentPage,
         modifier,
@@ -591,19 +600,21 @@ private fun TabRow(
         Tab(
             selected = pagerState.currentPage == 0,
             onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-            text = { Text("详情", softWrap = false) },
+            modifier = Modifier.height(44.dp),
+            text = { Text(detailsText, softWrap = false) },
             selectedContentColor = MaterialTheme.colorScheme.primary,
             unselectedContentColor = MaterialTheme.colorScheme.onSurface,
         )
         Tab(
             selected = pagerState.currentPage == 1,
             onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+            modifier = Modifier.height(44.dp),
             text = {
-                val text by remember(commentCount) {
-                    derivedStateOf {
-                        val count = commentCount()
-                        if (count == null) "评论" else "评论 $count"
-                    }
+                val count = commentCount()
+                val text = if (count == null) {
+                    stringResource(Lang.episode_comments)
+                } else {
+                    stringResource(Lang.episode_comments_with_count, count)
                 }
                 Text(text, softWrap = false)
             },
@@ -705,7 +716,6 @@ private fun EpisodeScreenContentPhone(
                             }
                         }
                     },
-                    shareData = page.shareData,
                     loadError = page.loadError,
                     onRetryLoad = {
                         page.loadError?.let { vm.retryLoad(it) }
@@ -763,7 +773,9 @@ private fun EpisodeScreenContentPhone(
                     }
                 },
                 focusRequester,
-                Modifier.imePadding(),
+                vm.playerControllerState.focusState,
+                onDismiss = dismiss,
+                modifier = Modifier.imePadding(),
             )
             LaunchedEffect(true) {
                 focusRequester.requestFocus()
@@ -777,18 +789,22 @@ private fun DetachedDanmakuEditorLayout(
     danmakuEditorState: DanmakuEditorState,
     onSend: (text: String) -> Unit,
     focusRequester: FocusRequester,
+    playerFocusState: PlayerFocusState,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.padding(all = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("发送弹幕", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(Lang.episode_send_danmaku), style = MaterialTheme.typography.titleMedium)
         val isSending = danmakuEditorState.isSending.collectAsStateWithLifecycle()
         PlayerDanmakuEditor(
             text = danmakuEditorState.text,
             onTextChange = { danmakuEditorState.text = it },
             isSending = { isSending.value },
-            placeholderText = remember { randomDanmakuPlaceholder() },
+            placeholderText = rememberRandomDanmakuPlaceholder(),
             onSend = onSend,
-            Modifier.fillMaxWidth().focusRequester(focusRequester),
+            playerFocusState = playerFocusState,
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            onEscape = onDismiss,
             colors = OutlinedTextFieldDefaults.colors(),
         )
     }
@@ -825,7 +841,7 @@ fun EpisodeScreenContentPhoneScaffold(
                     )
                     Box(
                         modifier = Modifier.weight(0.618f) // width
-                            .height(48.dp)
+                            .height(44.dp)
                             .padding(vertical = 4.dp, horizontal = 16.dp),
                     ) {
                         Row(Modifier.align(Alignment.CenterEnd)) {
@@ -866,6 +882,8 @@ private fun EpisodeVideo(
     windowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
 ) {
     val context by rememberUpdatedState(LocalContext.current)
+    val navigator = LocalNavigator.current
+    val isAndroid = LocalPlatform.current.isAndroid()
 
     // Don't rememberSavable. 刻意让每次切换都是隐藏的
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -873,7 +891,7 @@ private fun EpisodeVideo(
     }
 
     // Refresh every time on configuration change (i.e. switching theme, entering fullscreen)
-    val danmakuTextPlaceholder = remember { randomDanmakuPlaceholder() }
+    val danmakuTextPlaceholder = rememberRandomDanmakuPlaceholder()
     val window = LocalPlatformWindow.current
 
     SideEffect {
@@ -890,6 +908,11 @@ private fun EpisodeVideo(
             vm.player.seekTo(it)
         },
     )
+    val framePreview = if (vm.videoScaffoldConfig.enableFramePreview) {
+        rememberMediaProgressFramePreviewState(vm.player)
+    } else {
+        null
+    }
     val scope = rememberCoroutineScope()
 
     // 必须在 UI 里, 跟随 context 变化. 否则 #958
@@ -960,7 +983,11 @@ private fun EpisodeVideo(
             // 条目ID-剧集序号-视频时间点.png
             val filename = "${vm.subjectId}-${page.episodePresentation.ep}-${currentPosition}.png"
             scope.launch {
-                vm.player.features[Screenshots]?.takeScreenshot(filename)
+                if (isAndroid) {
+                    takeAndroidPlayerScreenshot(context, vm.player, filename)
+                } else {
+                    vm.player.features[Screenshots]?.takeScreenshot(filename)
+                }
             }
         },
         detachedProgressSlider = {
@@ -968,6 +995,8 @@ private fun EpisodeVideo(
                 progressSliderState,
                 cacheProgressInfoFlow = vm.cacheProgressInfoFlow,
                 enabled = false,
+                framePreview = framePreview,
+                showFramePreviewInPopup = expanded,
             )
         },
         sidebarVisible = vm.sidebarVisible,
@@ -976,6 +1005,7 @@ private fun EpisodeVideo(
         },
         progressSliderState = progressSliderState,
         cacheProgressInfoFlow = vm.cacheProgressInfoFlow,
+        framePreview = framePreview,
         audioController = remember {
             derivedStateOf {
                 platformComponents.audioManager?.asLevelController(StreamType.MUSIC)
@@ -1060,6 +1090,8 @@ private fun EpisodeVideo(
                 },
             )
         },
+        shareData = page.shareData,
+        onClickCache = { navigator.navigateSubjectCaches(vm.subjectId) },
         modifier = modifier
             .fillMaxWidth().background(Color.Black)
             .then(if (expanded) Modifier.fillMaxSize() else Modifier.statusBarsPadding()),
@@ -1082,6 +1114,8 @@ private fun EpisodeCommentColumn(
 ) {
     val toaster = LocalToaster.current
     val browserNavigator = LocalUriHandler.current
+    val externalAppLinkWarningPrefix = stringResource(Lang.foundation_richtext_external_app_link_warning_prefix)
+    val openLinkFailedPrefix = stringResource(Lang.foundation_richtext_open_failed_prefix)
 
     EpisodeCommentColumn(
         state = commentState,
@@ -1098,7 +1132,13 @@ private fun EpisodeCommentColumn(
             setShowEditCommentSheet(true)
         },
         onClickUrl = {
-            RichTextDefaults.checkSanityAndOpen(it, browserNavigator, toaster)
+            RichTextDefaults.checkSanityAndOpen(
+                it,
+                browserNavigator,
+                toaster,
+                externalAppLinkWarningPrefix,
+                openLinkFailedPrefix,
+            )
         },
         modifier = modifier.fillMaxSize(),
         gridState = gridState,

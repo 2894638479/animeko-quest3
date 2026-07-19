@@ -18,13 +18,14 @@ import me.him188.ani.app.data.models.subject.SubjectCollectionStats
 import me.him188.ani.app.data.models.subject.SubjectInfo
 import me.him188.ani.app.data.models.subject.Tag
 import me.him188.ani.app.domain.mediasource.MediaListFilters
+import me.him188.ani.app.domain.search.SearchSort
 import me.him188.ani.app.domain.search.SubjectType
 import me.him188.ani.client.apis.SubjectsAniApi
 import me.him188.ani.client.models.AniNsfwFilter
 import me.him188.ani.client.models.AniSubjectSearch
+import me.him188.ani.client.models.AniSubjectSearchField
 import me.him188.ani.client.models.AniSubjectSearchSortBy
 import me.him188.ani.datasources.api.PackedDate
-import me.him188.ani.datasources.bangumi.models.search.BangumiSort
 import me.him188.ani.utils.coroutines.IO_
 import me.him188.ani.utils.ktor.ApiInvoker
 import kotlin.coroutines.CoroutineContext
@@ -36,12 +37,12 @@ class AniSubjectSearchService(
 ) {
     suspend fun searchSubjects(
         keyword: String,
-        useNewApi: Boolean,
         offset: Int? = null,
         limit: Int? = null,
 
-        sort: BangumiSort? = null,
-        filters: BangumiSearchFilters? = null,
+        sort: SearchSort = SearchSort.MATCH,
+        filters: SubjectSearchFilters? = null,
+        fields: List<SubjectSearchField>? = null,
     ): List<BatchSubjectDetails> = withContext(ioDispatcher) {
         val result = subjectApi.invoke {
             searchSubjects(
@@ -49,18 +50,21 @@ class AniSubjectSearchService(
                 offset = offset,
                 limit = limit,
                 tags = filters?.tags,
+                airDates = filters?.airDates,
+                ratings = filters?.ratings,
+                ranks = filters?.ranks,
                 includeNsfw = when (filters?.nsfw) {
-                    true -> AniNsfwFilter.INCLUDE
+                    true -> AniNsfwFilter.ONLY
                     false -> AniNsfwFilter.EXCLUDE
-                    null -> null
+                    null -> AniNsfwFilter.INCLUDE
                 },
                 sortBy = when (sort) {
-                    BangumiSort.MATCH -> AniSubjectSearchSortBy.RELEVANCE
-                    BangumiSort.HEAT -> AniSubjectSearchSortBy.AIR_DATE_DESC
-                    BangumiSort.RANK -> AniSubjectSearchSortBy.RANK_ASC
-                    BangumiSort.SCORE -> AniSubjectSearchSortBy.RATING_DESC
-                    null -> null
+                    SearchSort.MATCH -> AniSubjectSearchSortBy.RELEVANCE
+                    SearchSort.RANK -> AniSubjectSearchSortBy.RATING_DESC
+                    SearchSort.COLLECTION -> AniSubjectSearchSortBy.COLLECTION_DESC
+                    SearchSort.DATE -> AniSubjectSearchSortBy.AIR_DATE_DESC
                 },
+                fields = fields?.map { it.toAniField() },
             )
         }.body()
 
@@ -109,4 +113,19 @@ class AniSubjectSearchService(
             ),
         )
     }
+}
+
+private fun SubjectSearchField.toAniField(): AniSubjectSearchField = when (this) {
+    SubjectSearchField.NAME -> AniSubjectSearchField.NAME
+    SubjectSearchField.SUMMARY -> AniSubjectSearchField.SUMMARY
+    SubjectSearchField.IMAGE_LARGE -> AniSubjectSearchField.IMAGE_LARGE
+    SubjectSearchField.NSFW -> AniSubjectSearchField.NSFW
+    SubjectSearchField.AIR_DATE -> AniSubjectSearchField.AIR_DATE
+    SubjectSearchField.SCORE -> AniSubjectSearchField.SCORE
+    SubjectSearchField.RANK -> AniSubjectSearchField.RANK
+    SubjectSearchField.RATING_TOTAL -> AniSubjectSearchField.RATING_TOTAL
+    SubjectSearchField.FAVORITE -> AniSubjectSearchField.FAVORITE
+    SubjectSearchField.TAGS -> AniSubjectSearchField.TAGS
+    SubjectSearchField.MAIN_EPISODE_COUNT -> AniSubjectSearchField.MAIN_EPISODE_COUNT
+    SubjectSearchField.LIGHT_RELATED_PERSON_INFO -> AniSubjectSearchField.LIGHT_RELATED_PERSON_INFO
 }

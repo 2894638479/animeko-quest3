@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -10,7 +10,6 @@
 package me.him188.ani.app.ui.exploration.search
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.WindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -70,10 +70,8 @@ import me.him188.ani.app.domain.search.SearchSort
 import me.him188.ani.app.ui.foundation.IconButton
 import me.him188.ani.app.ui.foundation.animation.AniMotionScheme
 import me.him188.ani.app.ui.foundation.animation.LocalAniMotionScheme
-import me.him188.ani.app.ui.foundation.animation.SharedTransitionKeys
 import me.him188.ani.app.ui.foundation.icons.BackgroundDotLarge
 import me.him188.ani.app.ui.foundation.icons.GalleryThumbnail
-import me.him188.ani.app.ui.foundation.ifNotNullThen
 import me.him188.ani.app.ui.foundation.interaction.keyboardDirectionToSelectItem
 import me.him188.ani.app.ui.foundation.interaction.keyboardPageToScroll
 import me.him188.ani.app.ui.foundation.layout.currentWindowAdaptiveInfo1
@@ -81,6 +79,13 @@ import me.him188.ani.app.ui.foundation.layout.paneHorizontalPadding
 import me.him188.ani.app.ui.foundation.layout.paneVerticalPadding
 import me.him188.ani.app.ui.foundation.widgets.NsfwMask
 import me.him188.ani.app.ui.foundation.widgets.SelectableDropdownMenuItem
+import me.him188.ani.app.ui.lang.Lang
+import me.him188.ani.app.ui.lang.exploration_search_results_shown
+import me.him188.ani.app.ui.lang.exploration_search_sort_collection
+import me.him188.ani.app.ui.lang.exploration_search_sort_date
+import me.him188.ani.app.ui.lang.exploration_search_sort_match
+import me.him188.ani.app.ui.lang.exploration_search_sort_rank
+import me.him188.ani.app.ui.lang.foundation_load_error_no_results
 import me.him188.ani.app.ui.search.LoadErrorCard
 import me.him188.ani.app.ui.search.SearchDefaults.IconTextButton
 import me.him188.ani.app.ui.search.SearchResultLazyVerticalGrid
@@ -89,6 +94,7 @@ import me.him188.ani.app.ui.search.isFinishedAndEmpty
 import me.him188.ani.app.ui.subject.SubjectCoverCard
 import me.him188.ani.app.ui.subject.SubjectGridDefaults
 import me.him188.ani.app.ui.subject.SubjectGridLayoutParams
+import org.jetbrains.compose.resources.stringResource
 
 
 @Composable
@@ -125,7 +131,8 @@ internal fun SearchResultColumn(
             .focusGroup()
             .onSizeChanged { height = it.height }
             .keyboardDirectionToSelectItem(
-                selectedItemIndex,
+                selectedItemIndex = selectedItemIndex,
+                itemCount = { items.itemCount },
             ) {
                 state.animateScrollToItem(it)
                 onSelect(it)
@@ -151,86 +158,74 @@ internal fun SearchResultColumn(
 
         items(
             count = items.itemCount,
-            key = items.itemKey { it.subjectId },
+            key = { index ->
+                val item = items.peek(index)
+                if (item == null) {
+                    "search-result-placeholder-$index"
+                } else {
+                    "search-result-$index-${item.subjectId}"
+                }
+            },
             contentType = items.itemContentType { 1 },
         ) { index ->
             val info = items[index]
 
-            SharedTransitionLayout {
-                AnimatedContent(
-                    layoutParams.kind,
-                    transitionSpec = aniMotionScheme.animatedContent.topLevel,
-                ) { targetKind ->
-                    var nsfwMaskState: NsfwMode by rememberSaveable(info?.title) {
-                        mutableStateOf(info?.nsfwMode ?: NsfwMode.DISPLAY)
-                    }
-                    NsfwMask(
-                        mode = nsfwMaskState,
-                        onTemporarilyDisplay = { nsfwMaskState = NsfwMode.DISPLAY },
-                        shape = layoutParams.grid.cardShape,
-                    ) {
-                        val animatedVisibilityScope = this
-                        when (targetKind) {
-                            SearchResultLayoutKind.COVER -> {
-                                SubjectCoverCard(
-                                    info?.title,
-                                    info?.imageUrl,
-                                    isPlaceholder = info == null,
+            AnimatedContent(
+                layoutParams.kind,
+                transitionSpec = aniMotionScheme.animatedContent.topLevel,
+            ) { targetKind ->
+                var nsfwMaskState: NsfwMode by rememberSaveable(info?.title) {
+                    mutableStateOf(info?.nsfwMode ?: NsfwMode.DISPLAY)
+                }
+                NsfwMask(
+                    mode = nsfwMaskState,
+                    onTemporarilyDisplay = { nsfwMaskState = NsfwMode.DISPLAY },
+                    shape = layoutParams.grid.cardShape,
+                ) {
+                    when (targetKind) {
+                        SearchResultLayoutKind.COVER -> {
+                            SubjectCoverCard(
+                                info?.title,
+                                info?.imageUrl,
+                                isPlaceholder = info == null,
+                                onClick = { onSelect(index) },
+                                Modifier.animateItem(
+                                    aniMotionScheme.feedItemFadeInSpec,
+                                    aniMotionScheme.feedItemPlacementSpec,
+                                    aniMotionScheme.feedItemFadeOutSpec,
+                                ),
+                                shape = layoutParams.grid.cardShape,
+                            )
+                        }
+
+                        SearchResultLayoutKind.PREVIEW -> {
+                            if (info != null && !info.hide) {
+                                val requester = remember { BringIntoViewRequester() }
+                                // Shared transition disabled temporarily to avoid detach/lookahead crashes.
+                                DisposableEffect(requester) {
+                                    bringIntoViewRequesters[info.subjectId] = requester
+                                    onDispose {
+                                        bringIntoViewRequesters.remove(info.subjectId)
+                                    }
+                                }
+
+                                SearchResultItem(
+                                    info = info,
+                                    selected = highlightSelected && index == selectedItemIndex(),
+                                    shape = layoutParams.previewItem.shape,
                                     onClick = { onSelect(index) },
+                                    onPlay = onPlay,
                                     Modifier
-                                        .ifNotNullThen(info) {
-                                            sharedElement(
-                                                rememberSharedContentState(
-                                                    SharedTransitionKeys.subjectCoverImage(
-                                                        subjectId = it.subjectId,
-                                                    ),
-                                                ),
-                                                animatedVisibilityScope,
-                                                clipInOverlayDuringTransition = OverlayClip(layoutParams.grid.cardShape),
-                                            )
-                                        }
                                         .animateItem(
                                             aniMotionScheme.feedItemFadeInSpec,
                                             aniMotionScheme.feedItemPlacementSpec,
                                             aniMotionScheme.feedItemFadeOutSpec,
-                                        ),
-                                    shape = layoutParams.grid.cardShape,
+                                        )
+                                        .bringIntoViewRequester(requester),
+                                    imageModifier = Modifier,
                                 )
-                            }
-
-                            SearchResultLayoutKind.PREVIEW -> {
-                                if (info != null && !info.hide) {
-                                    val requester = remember { BringIntoViewRequester() }
-                                    // 记录 item 对应的 requester
-                                    DisposableEffect(requester) {
-                                        bringIntoViewRequesters[info.subjectId] = requester
-                                        onDispose {
-                                            bringIntoViewRequesters.remove(info.subjectId)
-                                        }
-                                    }
-
-                                    SearchResultItem(
-                                        info = info,
-                                        selected = highlightSelected && index == selectedItemIndex(),
-                                        shape = layoutParams.previewItem.shape,
-                                        onClick = { onSelect(index) },
-                                        onPlay = onPlay,
-                                        Modifier
-                                            .animateItem(
-                                                aniMotionScheme.feedItemFadeInSpec,
-                                                aniMotionScheme.feedItemPlacementSpec,
-                                                aniMotionScheme.feedItemFadeOutSpec,
-                                            )
-                                            .bringIntoViewRequester(requester),
-                                        imageModifier = Modifier.sharedElement(
-                                            rememberSharedContentState(SharedTransitionKeys.subjectCoverImage(subjectId = info.subjectId)),
-                                            animatedVisibilityScope,
-                                            clipInOverlayDuringTransition = OverlayClip(layoutParams.grid.cardShape),
-                                        ),
-                                    )
-                                } else {
-                                    Box(Modifier.size(Dp.Hairline))
-                                }
+                            } else {
+                                Box(Modifier.size(Dp.Hairline))
                             }
                         }
                     }
@@ -339,10 +334,11 @@ private fun LazyGridItemScope.SearchResultColumnScopeImpl(
         modifier: Modifier
     ) {
         val modifier1 = modifier // 不要加动画, #1901
+        val noResultsText = stringResource(Lang.foundation_load_error_no_results)
         when {
             itemsState.value.isFinishedAndEmpty -> {
                 ListItem(
-                    headlineContent = { Text("无搜索结果") },
+                    headlineContent = { Text(noResultsText) },
                     modifier = modifier1,
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
                 )
@@ -355,7 +351,10 @@ private fun LazyGridItemScope.SearchResultColumnScopeImpl(
                         verticalArrangement = Arrangement.aligned(Alignment.CenterVertically),
                         itemVerticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("已显示 ${itemsState.value.itemCount} 个结果", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(Lang.exploration_search_results_shown, itemsState.value.itemCount),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
                         Row(
                             Modifier.weight(1f).align(Alignment.Bottom),
                             verticalAlignment = Alignment.CenterVertically,
@@ -425,6 +424,7 @@ private fun SortButton(
     onSortChange: (SearchSort) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val sortLabels = rememberSearchSortLabels()
     Box(
         modifier, contentAlignment = Alignment.BottomEnd,
     ) {
@@ -437,7 +437,7 @@ private fun SortButton(
                 Icon(Icons.AutoMirrored.Rounded.Sort, null)
             },
         ) {
-            Text(getSortText(currentSort), softWrap = false)
+            Text(getSortText(currentSort, sortLabels), softWrap = false)
         }
         DropdownMenu(showDropdown, { showDropdown = false }) {
             for (sort in SearchSort.entries) {
@@ -445,7 +445,7 @@ private fun SortButton(
                     selected = sort == currentSort,
                     text = {
                         Text(
-                            getSortText(sort),
+                            getSortText(sort, sortLabels),
                             softWrap = false,
                         )
                     },
@@ -459,8 +459,25 @@ private fun SortButton(
     }
 }
 
-private fun getSortText(currentSort: SearchSort): String = when (currentSort) {
-    SearchSort.MATCH -> "最佳匹配"
-    SearchSort.COLLECTION -> "最多收藏"
-    SearchSort.RANK -> "最高排名"
+@Immutable
+private data class SearchSortLabels(
+    val match: String,
+    val collection: String,
+    val rank: String,
+    val date: String,
+)
+
+@Composable
+private fun rememberSearchSortLabels(): SearchSortLabels = SearchSortLabels(
+    match = stringResource(Lang.exploration_search_sort_match),
+    collection = stringResource(Lang.exploration_search_sort_collection),
+    rank = stringResource(Lang.exploration_search_sort_rank),
+    date = stringResource(Lang.exploration_search_sort_date),
+)
+
+private fun getSortText(currentSort: SearchSort, labels: SearchSortLabels): String = when (currentSort) {
+    SearchSort.MATCH -> labels.match
+    SearchSort.COLLECTION -> labels.collection
+    SearchSort.RANK -> labels.rank
+    SearchSort.DATE -> labels.date
 }

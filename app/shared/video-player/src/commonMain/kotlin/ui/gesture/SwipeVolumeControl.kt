@@ -26,6 +26,9 @@ interface LevelController {
 
     val range: ClosedRange<Float>
 
+    /** Smallest level change that this controller can represent. */
+    val levelStep: Float get() = 0.01f
+
     @MainThread
     fun setLevel(level: Float)
 }
@@ -58,6 +61,9 @@ fun AudioManager.asLevelController(
         get() = getVolume(streamType)
 
     override val range: ClosedRange<Float> = 0f..1f
+
+    override val levelStep: Float
+        get() = getVolumeStep(streamType)
 
     override fun setLevel(level: Float) {
         setVolume(streamType, level.coerceIn(range))

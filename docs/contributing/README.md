@@ -9,14 +9,10 @@
 - Telegram
   开发者群 [![Group](https://img.shields.io/badge/Telegram-2CA5E0?style=flat-squeare&logo=telegram&logoColor=white)](https://t.me/openani_dev) (
   推荐，开发者即时回复)
-- [GitHub Discussions](https://github.com/open-ani/ani/discussions)
 
 ## 上手指南
 
-> [!IMPORTANT]
-> 每个步骤都很重要，根据你的经验不同，总共可能需要花费 10-30 分钟。请不要跳过，跳过可能会导致花费更多时间解决问题。
-
-1. [开发工具: IDE, JDK, 推荐插件](setup.md)
+1. [开发工具: IDE, JDK,](setup.md)
 2. [代码风格与代码规范](code-style.md)
 3. [项目架构](architecture.md)
 4. [构建和打包](building.md): 如何编译, 如何打包 APK
@@ -25,14 +21,15 @@
 
 ## 开发文档
 
-> 以下文档为人工编写，只覆盖部分内容。
-> 可以参考 DeepWiki (AI) 自动生成的全面在线文档（有很高正确性）：<https://deepwiki.com/open-ani/animeko>
-
 - [条目系统](code/subjects.md)
 - [Media Framework](code/media-framework.md)
     - [MediaSource](code/media/media-source.md)
     - [MediaSelector](code/media/media-selector.md)
     - [缓存](code/media/media-cache.md)
+    - [代码地图](code/media/media-code-map.md)
+
+> 以上文档除有标注外为人工编写。
+> 其他部分文档可以参考 DeepWiki (AI)（有很高正确性）：<https://deepwiki.com/open-ani/animeko>
 
 ## 更多信息
 

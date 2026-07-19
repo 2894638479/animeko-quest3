@@ -89,6 +89,16 @@ sealed class NavRoutes {
     ) : NavRoutes()
 
     @Serializable
+    data class PersonDetail(
+        val personId: Int,
+    ) : NavRoutes()
+
+    @Serializable
+    data class CharacterDetail(
+        val characterId: Int,
+    ) : NavRoutes()
+
+    @Serializable
     data class SubjectCaches(
         val subjectId: Int,
     ) : NavRoutes()
@@ -118,6 +128,12 @@ sealed class NavRoutes {
 
     @Serializable
     data object Schedule : NavRoutes()
+
+    @Serializable
+    data object PlaybackHistory : NavRoutes()
+
+    @Serializable
+    data object PlaybackHistorySyncStatus : NavRoutes()
 
     companion object {
         val NavType by lazy { SerializableNavType(serializer()) }

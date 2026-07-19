@@ -51,7 +51,7 @@ object ReleaseArtifactNames {
 
     fun fullVersionFromTag(tag: String): String = tag.removePrefix("v")
 
-    // alpha 和 beta 版本不能超过 5 个, 因为只有一位数可以给它用
+    // alpha 只能又 6 个版本，beta 只能有 3 个版本
     fun versionCodeFromTag(tag: String): String {
         val match = Regex("""^v(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)(\d+))?$""").matchEntire(tag)
             ?: throw GradleException("Unsupported tag format: '$tag'")
@@ -74,21 +74,18 @@ object ReleaseArtifactNames {
 
         val metaDigit = when (channel) {
             "alpha" -> when (meta) {
-                1 -> 0
-                2 -> 1
-                3 -> 2
+                1 -> 1
+                2 -> 2
+                3 -> 3
                 4 -> 3
                 5 -> 4
-                else -> 0
+                else -> 6
             }
 
             "beta" -> when (meta) {
-                1 -> 5
-                2 -> 6
-                3 -> 7
-                4 -> 8
-                5 -> 9
-                else -> 0
+                1 -> 7
+                2 -> 8
+                else -> 9
             }
 
             else -> 0
@@ -406,6 +403,11 @@ abstract class UploadDesktopInstallersTask : ReleaseUploadTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val linuxAppImage: RegularFileProperty
 
+    @get:Optional
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val linuxAppImageZsync: RegularFileProperty
+
     @TaskAction
     fun uploadInstallers() {
         val fullVersion = releaseFullVersion.get()
@@ -448,16 +450,28 @@ abstract class UploadDesktopInstallersTask : ReleaseUploadTask() {
                 }
             }
 
-            ReleaseHostOs.LINUX -> uploadReleaseAsset(
-                name = ReleaseArtifactNames.desktopDistributionFile(
-                    fullVersion = fullVersion,
-                    osName = "linux",
-                    archName = "x86_64",
-                    extension = "appimage",
-                ),
-                contentType = "application/x-appimage",
-                file = requiredFile(linuxAppImage, "linuxAppImage"),
-            )
+            ReleaseHostOs.LINUX -> {
+                uploadReleaseAsset(
+                    name = ReleaseArtifactNames.desktopDistributionFile(
+                        fullVersion = fullVersion,
+                        osName = "linux",
+                        archName = "x86_64",
+                        extension = "appimage",
+                    ),
+                    contentType = "application/x-appimage",
+                    file = requiredFile(linuxAppImage, "linuxAppImage"),
+                )
+                uploadReleaseAsset(
+                    name = ReleaseArtifactNames.desktopDistributionFile(
+                        fullVersion = fullVersion,
+                        osName = "linux",
+                        archName = "x86_64",
+                        extension = "appimage.zsync",
+                    ),
+                    contentType = "application/octet-stream",
+                    file = requiredFile(linuxAppImageZsync, "linuxAppImageZsync"),
+                )
+            }
         }
     }
 

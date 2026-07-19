@@ -11,7 +11,6 @@
 
 package me.him188.ani.app.ui.settings.mediasource.selector.episode
 
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,6 +84,19 @@ import me.him188.ani.app.ui.foundation.stateOf
 import me.him188.ani.app.ui.foundation.widgets.BackNavigationIconButton
 import me.him188.ani.app.ui.foundation.widgets.FastLinearProgressIndicator
 import me.him188.ani.app.ui.foundation.widgets.LocalToaster
+import me.him188.ani.app.ui.lang.Lang
+import me.him188.ani.app.ui.lang.settings_mediasource_copied
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_actual_play_url
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_hide_css
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_hide_data
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_hide_images
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_hide_scripts
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_matched
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_multiple_matched_video
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_nested_link
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_no_matched_video
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_not_matched
+import me.him188.ani.app.ui.lang.settings_mediasource_selector_episode_single_matched_video
 import me.him188.ani.app.ui.settings.mediasource.rss.createTestSaveableStorage
 import me.him188.ani.app.ui.settings.mediasource.selector.EditSelectorMediaSourcePageState
 import me.him188.ani.app.ui.settings.mediasource.selector.edit.SelectorConfigurationDefaults
@@ -92,6 +104,7 @@ import me.him188.ani.app.ui.settings.mediasource.selector.test.SelectorTestPane
 import me.him188.ani.app.ui.settings.mediasource.selector.test.TestSelectorMediaSourceEngine
 import me.him188.ani.datasources.api.EpisodeSort
 import me.him188.ani.utils.platform.annotations.TestOnly
+import org.jetbrains.compose.resources.stringResource
 import kotlin.coroutines.EmptyCoroutineContext
 
 @Composable
@@ -105,81 +118,76 @@ fun SelectorTestAndEpisodePane(
     val nestedNav = rememberNavController()
     state.episodeNavController = nestedNav
 
-    SharedTransitionScope { transitionModifier ->
-        NavHost(nestedNav, initialRoute, modifier.then(transitionModifier)) {
-            composable<SelectorEpisodePaneRoutes.TEST> {
-                SelectorTestPane(
-                    state.testState,
-                    onViewEpisode = {
-                        state.viewEpisode(it)
-                    },
-                    this,
+    NavHost(nestedNav, initialRoute, modifier) {
+        composable<SelectorEpisodePaneRoutes.TEST> {
+            SelectorTestPane(
+                state.testState,
+                onViewEpisode = {
+                    state.viewEpisode(it)
+                },
+                Modifier.fillMaxSize(),
+                contentPadding = contentPadding,
+            )
+        }
+        composable<SelectorEpisodePaneRoutes.EPISODE> {
+            val onBack: () -> Unit = {
+                state.stopViewing()
+                nestedNav.popBackStack(SelectorEpisodePaneRoutes.EPISODE, inclusive = true)
+            }
+            BackHandler(onBack = onBack)
+            val cardColors: CardColors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            )
+
+            // decorate
+            val content: @Composable () -> Unit = {
+                SelectorEpisodePaneContent(
+                    state.episodeState,
                     Modifier.fillMaxSize(),
-                    contentPadding = contentPadding,
+                    itemColors = ListItemDefaults.colors(containerColor = cardColors.containerColor),
                 )
             }
-            composable<SelectorEpisodePaneRoutes.EPISODE> {
-                val onBack: () -> Unit = {
-                    state.stopViewing()
-                    nestedNav.popBackStack(SelectorEpisodePaneRoutes.EPISODE, inclusive = true)
-                }
-                BackHandler(onBack = onBack)
-                val cardColors: CardColors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                )
-
-                // decorate
-                val content: @Composable () -> Unit = {
-                    SelectorEpisodePaneContent(
-                        state.episodeState,
+            val topAppBarDecorated = if (layout.showTopBarInPane) {
+                {
+                    // list 展开, 能编辑配置
+                    Card(
                         Modifier.fillMaxSize(),
-                        itemColors = ListItemDefaults.colors(containerColor = cardColors.containerColor),
-                    )
-                }
-                val topAppBarDecorated = if (layout.showTopBarInPane) {
-                    {
-                        // list 展开, 能编辑配置
-                        Card(
-                            Modifier
-//                                .sharedBounds(rememberSharedContentState(state.episodeState.lastNonNullId), this)
-                                .fillMaxSize(),
-                            colors = cardColors,
-                            shape = MaterialTheme.shapes.large,
-                        ) {
-                            SelectorEpisodePaneDefaults.TopAppBar(
-                                state.episodeState,
-                                navigationIcon = {
-                                    BackNavigationIconButton({ onBack() })
-                                },
-                            )
-                            content()
-                        }
-                    }
-                } else content
-
-                val bottomSheetDecorated = if (layout.showBottomSheet) {
-                    {
-                        BottomSheetScaffold(
-                            sheetContent = {
-                                SelectorEpisodePaneDefaults.ConfigurationContent(
-                                    state.configurationState,
-                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                                )
+                        colors = cardColors,
+                        shape = MaterialTheme.shapes.large,
+                    ) {
+                        SelectorEpisodePaneDefaults.TopAppBar(
+                            state.episodeState,
+                            navigationIcon = {
+                                BackNavigationIconButton({ onBack() })
                             },
-                            Modifier
-                                .fillMaxSize(),
-                            sheetPeekHeight = 78.dp,
-                        ) { paddingValues ->
-                            Box(Modifier.padding(paddingValues)) {
-                                topAppBarDecorated()
-                            }
+                        )
+                        content()
+                    }
+                }
+            } else content
+
+            val bottomSheetDecorated = if (layout.showBottomSheet) {
+                {
+                    BottomSheetScaffold(
+                        sheetContent = {
+                            SelectorEpisodePaneDefaults.ConfigurationContent(
+                                state.configurationState,
+                                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                            )
+                        },
+                        Modifier
+                            .fillMaxSize(),
+                        sheetPeekHeight = 78.dp,
+                    ) { paddingValues ->
+                        Box(Modifier.padding(paddingValues)) {
+                            topAppBarDecorated()
                         }
                     }
-                } else topAppBarDecorated
-
-                Box(Modifier.padding(contentPadding)) {
-                    bottomSheetDecorated()
                 }
+            } else topAppBarDecorated
+
+            Box(Modifier.padding(contentPadding)) {
+                bottomSheetDecorated()
             }
         }
     }
@@ -219,6 +227,20 @@ fun SelectorEpisodePaneContent(
                     list.count { it.isMatchedVideo() }
                 }
             }
+            val noMatchedVideoText = stringResource(
+                Lang.settings_mediasource_selector_episode_no_matched_video,
+                list.size,
+            )
+            val singleMatchedVideoText = stringResource(
+                Lang.settings_mediasource_selector_episode_single_matched_video,
+                list.size,
+                matchedVideoSize,
+            )
+            val multipleMatchedVideoText = stringResource(
+                Lang.settings_mediasource_selector_episode_multiple_matched_video,
+                list.size,
+                matchedVideoSize,
+            )
             ProvideTextStyle(MaterialTheme.typography.titleMedium) {
                 when (matchedVideoSize) {
                     0 -> {
@@ -227,7 +249,7 @@ fun SelectorEpisodePaneContent(
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
                         )
-                        Text("根据步骤 3 的配置，从 ${list.size} 个链接中未匹配到播放链接，请检查配置")
+                        Text(noMatchedVideoText)
                     }
 
                     1 -> {
@@ -236,7 +258,7 @@ fun SelectorEpisodePaneContent(
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                         )
-                        Text("根据步骤 3 的配置，从 ${list.size} 个链接中匹配到了 $matchedVideoSize 个链接")
+                        Text(singleMatchedVideoText)
                     }
 
                     else -> {
@@ -245,12 +267,16 @@ fun SelectorEpisodePaneContent(
                             contentDescription = null,
                             tint = Color.Yellow.compositeOver(MaterialTheme.colorScheme.error),
                         )
-                        Text("根据步骤 3 的配置，从 ${list.size} 个链接中匹配到了 $matchedVideoSize 个链接。为了更好的稳定性，建议调整规则，匹配到正好一个链接")
+                        Text(multipleMatchedVideoText)
                     }
                 }
             }
         }
 
+        val hideImagesText = stringResource(Lang.settings_mediasource_selector_episode_hide_images)
+        val hideCssText = stringResource(Lang.settings_mediasource_selector_episode_hide_css)
+        val hideScriptsText = stringResource(Lang.settings_mediasource_selector_episode_hide_scripts)
+        val hideDataText = stringResource(Lang.settings_mediasource_selector_episode_hide_data)
         FlowRow(
             Modifier.padding(horizontal = horizontalPadding).padding(bottom = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -258,30 +284,34 @@ fun SelectorEpisodePaneContent(
             FilterChip(
                 selected = state.hideImages,
                 { state.hideImages = !state.hideImages },
-                label = { Text("隐藏图片") },
+                label = { Text(hideImagesText) },
                 leadingIcon = { if (state.hideImages) Icon(Icons.Rounded.Check, null) },
             )
             FilterChip(
                 selected = state.hideCss,
                 { state.hideCss = !state.hideCss },
-                label = { Text("隐藏 CSS/字体") },
+                label = { Text(hideCssText) },
                 leadingIcon = { if (state.hideCss) Icon(Icons.Rounded.Check, null) },
             )
             FilterChip(
                 selected = state.hideScripts,
                 { state.hideScripts = !state.hideScripts },
-                label = { Text("隐藏 JS/WASM") },
+                label = { Text(hideScriptsText) },
                 leadingIcon = { if (state.hideScripts) Icon(Icons.Rounded.Check, null) },
             )
             FilterChip(
                 selected = state.hideData,
                 { state.hideData = !state.hideData },
-                label = { Text("隐藏 data") },
+                label = { Text(hideDataText) },
                 leadingIcon = { if (state.hideData) Icon(Icons.Rounded.Check, null) },
             )
         }
 
         val filteredList by state.filteredResults.collectAsStateWithLifecycle(emptyList())
+        val copiedText = stringResource(Lang.settings_mediasource_copied)
+        val nestedLinkText = stringResource(Lang.settings_mediasource_selector_episode_nested_link)
+        val matchedText = stringResource(Lang.settings_mediasource_selector_episode_matched)
+        val notMatchedText = stringResource(Lang.settings_mediasource_selector_episode_not_matched)
 
         LazyColumn(
             contentPadding = PaddingValues(
@@ -309,18 +339,23 @@ fun SelectorEpisodePaneContent(
                             .clickable {
                                 scope.launch {
                                     clipboard.setClipEntryText(matchResult.originalUrl)
-                                    toaster.toast("已复制")
+                                    toaster.toast(copiedText)
                                 }
                             },
                         supportingContent = {
                             val m3u8 = matchResult.video?.m3u8Url
                             when {
                                 m3u8 != null && m3u8 != matchResult.originalUrl -> {
-                                    Text("将实际播放：${m3u8}")
+                                    Text(
+                                        stringResource(
+                                            Lang.settings_mediasource_selector_episode_actual_play_url,
+                                            m3u8,
+                                        ),
+                                    )
                                 }
 
                                 matchResult.webUrl.didLoadNestedPage -> {
-                                    Text("嵌套链接")
+                                    Text(nestedLinkText)
                                 }
                             }
                         },
@@ -329,11 +364,11 @@ fun SelectorEpisodePaneContent(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 when {
                                     matchResult.highlight -> {
-                                        Icon(Icons.Rounded.Check, "匹配", tint = MaterialTheme.colorScheme.primary)
+                                        Icon(Icons.Rounded.Check, matchedText, tint = MaterialTheme.colorScheme.primary)
                                     }
 
                                     else -> {
-                                        Icon(Icons.Rounded.Close, "未匹配")
+                                        Icon(Icons.Rounded.Close, notMatchedText)
                                     }
                                 }
                             }

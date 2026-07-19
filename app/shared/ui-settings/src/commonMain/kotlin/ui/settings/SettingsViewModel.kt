@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -23,8 +23,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import me.him188.ani.app.data.models.danmaku.DanmakuConfigSerializer
 import me.him188.ani.app.data.models.danmaku.DanmakuFilterConfig
+import me.him188.ani.app.data.models.danmaku.DanmakuRegexFilter
 import me.him188.ani.app.data.models.preference.AnalyticsSettings
 import me.him188.ani.app.data.models.preference.AnitorrentConfig
+import me.him188.ani.app.data.models.preference.PikPakConfig
 import me.him188.ani.app.data.models.preference.DanmakuSettings
 import me.him188.ani.app.data.models.preference.DebugSettings
 import me.him188.ani.app.data.models.preference.MediaCacheSettings
@@ -87,6 +89,9 @@ import me.him188.ani.app.ui.user.SelfInfoStateProducer
 import me.him188.ani.danmaku.ui.DanmakuConfig
 import me.him188.ani.datasources.api.source.ConnectionStatus
 import me.him188.ani.datasources.bangumi.BangumiClient
+import me.him188.ani.app.domain.foundation.ScopedHttpClientUserAgent
+import me.him188.ani.torrent.pikpak.testPikPakLogin
+import me.him188.ani.utils.ktor.UnsafeScopedHttpClientApi
 import me.him188.ani.utils.coroutines.IO_
 import me.him188.ani.utils.coroutines.SingleTaskExecutor
 import org.koin.core.component.KoinComponent
@@ -132,6 +137,39 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
     val torrentSettingsState: SettingsState<AnitorrentConfig> =
         settingsRepository.anitorrentConfig.stateInBackground(AnitorrentConfig.Default.copy(_placeholder = -1))
 
+    val pikpakSettingsState: SettingsState<PikPakConfig> =
+        settingsRepository.pikpakConfig.stateInBackground(PikPakConfig.Default)
+
+    // Probes PikPak auth with the currently-displayed credentials. The engine
+    // keeps the password persisted (obscured, see PikPakConfig.password) so a
+    // revoked refresh token can be recovered without prompting the user; an
+    // existing refresh token is also a usable auth path on its own. NOT_ENABLED
+    // therefore requires both credential fields blank, not just the password.
+    //
+    // We borrow/returnClient around each probe rather than borrowForever:
+    // every click on "测试连接" would otherwise pin a fresh client in the
+    // ref-counted pool until process exit, so after e.g. a proxy change the
+    // old clients (with their sockets / threads) would accumulate.
+    @OptIn(UnsafeScopedHttpClientApi::class)
+    val pikpakConnectionTester: ConnectionTester = ConnectionTester(id = "pikpak") {
+        val cfg = pikpakSettingsState.value
+        if (cfg.username.isEmpty() || (cfg.password.isEmpty() && cfg.refreshToken.isEmpty())) {
+            ConnectionTestResult.NOT_ENABLED
+        } else {
+            val scoped = clientProvider.get(ScopedHttpClientUserAgent.ANI)
+            val ticket = scoped.borrow()
+            try {
+                if (testPikPakLogin(cfg.username, cfg.password, cfg.refreshToken, ticket.client)) {
+                    ConnectionTestResult.SUCCESS
+                } else {
+                    ConnectionTestResult.FAILED
+                }
+            } finally {
+                scoped.returnClient(ticket)
+            }
+        }
+    }
+
     val cacheDirectoryGroupState = CacheDirectoryGroupState(
         mediaCacheSettingsState,
         permissionManager,
@@ -147,7 +185,7 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
         },
     )
 
-    private val mediaSelectorSettingsState: SettingsState<MediaSelectorSettings> =
+    internal val mediaSelectorSettingsState: SettingsState<MediaSelectorSettings> =
         settingsRepository.mediaSelectorSettings.stateInBackground(MediaSelectorSettings.Default.copy(_placeholder = -1))
 
     private val defaultMediaPreferenceState =
@@ -229,6 +267,8 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
                 danmakuRegexFilterRepository.update(it.id, it.copy(enabled = !it.enabled))
             }
         },
+        onExport = { danmakuRegexFilterRepository.export() },
+        onImport = { danmakuRegexFilterRepository.import(it) },
     )
 
     val danmakuServerTesters = DefaultConnectionTesterRunner(
@@ -327,6 +367,7 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
             danmakuEnabled = settingsRepository.danmakuEnabled.flow.first(),
             danmakuConfig = settingsRepository.danmakuConfig.flow.first(),
             danmakuFilterConfig = settingsRepository.danmakuFilterConfig.flow.first(),
+            danmakuRegexFilters = danmakuRegexFilterRepository.flow.first(),
             mediaSelectorSettings = settingsRepository.mediaSelectorSettings.flow.first(),
             defaultMediaPreference = settingsRepository.defaultMediaPreference.flow.first(),
             profileSettings = settingsRepository.profileSettings.flow.first(),
@@ -343,6 +384,11 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
             oneshotActionConfig = settingsRepository.oneshotActionConfig.flow.first(),
             analyticsSettings = settingsRepository.analyticsSettings.flow.first(),
             debugSettings = settingsRepository.debugSettings.flow.first(),
+            // Account credentials must not leak into exported settings; keep
+            // the field present so the backup schema stays stable, but write
+            // a credential-free Default. restoreSettingsBackup intentionally
+            // ignores it for the same reason.
+            pikpakConfig = PikPakConfig.Default,
             tokenStore = tokenRepository.getTokenSaveSnapshot(),
         )
 
@@ -356,6 +402,7 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
         backup.danmakuEnabled?.let { settingsRepository.danmakuEnabled.set(it) }
         backup.danmakuConfig?.let { settingsRepository.danmakuConfig.set(it) }
         backup.danmakuFilterConfig?.let { settingsRepository.danmakuFilterConfig.set(it) }
+        backup.danmakuRegexFilters?.let { danmakuRegexFilterRepository.replaceAll(it) }
         backup.mediaSelectorSettings?.let { settingsRepository.mediaSelectorSettings.set(it) }
         backup.defaultMediaPreference?.let { settingsRepository.defaultMediaPreference.set(it) }
         backup.profileSettings?.let { settingsRepository.profileSettings.set(it) }
@@ -372,6 +419,10 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
         backup.oneshotActionConfig?.let { settingsRepository.oneshotActionConfig.set(it) }
         backup.analyticsSettings?.let { settingsRepository.analyticsSettings.set(it) }
         backup.debugSettings?.let { settingsRepository.debugSettings.set(it) }
+        // pikpakConfig deliberately not restored: see serializeSettingsBackup.
+        // Older backups produced before that change may still carry real
+        // credentials, and we don't want a restore to silently re-introduce
+        // them on a different device.
         backup.tokenStore?.let { tokenRepository.restoreFromTokenSave(it) }
 
         return true
@@ -404,6 +455,7 @@ private data class SettingsBackup(
     val danmakuEnabled: Boolean?,
     @Serializable(with = DanmakuConfigSerializer::class) val danmakuConfig: DanmakuConfig?,
     val danmakuFilterConfig: DanmakuFilterConfig?,
+    val danmakuRegexFilters: List<DanmakuRegexFilter>? = null,
     val mediaSelectorSettings: MediaSelectorSettings?,
     val defaultMediaPreference: MediaPreference?,
     val profileSettings: ProfileSettings?,
@@ -420,5 +472,6 @@ private data class SettingsBackup(
     val oneshotActionConfig: OneshotActionConfig?,
     val analyticsSettings: AnalyticsSettings?,
     val debugSettings: DebugSettings?,
+    val pikpakConfig: PikPakConfig? = null,
     val tokenStore: TokenSave?
 )

@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +45,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
@@ -62,6 +64,7 @@ import me.him188.ani.app.data.repository.player.DanmakuRegexFilterRepository
 import me.him188.ani.app.data.repository.subject.SetSubjectCollectionTypeOrDeleteUseCase
 import me.him188.ani.app.data.repository.user.SettingsRepository
 import me.him188.ani.app.domain.comment.PostCommentUseCase
+import me.him188.ani.app.domain.comment.TurnstileState
 import me.him188.ani.app.domain.danmaku.DanmakuRepository
 import me.him188.ani.app.domain.danmaku.SetDanmakuEnabledUseCase
 import me.him188.ani.app.domain.episode.EpisodeCompletionContext.isKnownCompleted
@@ -106,6 +109,7 @@ import me.him188.ani.app.ui.comment.CommentMapperContext
 import me.him188.ani.app.ui.comment.CommentMapperContext.parseToUIComment
 import me.him188.ani.app.ui.comment.CommentState
 import me.him188.ani.app.ui.comment.EditCommentSticker
+import me.him188.ani.app.ui.comment.UICommentSource
 import me.him188.ani.app.ui.danmaku.UIDanmakuEvent
 import me.him188.ani.app.ui.episode.PlayingEpisodeSummary
 import me.him188.ani.app.ui.episode.danmaku.MatchingDanmakuPresenter
@@ -254,6 +258,7 @@ class EpisodeViewModel(
     private val setDanmakuEnabledUseCase: SetDanmakuEnabledUseCase by inject()
     private val postCommentUseCase: PostCommentUseCase by inject()
     private val autoSkipRepository: AutoSkipRepository by inject()
+    val turnstileState: TurnstileState by inject()
     private val getMediaSelectorSettings: GetMediaSelectorSettingsUseCase by inject()
     private val getMediaSourceInstances: GetMediaSourceInstancesUseCase by inject()
     val setEpisodeCollectionType: SetEpisodeCollectionTypeUseCase by inject()
@@ -390,6 +395,8 @@ class EpisodeViewModel(
                 danmakuRegexFilterRepository.update(it.id, it.copy(enabled = !it.enabled))
             }
         },
+        onExport = { danmakuRegexFilterRepository.export() },
+        onImport = { danmakuRegexFilterRepository.import(it) },
     )
 
 
@@ -617,18 +624,34 @@ class EpisodeViewModel(
 
 
     private val commentStateRestarter = FlowRestarter()
+    private val commentLoadFailureChannel = Channel<Throwable>(Channel.BUFFERED)
 
     @OptIn(UnsafeEpisodeSessionApi::class)
     val episodeCommentState: CommentState = CommentState(
         list = episodeIdFlow
             .restartable(commentStateRestarter)
             .flatMapLatest { episodeId ->
-                episodeCommentRepository.subjectEpisodeCommentsPager(episodeId.toLong())
+                episodeCommentRepository.subjectEpisodeCommentsPager(
+                    episodeId.toLong(),
+                    onAniLoadFailed = { commentLoadFailureChannel.trySend(it) },
+                )
                     .map { page -> page.map { it.parseToUIComment() } }
             }.cachedIn(backgroundScope),
         countState = stateOf(null),
-        onSubmitCommentReaction = { _, _ -> },
+        onSubmitCommentReaction = { comment, value, selected ->
+            episodeCommentRepository.submitReaction(
+                episodeId = episodeIdFlow.first().toLong(),
+                source = when (comment.source) {
+                    UICommentSource.ANI -> me.him188.ani.app.data.models.episode.EpisodeCommentSource.ANI
+                    UICommentSource.BANGUMI -> me.him188.ani.app.data.models.episode.EpisodeCommentSource.BANGUMI
+                },
+                commentId = comment.sourceCommentId,
+                value = value,
+                selected = selected,
+            )
+        },
         backgroundScope = backgroundScope,
+        commentLoadFailures = commentLoadFailureChannel.receiveAsFlow(),
     )
 
     @OptIn(UnsafeEpisodeSessionApi::class)
@@ -984,11 +1007,10 @@ class EpisodeViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        turnstileState.cancel()
+        webCaptchaCoordinator.cancelAutoResolutionRequests()
         backgroundScope.launch(NonCancellable + CoroutineName("EpisodeViewModel#onCleared")) {
             fetchPlayState.onClose()
-            withContext(Dispatchers.Main) {
-                player.stopPlayback()
-            }
         }
     }
 

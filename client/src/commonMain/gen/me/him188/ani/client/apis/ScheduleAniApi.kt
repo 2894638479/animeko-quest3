@@ -1,12 +1,3 @@
-/*
- * Copyright (C) 2024-2026 OpenAni and contributors.
- *
- * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
- * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
- *
- * https://github.com/open-ani/ani/blob/main/LICENSE
- */
-
 // @formatter:off
 /**
  *
@@ -25,20 +16,22 @@
 
 package me.him188.ani.client.apis
 
-import io.ktor.client.HttpClient
-import io.ktor.client.HttpClientConfig
-import io.ktor.client.engine.HttpClientEngine
-import kotlinx.serialization.json.Json
-import me.him188.ani.client.infrastructure.ApiClient
-import me.him188.ani.client.infrastructure.HttpResponse
-import me.him188.ani.client.infrastructure.RequestConfig
-import me.him188.ani.client.infrastructure.RequestMethod
-import me.him188.ani.client.infrastructure.toMultiValue
-import me.him188.ani.client.infrastructure.wrap
 import me.him188.ani.client.models.AniAnimeSchedule
 import me.him188.ani.client.models.AniAnimeSeasonIdList
 import me.him188.ani.client.models.AniBatchGetSubjectRecurrenceResponse
+import me.him188.ani.client.models.AniLatestAiringSchedule
 import me.him188.ani.client.models.AniLatestAnimeSchedules
+
+import me.him188.ani.client.infrastructure.*
+import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
+import io.ktor.client.request.forms.formData
+import io.ktor.client.engine.HttpClientEngine
+import kotlinx.serialization.json.Json
+import io.ktor.http.ParametersBuilder
+import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 
 open class ScheduleAniApi : ApiClient {
 
@@ -57,7 +50,7 @@ open class ScheduleAniApi : ApiClient {
     /**
      * 获取一个季度的新番时间表
      * 获取一个季度的新番时间表
-     * @param seasonId 
+     * @param seasonId
      * @return AniAnimeSchedule
      */
     @Suppress("UNCHECKED_CAST")
@@ -65,7 +58,7 @@ open class ScheduleAniApi : ApiClient {
 
         val localVariableAuthNames = listOf<String>()
 
-        val localVariableBody = 
+        val localVariableBody =
             io.ktor.client.utils.EmptyContent
 
         val localVariableQuery = mutableMapOf<String, List<String>>()
@@ -97,7 +90,7 @@ open class ScheduleAniApi : ApiClient {
 
         val localVariableAuthNames = listOf<String>()
 
-        val localVariableBody = 
+        val localVariableBody =
             io.ktor.client.utils.EmptyContent
 
         val localVariableQuery = mutableMapOf<String, List<String>>()
@@ -106,6 +99,42 @@ open class ScheduleAniApi : ApiClient {
         val localVariableConfig = RequestConfig<kotlin.Any?>(
             RequestMethod.GET,
             "/v1/schedule/seasons",
+            query = localVariableQuery,
+            headers = localVariableHeaders,
+            requiresAuthentication = false,
+        )
+
+        return request(
+            localVariableConfig,
+            localVariableBody,
+            localVariableAuthNames
+        ).wrap()
+    }
+
+
+    /**
+     * 获取最近的新番播出时间表
+     * 获取最近的新番播出时间表
+     * @param today
+     * @param timeZone
+     * @return AniLatestAiringSchedule
+     */
+    @Suppress("UNCHECKED_CAST")
+    open suspend fun getLatestAiringSchedule(today: kotlin.String, timeZone: kotlin.String): HttpResponse<AniLatestAiringSchedule> {
+
+        val localVariableAuthNames = listOf<String>()
+
+        val localVariableBody =
+            io.ktor.client.utils.EmptyContent
+
+        val localVariableQuery = mutableMapOf<String, List<String>>()
+        today?.apply { localVariableQuery["today"] = listOf("$today") }
+        timeZone?.apply { localVariableQuery["timeZone"] = listOf("$timeZone") }
+        val localVariableHeaders = mutableMapOf<String, String>()
+
+        val localVariableConfig = RequestConfig<kotlin.Any?>(
+            RequestMethod.GET,
+            "/v1/schedule/airing",
             query = localVariableQuery,
             headers = localVariableHeaders,
             requiresAuthentication = false,
@@ -129,7 +158,7 @@ open class ScheduleAniApi : ApiClient {
 
         val localVariableAuthNames = listOf<String>()
 
-        val localVariableBody = 
+        val localVariableBody =
             io.ktor.client.utils.EmptyContent
 
         val localVariableQuery = mutableMapOf<String, List<String>>()
@@ -154,7 +183,7 @@ open class ScheduleAniApi : ApiClient {
     /**
      * 查询一些条目的连载信息
      * 查询一些条目的连载信息
-     * @param ids 
+     * @param ids
      * @return AniBatchGetSubjectRecurrenceResponse
      */
     @Suppress("UNCHECKED_CAST")
@@ -162,7 +191,7 @@ open class ScheduleAniApi : ApiClient {
 
         val localVariableAuthNames = listOf<String>()
 
-        val localVariableBody = 
+        val localVariableBody =
             io.ktor.client.utils.EmptyContent
 
         val localVariableQuery = mutableMapOf<String, List<String>>()
@@ -188,3 +217,4 @@ open class ScheduleAniApi : ApiClient {
 }
 
 // @formatter:on
+

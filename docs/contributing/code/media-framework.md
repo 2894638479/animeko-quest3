@@ -93,6 +93,7 @@ APP 可能会有 50 个左右的 `MediaSource` 实例。
 >
 > 更多 Media 相关文档：
 > - [缓存](media/media-cache.md)
+> - [代码地图](media/media-code-map.md)：概念到具体类/函数/调用链的映射，改代码前建议阅读
 
 
 [无职转生]: https://bangumi.tv/subject/277554

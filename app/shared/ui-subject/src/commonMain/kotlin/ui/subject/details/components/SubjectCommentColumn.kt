@@ -52,10 +52,11 @@ fun SubjectDetailsDefaults.SubjectCommentColumn(
     state: CommentState,
     onClickUrl: (url: String) -> Unit,
     onClickImage: (String) -> Unit,
-    connectedScrollState: ConnectedScrollState,
     modifier: Modifier = Modifier,
+    connectedScrollState: ConnectedScrollState? = null,
     gridState: LazyGridState = rememberLazyGridState(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    pullToRefreshEnabled: Boolean = true,
 ) {
     Box(modifier, contentAlignment = Alignment.TopCenter) {
         CommentColumn(
@@ -68,14 +69,16 @@ fun SubjectDetailsDefaults.SubjectCommentColumn(
             contentPadding = contentPadding,
             state = gridState,
             connectedScrollState = connectedScrollState,
+            pullToRefreshEnabled = pullToRefreshEnabled,
         ) { _, comment ->
+            val commentWithOverlay = state.withReactionOverlay(comment)
             SubjectComment(
-                comment = comment,
+                comment = commentWithOverlay,
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                 onClickImage = onClickImage,
                 onClickUrl = onClickUrl,
-                onClickReaction = { commentId, reactionId ->
-                    state.submitReaction(commentId, reactionId)
+                onClickReaction = { reactionValue ->
+                    state.submitReaction(commentWithOverlay, reactionValue)
                 },
             )
         }
@@ -87,7 +90,7 @@ fun SubjectComment(
     comment: UIComment,
     onClickUrl: (String) -> Unit,
     onClickImage: (String) -> Unit,
-    onClickReaction: (commentId: Long, reactionId: Int) -> Unit,
+    onClickReaction: (reactionValue: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uriHandler = LocalUriHandler.current
@@ -138,7 +141,7 @@ fun SubjectComment(
         reactionRow = {
             CommentDefaults.ReactionRow(
                 comment.reactions,
-                onClickItem = { onClickReaction(comment.id, it) },
+                onClickItem = onClickReaction,
             )
         },
     )
@@ -154,7 +157,7 @@ private fun PreviewSubjectComment() {
             modifier = Modifier.fillMaxWidth(),
             onClickImage = { },
             onClickUrl = { },
-            onClickReaction = { _, _ -> },
+            onClickReaction = { },
         )
 
     }

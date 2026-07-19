@@ -17,6 +17,9 @@ interface AudioManager {
      */
     fun getVolume(streamType: StreamType): Float
 
+    /** Smallest volume change that the platform can represent for [streamType]. */
+    fun getVolumeStep(streamType: StreamType): Float = 0.01f
+
     fun setVolume(streamType: StreamType, levelPercentage: Float)
 }
 

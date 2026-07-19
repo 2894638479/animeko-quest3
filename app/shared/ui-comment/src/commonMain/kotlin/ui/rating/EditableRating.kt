@@ -29,11 +29,15 @@ import me.him188.ani.app.data.models.subject.SubjectInfo
 import me.him188.ani.app.data.models.subject.TestSelfRatingInfo
 import me.him188.ani.app.data.models.subject.TestSubjectInfo
 import me.him188.ani.app.tools.MonoTasker
+import me.him188.ani.app.ui.lang.Lang
+import me.him188.ani.app.ui.lang.rating_requires_collection
+import me.him188.ani.app.ui.lang.settings_mediasource_close
 import me.him188.ani.utils.analytics.Analytics
 import me.him188.ani.utils.analytics.AnalyticsEvent.Companion.RatingEnter
 import me.him188.ani.utils.analytics.AnalyticsEvent.Companion.RatingSubmit
 import me.him188.ani.utils.analytics.recordEvent
 import me.him188.ani.utils.platform.annotations.TestOnly
+import org.jetbrains.compose.resources.stringResource
 
 
 @Stable
@@ -105,13 +109,32 @@ fun EditableRating(
     state: EditableRatingState,
     modifier: Modifier = Modifier,
 ) {
+    EditableRatingDialogsHost(state)
+    val isUpdatingRating = state.isUpdatingRating.collectAsStateWithLifecycle()
+    Rating(
+        rating = state.ratingInfo,
+        selfRatingScore = state.selfRatingInfo.score,
+        onClick = { state.requestEdit() },
+        clickEnabled = state.enableEdit && !isUpdatingRating.value,
+        modifier = modifier,
+    )
+}
+
+/**
+ * 仅承载 [EditableRatingState] 的对话框 ([RatingEditorDialog] 与"需要收藏"提示), 不显示评分本身.
+ *
+ * 用于不展示 [Rating] 组件但需要 [EditableRatingState.requestEdit] 入口的布局
+ * (如桌面条目详情多栏页的"写评价").
+ */
+@Composable
+fun EditableRatingDialogsHost(state: EditableRatingState) {
     if (state.showRatingRequiresCollectionDialog) {
         AlertDialog(
             { state.dismissRatingRequiresCollectionDialog() },
-            text = { Text("请先收藏再评分") },
+            text = { Text(stringResource(Lang.rating_requires_collection)) },
             confirmButton = {
                 TextButton({ state.dismissRatingRequiresCollectionDialog() }) {
-                    Text("关闭")
+                    Text(stringResource(Lang.settings_mediasource_close))
                 }
             },
         )
@@ -135,13 +158,6 @@ fun EditableRating(
             isLoading = isUpdatingRating.value,
         )
     }
-    Rating(
-        rating = state.ratingInfo,
-        selfRatingScore = state.selfRatingInfo.score,
-        onClick = { state.requestEdit() },
-        clickEnabled = state.enableEdit && !isUpdatingRating.value,
-        modifier = modifier,
-    )
 }
 
 @Composable

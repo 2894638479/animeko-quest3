@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -9,14 +9,18 @@
 
 package me.him188.ani.app.ui.subject.episode.details.components
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -31,21 +35,30 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import me.him188.ani.app.data.models.episode.EpisodeCollectionInfo
 import me.him188.ani.app.data.models.episode.displayName
+import me.him188.ani.app.domain.media.cache.EpisodeCacheStatus
+import me.him188.ani.app.ui.foundation.LongClickProgressFill
+import me.him188.ani.app.ui.foundation.ProvideCompositionLocalsForPreview
 import me.him188.ani.app.ui.foundation.icons.PlayingIcon
 import me.him188.ani.app.ui.foundation.layout.plus
 import me.him188.ani.app.ui.subject.episode.details.EpisodeCarouselState
+import me.him188.ani.app.ui.subject.episode.details.PreviewEpisodeCollections
 import me.him188.ani.datasources.api.topic.UnifiedCollectionType
 import me.him188.ani.datasources.api.topic.isDoneOrDropped
+import me.him188.ani.utils.platform.annotations.TestOnly
 
 /**
  * 剧集网格组件，以两列网格布局显示剧集列表。
@@ -102,6 +115,28 @@ fun EpisodeGrid(
     }
 }
 
+@OptIn(TestOnly::class)
+@Composable
+@PreviewLightDark
+private fun PreviewEpisodeGrid() = ProvideCompositionLocalsForPreview {
+    val scope = rememberCoroutineScope()
+    Surface {
+        EpisodeGrid(
+            episodeCarouselState = remember {
+                EpisodeCarouselState(
+                    episodes = mutableStateOf(PreviewEpisodeCollections),
+                    playingEpisode = mutableStateOf(PreviewEpisodeCollections[2]),
+                    cacheStatus = { EpisodeCacheStatus.NotCached },
+                    onSelect = {},
+                    onChangeCollectionType = { _, _ -> },
+                    backgroundScope = scope,
+                )
+            },
+            onEpisodeClick = {},
+        )
+    }
+}
+
 /**
  * 剧集网格项组件，用于网格布局中的单个剧集显示。
  * 
@@ -133,61 +168,71 @@ private fun EpisodeGridItem(
     modifier: Modifier = Modifier,
 ) {
     val isWatched = episode.collectionType.isDoneOrDropped()
+    val interactionSource = remember { MutableInteractionSource() }
     
     Card(
         colors = CardDefaults.cardColors(
             containerColor = if (isPlaying) {
                 MaterialTheme.colorScheme.primaryContainer
             } else if (isWatched) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                MaterialTheme.colorScheme.surfaceContainerLow
             } else {
-                MaterialTheme.colorScheme.surfaceContainer
-            }
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            },
         ),
         modifier = modifier
             .fillMaxWidth()
             .height(72.dp)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 onClick = onClick,
-                onLongClick = onLongClick
-            )
+                onLongClick = onLongClick,
+            ),
     ) {
-        Column(
-            modifier = Modifier
-                .padding(8.dp)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
+        Box(Modifier.fillMaxSize()) {
+            LongClickProgressFill(
+                interactionSource = interactionSource,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                modifier = Modifier.matchParentSize(),
+            )
+            Column(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                if (isPlaying) {
-                    PlayingIcon()
-                    Spacer(Modifier.width(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isPlaying) {
+                        PlayingIcon()
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(
+                        "${episode.episodeInfo.sort}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (isPlaying) {
+                            MaterialTheme.colorScheme.primary
+                        } else if (isWatched) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        } else {
+                            LocalContentColor.current
+                        },
+                    )
                 }
                 Text(
-                    "${episode.episodeInfo.sort}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (isPlaying) {
-                        MaterialTheme.colorScheme.primary
-                    } else if (isWatched) {
+                    episode.episodeInfo.displayName,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isWatched) {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     } else {
-                        LocalContentColor.current
-                    }
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
-            Text(
-                episode.episodeInfo.displayName,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (isWatched) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
         }
     }
 }

@@ -17,14 +17,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.rounded.DisplaySettings
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -50,6 +57,7 @@ import me.him188.ani.app.domain.media.player.MediaCacheProgressInfo
 import me.him188.ani.app.domain.media.player.staticMediaCacheProgressState
 import me.him188.ani.app.domain.player.VideoLoadingState
 import me.him188.ani.app.tools.rememberUiMonoTasker
+import me.him188.ani.app.ui.episode.share.MediaShareData
 import me.him188.ani.app.ui.foundation.LocalIsPreviewing
 import me.him188.ani.app.ui.foundation.LocalPlatform
 import me.him188.ani.app.ui.foundation.ProvideCompositionLocalsForPreview
@@ -60,15 +68,29 @@ import me.him188.ani.app.ui.foundation.icons.AniIcons
 import me.him188.ani.app.ui.foundation.icons.Forward85
 import me.him188.ani.app.ui.foundation.icons.RightPanelClose
 import me.him188.ani.app.ui.foundation.icons.RightPanelOpen
+import me.him188.ani.app.ui.foundation.icons.SubtitleGear
 import me.him188.ani.app.ui.foundation.ifThen
 import me.him188.ani.app.ui.foundation.interaction.WindowDragArea
 import me.him188.ani.app.ui.foundation.rememberDebugSettingsViewModel
 import me.him188.ani.app.ui.foundation.theme.AniTheme
+import me.him188.ani.app.ui.lang.Lang
+import me.him188.ani.app.ui.lang.subject_episode_cache
+import me.him188.ani.app.ui.lang.subject_episode_collapse_sidebar
+import me.him188.ani.app.ui.lang.subject_episode_danmaku_settings_title
+import me.him188.ani.app.ui.lang.subject_episode_expand_sidebar
+import me.him188.ani.app.ui.lang.subject_episode_external_links
+import me.him188.ani.app.ui.lang.subject_episode_fast_forward_85_seconds
+import me.him188.ani.app.ui.lang.subject_episode_more_options
+import me.him188.ani.app.ui.lang.subject_episode_preview_mode
+import me.him188.ani.app.ui.lang.subject_episode_select_media_source
+import me.him188.ani.app.ui.lang.video_player_stats_title_hide
+import me.him188.ani.app.ui.lang.video_player_stats_title_show
 import me.him188.ani.app.ui.mediafetch.TestMediaSourceResultListPresentation
 import me.him188.ani.app.ui.mediafetch.ViewKind
 import me.him188.ani.app.ui.mediafetch.rememberTestMediaSelectorState
 import me.him188.ani.app.ui.mediafetch.request.TestMediaFetchRequest
 import me.him188.ani.app.ui.settings.danmaku.createTestDanmakuRegexFilterState
+import me.him188.ani.app.ui.subject.episode.details.components.ShareEpisodeDropdown
 import me.him188.ani.app.ui.subject.episode.video.components.EpisodeVideoSideSheetPage
 import me.him188.ani.app.ui.subject.episode.video.components.EpisodeVideoSideSheets
 import me.him188.ani.app.ui.subject.episode.video.components.FloatingFullscreenSwitchButton
@@ -85,37 +107,48 @@ import me.him188.ani.app.videoplayer.ui.NoOpPlaybackSpeedController
 import me.him188.ani.app.videoplayer.ui.NoOpVideoAspectRatio
 import me.him188.ani.app.videoplayer.ui.PlaybackSpeedControllerState
 import me.him188.ani.app.videoplayer.ui.PlayerControllerState
+import me.him188.ani.app.videoplayer.ui.PlayerStatsOverlay
 import me.him188.ani.app.videoplayer.ui.VideoAspectRatioControllerState
 import me.him188.ani.app.videoplayer.ui.VideoPlayer
 import me.him188.ani.app.videoplayer.ui.VideoScaffold
 import me.him188.ani.app.videoplayer.ui.VideoSideSheetsController
 import me.him188.ani.app.videoplayer.ui.gesture.GestureFamily
+import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState
 import me.him188.ani.app.videoplayer.ui.gesture.GestureLock
 import me.him188.ani.app.videoplayer.ui.gesture.LevelController
 import me.him188.ani.app.videoplayer.ui.gesture.LockableVideoGestureHost
 import me.him188.ani.app.videoplayer.ui.gesture.NoOpLevelController
 import me.him188.ani.app.videoplayer.ui.gesture.ScreenshotButton
+import me.him188.ani.app.videoplayer.ui.gesture.SwipeSeekerConfig
+import me.him188.ani.app.videoplayer.ui.gesture.isInCancelArea
 import me.him188.ani.app.videoplayer.ui.gesture.mouseFamily
 import me.him188.ani.app.videoplayer.ui.gesture.rememberGestureIndicatorState
 import me.him188.ani.app.videoplayer.ui.gesture.rememberSwipeSeekerState
 import me.him188.ani.app.videoplayer.ui.hasPageAsState
 import me.him188.ani.app.videoplayer.ui.progress.AudioSwitcher
+import me.him188.ani.app.videoplayer.ui.progress.MediaProgressFramePreviewState
 import me.him188.ani.app.videoplayer.ui.progress.MediaProgressIndicatorText
+import me.him188.ani.app.videoplayer.ui.progress.MediaProgressSliderDefaults
 import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerBar
 import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults
 import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults.SpeedSwitcher
 import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults.VideoAspectRatioSelector
 import me.him188.ani.app.videoplayer.ui.progress.PlayerProgressSliderState
+import me.him188.ani.app.videoplayer.ui.progress.ProgressSliderCenteredPreviewFrame
 import me.him188.ani.app.videoplayer.ui.progress.SubtitleSwitcher
+import me.him188.ani.app.videoplayer.ui.progress.TouchSeekState
 import me.him188.ani.app.videoplayer.ui.progress.rememberMediaProgressSliderState
 import me.him188.ani.app.videoplayer.ui.rememberAlwaysOnRequester
+import me.him188.ani.app.videoplayer.ui.rememberPlayerStatsState
 import me.him188.ani.app.videoplayer.ui.rememberVideoControllerState
 import me.him188.ani.app.videoplayer.ui.rememberVideoSideSheetsController
 import me.him188.ani.app.videoplayer.ui.top.PlayerTopBar
 import me.him188.ani.app.videoplayer.ui.top.SystemTime
 import me.him188.ani.utils.platform.annotations.TestOnly
+import me.him188.ani.utils.platform.isAndroid
 import me.him188.ani.utils.platform.isDesktop
 import me.him188.ani.utils.platform.isMobile
+import org.jetbrains.compose.resources.stringResource
 import org.openani.mediamp.MediampPlayer
 import org.openani.mediamp.features.audioTracks
 import org.openani.mediamp.features.subtitleTracks
@@ -159,6 +192,7 @@ internal fun EpisodeVideoImpl(
     onToggleSidebar: (isCollapsed: Boolean) -> Unit,
     progressSliderState: PlayerProgressSliderState,
     cacheProgressInfoFlow: Flow<MediaCacheProgressInfo>,
+    framePreview: MediaProgressFramePreviewState? = null,
     audioController: LevelController,
     brightnessController: LevelController,
     playbackSpeedControllerState: PlaybackSpeedControllerState?,
@@ -166,6 +200,8 @@ internal fun EpisodeVideoImpl(
     leftBottomTips: @Composable () -> Unit,
     fullscreenSwitchButton: @Composable () -> Unit,
     sideSheets: @Composable (controller: VideoSideSheetsController<EpisodeVideoSideSheetPage>) -> Unit,
+    shareData: MediaShareData,
+    onClickCache: () -> Unit,
     modifier: Modifier = Modifier,
     maintainAspectRatio: Boolean = !expanded,
     isFullscreen: Boolean = expanded,
@@ -175,8 +211,11 @@ internal fun EpisodeVideoImpl(
 ) {
     // Don't rememberSavable. 刻意让每次切换都是隐藏的
     var isLocked by remember { mutableStateOf(false) }
+    var showPlayerStats by remember { mutableStateOf(false) }
+    val playerStats by rememberPlayerStatsState(playerState)
     val sheetsController = rememberVideoSideSheetsController<EpisodeVideoSideSheetPage>()
     val anySideSheetVisible by sheetsController.hasPageAsState()
+    val previewModeText = stringResource(Lang.subject_episode_preview_mode)
 
     // auto hide cursor
     val videoInteractionSource = remember { MutableInteractionSource() }
@@ -188,8 +227,18 @@ internal fun EpisodeVideoImpl(
                     || anySideSheetVisible)
         }
     }
+    val indicatorState = rememberGestureIndicatorState()
+    // 桌面设备可能同时支持鼠标和触摸；当前 GestureFamily 不能按单次输入来源分流，
+    // 因此桌面端仍使用 MOUSE 分支。后续实现来源级分流时再支持桌面触摸手势。
+    // TODO: 根据触控能力与平台特性建立设备抽象，并据此选择手势策略。
+    val touchSeekState = rememberPlayerTouchSeekState(
+        enabled = gestureFamily == GestureFamily.TOUCH,
+        controllerState = playerControllerState,
+        indicatorState = indicatorState,
+    )
 
     AniTheme(darkModeOverride = DarkMode.DARK) {
+        val progressSliderColors = MediaProgressSliderDefaults.colors()
         VideoScaffold(
             expanded = expanded,
             modifier = modifier
@@ -209,35 +258,19 @@ internal fun EpisodeVideoImpl(
                             null
                         },
                         actions = {
-                            IconButton({ onClickSkip85(playerState.getCurrentPositionMillis()) }) {
-                                Icon(AniIcons.Forward85, "快进 85 秒")
-                            }
-                            if (expanded) {
-                                IconButton(
-                                    { sheetsController.navigateTo(EpisodeVideoSideSheetPage.MEDIA_SELECTOR) },
-                                    Modifier.testTag(TAG_SHOW_MEDIA_SELECTOR),
-                                ) {
-                                    Icon(Icons.Rounded.DisplaySettings, contentDescription = "数据源")
-                                }
-                            }
-                            IconButton(
-                                { sheetsController.navigateTo(EpisodeVideoSideSheetPage.PLAYER_SETTINGS) },
-                                Modifier.testTag(TAG_SHOW_SETTINGS),
-                            ) {
-                                Icon(Icons.Rounded.Settings, contentDescription = "设置")
-                            }
-                            if (expanded && LocalPlatform.current.isDesktop()) {
-                                IconButton(
-                                    { onToggleSidebar(!sidebarVisible) },
-                                    Modifier.testTag(TAG_COLLAPSE_SIDEBAR),
-                                ) {
-                                    if (sidebarVisible) {
-                                        Icon(AniIcons.RightPanelClose, contentDescription = "折叠侧边栏")
-                                    } else {
-                                        Icon(AniIcons.RightPanelOpen, contentDescription = "展开侧边栏")
-                                    }
-                                }
-                            }
+                            EpisodeVideoTopBarActions(
+                                playerState = playerState,
+                                expanded = expanded,
+                                onClickSkip85 = onClickSkip85,
+                                sheetsController = sheetsController,
+                                shareData = shareData,
+                                onClickCache = onClickCache,
+                                playerControllerState = playerControllerState,
+                                sidebarVisible = sidebarVisible,
+                                onToggleSidebar = onToggleSidebar,
+                                playerStatsVisible = showPlayerStats,
+                                onTogglePlayerStats = { showPlayerStats = !showPlayerStats },
+                            )
                         },
                         // VideoScaffold already applies top/horizontal insets around the top bar.
                         // Passing the same insets into TopAppBar duplicates the status-bar padding on iOS portrait.
@@ -252,7 +285,7 @@ internal fun EpisodeVideoImpl(
             },
             video = {
                 if (LocalIsPreviewing.current) {
-                    Text("预览模式")
+                    Text(previewModeText)
                 } else {
                     // Save the status bar height to offset the video player
                     val statusBarHeight by rememberStatusBarHeightAsState()
@@ -288,7 +321,6 @@ internal fun EpisodeVideoImpl(
                 }
 
                 val indicatorTasker = rememberUiMonoTasker()
-                val indicatorState = rememberGestureIndicatorState()
                 LockableVideoGestureHost(
                     playerControllerState,
                     swipeSeekerState,
@@ -315,10 +347,18 @@ internal fun EpisodeVideoImpl(
                     onToggleFullscreen = onClickFullScreen,
                     onExitFullscreen = onExitFullscreen,
                     onToggleDanmaku = onToggleDanmaku,
+                    onTogglePlayerStats = {
+                        showPlayerStats = !showPlayerStats
+                    },
                     family = gestureFamily,
                     indicatorState,
                     fastForwardSpeed = fastForwardSpeed,
                 )
+            },
+            playerStatsOverlay = {
+                if (showPlayerStats) {
+                    PlayerStatsOverlay(playerStats)
+                }
             },
             floatingMessage = {
                 Column {
@@ -349,8 +389,17 @@ internal fun EpisodeVideoImpl(
                     }
                 }
             },
+            touchSeekState = touchSeekState,
+            framePreviewOverlay = {
+                if (!expanded) {
+                    ProgressSliderCenteredPreviewFrame(
+                        frame = framePreview?.frame,
+                        borderColor = progressSliderColors.previewTimeBackgroundColor,
+                    )
+                }
+            },
             rhsButtons = {
-                if (expanded && LocalPlatform.current.isDesktop()) {
+                if (expanded && (LocalPlatform.current.isDesktop() || LocalPlatform.current.isAndroid())) {
                     ScreenshotButton(
                         onClick = onClickScreenshot,
                     )
@@ -408,6 +457,9 @@ internal fun EpisodeVideoImpl(
                             progressSliderState,
                             cacheProgressInfoFlow = cacheProgressInfoFlow,
                             showPreviewTimeTextOnThumb = expanded,
+                            framePreview = framePreview,
+                            showFramePreviewInPopup = expanded,
+                            touchSeekState = touchSeekState,
                         )
                     },
                     danmakuEditor = danmakuEditor,
@@ -457,6 +509,7 @@ internal fun EpisodeVideoImpl(
                         )
                     },
                     expanded = expanded,
+                    sliderOnly = playerControllerState.visibility == ControllerVisibility.InlineSliderOnly,
                 )
             },
             detachedProgressSlider = detachedProgressSlider,
@@ -464,6 +517,168 @@ internal fun EpisodeVideoImpl(
             rhsSheet = { sideSheets(sheetsController) },
             leftBottomTips = leftBottomTips,
         )
+    }
+}
+
+/**
+ * 将进度条的通用触摸状态机接入播放器 UI：拖动期间保留 inline progress slider，
+ * 手指进入取消区域时持续显示取消提示。非触屏分支返回 `null`，不改变原有交互。
+ */
+@Composable
+private fun rememberPlayerTouchSeekState(
+    enabled: Boolean,
+    controllerState: PlayerControllerState,
+    indicatorState: GestureIndicatorState,
+): TouchSeekState? {
+    if (!enabled) return null
+
+    return remember(controllerState, indicatorState) {
+        // requester 和 indicator ticket 跨状态迁移保持不变，确保每次请求都由同一实例撤销。
+        val controllerRequester = Any()
+        var indicatorTicket: Int? = null
+        fun stopCancellationIndicator() {
+            indicatorTicket?.let(indicatorState::stopSeekCancellation)
+            indicatorTicket = null
+        }
+        TouchSeekState(
+            isInCancelArea = SwipeSeekerConfig.Default::isInCancelArea,
+            onStateChanged = { state ->
+                when (state) {
+                    // 手势结束：恢复控制器的正常显隐，并关闭可能存在的取消提示。
+                    TouchSeekState.State.Idle -> {
+                        controllerState.cancelRequestInlineProgressSlider(controllerRequester)
+                        stopCancellationIndicator()
+                    }
+
+                    // 正常拖动：保留 bottom bar 内正在接收触摸事件的原进度条。
+                    TouchSeekState.State.Seeking -> {
+                        controllerState.setRequestInlineProgressSlider(controllerRequester)
+                        stopCancellationIndicator()
+                    }
+
+                    // 进入取消区域：进度条保持原位，只将中央指示器切换为取消提示。
+                    TouchSeekState.State.Cancelling -> {
+                        indicatorTicket = indicatorState.startSeekCancellation()
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun EpisodeVideoTopBarActions(
+    playerState: MediampPlayer,
+    expanded: Boolean,
+    onClickSkip85: (currentPositionMillis: Long) -> Unit,
+    sheetsController: VideoSideSheetsController<EpisodeVideoSideSheetPage>,
+    shareData: MediaShareData,
+    onClickCache: () -> Unit,
+    playerControllerState: PlayerControllerState,
+    sidebarVisible: Boolean,
+    onToggleSidebar: (isCollapsed: Boolean) -> Unit,
+    playerStatsVisible: Boolean,
+    onTogglePlayerStats: () -> Unit,
+) {
+    var showShareDropdown by rememberSaveable { mutableStateOf(false) }
+    var showMoreDropdown by rememberSaveable { mutableStateOf(false) }
+    val dropdownAlwaysOnRequester = rememberAlwaysOnRequester(playerControllerState, "topBarExternalActions")
+    val isExternalDropdownVisible = showShareDropdown || showMoreDropdown
+    val fastForward85SecondsText = stringResource(Lang.subject_episode_fast_forward_85_seconds)
+    val selectMediaSourceText = stringResource(Lang.subject_episode_select_media_source)
+    val danmakuSettingsTitleText = stringResource(Lang.subject_episode_danmaku_settings_title)
+    val moreOptionsText = stringResource(Lang.subject_episode_more_options)
+    val externalLinksText = stringResource(Lang.subject_episode_external_links)
+    val cacheText = stringResource(Lang.subject_episode_cache)
+    val showPlayerStatsText = stringResource(Lang.video_player_stats_title_show)
+    val hidePlayerStatsText = stringResource(Lang.video_player_stats_title_hide)
+    val collapseSidebarText = stringResource(Lang.subject_episode_collapse_sidebar)
+    val expandSidebarText = stringResource(Lang.subject_episode_expand_sidebar)
+
+    DisposableEffect(dropdownAlwaysOnRequester, isExternalDropdownVisible) {
+        if (isExternalDropdownVisible) {
+            dropdownAlwaysOnRequester.request()
+        } else {
+            dropdownAlwaysOnRequester.cancelRequest()
+        }
+        onDispose {
+            if (isExternalDropdownVisible) {
+                dropdownAlwaysOnRequester.cancelRequest()
+            }
+        }
+    }
+
+    IconButton({ onClickSkip85(playerState.getCurrentPositionMillis()) }) {
+        Icon(AniIcons.Forward85, fastForward85SecondsText)
+    }
+
+    if (expanded) {
+        IconButton(
+            { sheetsController.navigateTo(EpisodeVideoSideSheetPage.MEDIA_SELECTOR) },
+            Modifier.testTag(TAG_SHOW_MEDIA_SELECTOR),
+        ) {
+            Icon(Icons.Rounded.DisplaySettings, contentDescription = selectMediaSourceText)
+        }
+    }
+
+    IconButton(
+        { sheetsController.navigateTo(EpisodeVideoSideSheetPage.PLAYER_SETTINGS) },
+        Modifier.testTag(TAG_SHOW_SETTINGS),
+    ) {
+        Icon(AniIcons.SubtitleGear, contentDescription = danmakuSettingsTitleText)
+    }
+
+    Box {
+        IconButton({ showMoreDropdown = true }) {
+            Icon(Icons.Rounded.MoreVert, contentDescription = moreOptionsText)
+        }
+        DropdownMenu(
+            expanded = showMoreDropdown,
+            onDismissRequest = { showMoreDropdown = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(if (playerStatsVisible) hidePlayerStatsText else showPlayerStatsText) },
+                onClick = {
+                    showMoreDropdown = false
+                    onTogglePlayerStats()
+                },
+                leadingIcon = { Icon(Icons.Outlined.Analytics, null) },
+            )
+            DropdownMenuItem(
+                text = { Text(externalLinksText) },
+                onClick = {
+                    showMoreDropdown = false
+                    showShareDropdown = true
+                },
+                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.OpenInNew, null) },
+            )
+            DropdownMenuItem(
+                text = { Text(cacheText) },
+                onClick = {
+                    showMoreDropdown = false
+                    onClickCache()
+                },
+                leadingIcon = { Icon(Icons.Rounded.Download, null) },
+            )
+        }
+        ShareEpisodeDropdown(
+            shareData,
+            showShareDropdown,
+            onDismissRequest = { showShareDropdown = false },
+        )
+    }
+
+    if (expanded && LocalPlatform.current.isDesktop()) {
+        IconButton(
+            { onToggleSidebar(!sidebarVisible) },
+            Modifier.testTag(TAG_COLLAPSE_SIDEBAR),
+        ) {
+            if (sidebarVisible) {
+                Icon(AniIcons.RightPanelClose, contentDescription = collapseSidebarText)
+            } else {
+                Icon(AniIcons.RightPanelOpen, contentDescription = expandSidebarText)
+            }
+        }
     }
 }
 
@@ -575,7 +790,10 @@ private fun PreviewVideoScaffoldImpl(
             VideoAspectRatioControllerState(NoOpVideoAspectRatio, scope)
         },
         leftBottomTips = {
-            PlayerControllerDefaults.LeftBottomTips(onClick = {})
+            PlayerControllerDefaults.LeftBottomTips(
+                onClick = {},
+                modifier = Modifier.padding(if (expanded) 16.dp else 8.dp)
+            )
         },
         fullscreenSwitchButton = {
             EpisodeVideoDefaults.FloatingFullscreenSwitchButton(
@@ -627,5 +845,7 @@ private fun PreviewVideoScaffoldImpl(
                 },
             )
         },
+        shareData = MediaShareData.from(null, null),
+        onClickCache = {},
     )
 }

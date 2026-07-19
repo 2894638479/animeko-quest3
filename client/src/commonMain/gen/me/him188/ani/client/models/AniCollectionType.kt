@@ -20,7 +20,7 @@ package me.him188.ani.client.models
 import kotlinx.serialization.*
 
 /**
- * 
+ *
  *
  * Values: WISH,DONE,DOING,ON_HOLD,DROPPED
  */
@@ -71,3 +71,4 @@ enum class AniCollectionType(val value: kotlin.String) {
 
 
 // @formatter:on
+

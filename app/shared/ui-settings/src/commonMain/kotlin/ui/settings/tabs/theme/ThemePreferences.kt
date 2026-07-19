@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -22,15 +22,20 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import me.him188.ani.app.data.models.preference.ThemeSettings
+import me.him188.ani.app.ui.foundation.LocalPlatform
 import me.him188.ani.app.ui.foundation.theme.AniThemeDefaults
 import me.him188.ani.app.ui.foundation.theme.isPlatformSupportDynamicTheme
 import me.him188.ani.app.ui.lang.Lang
 import me.him188.ani.app.ui.lang.settings_theme_always_dark_episode
 import me.him188.ani.app.ui.lang.settings_theme_always_dark_episode_description
+import me.him188.ani.app.ui.lang.settings_theme_animated_gradient_subject
+import me.him188.ani.app.ui.lang.settings_theme_animated_gradient_subject_description
 import me.him188.ani.app.ui.lang.settings_theme_dynamic_colors
 import me.him188.ani.app.ui.lang.settings_theme_dynamic_colors_description
 import me.him188.ani.app.ui.lang.settings_theme_dynamic_subject
 import me.him188.ani.app.ui.lang.settings_theme_dynamic_subject_description
+import me.him188.ani.app.ui.lang.settings_theme_frosted_glass
+import me.him188.ani.app.ui.lang.settings_theme_frosted_glass_description
 import me.him188.ani.app.ui.lang.settings_theme_high_contrast
 import me.him188.ani.app.ui.lang.settings_theme_high_contrast_description
 import me.him188.ani.app.ui.lang.settings_theme_palette
@@ -39,6 +44,7 @@ import me.him188.ani.app.ui.settings.framework.SettingsState
 import me.him188.ani.app.ui.settings.framework.components.SettingsScope
 import me.him188.ani.app.ui.settings.framework.components.SwitchItem
 import me.him188.ani.app.ui.theme.themeColorOptions
+import me.him188.ani.utils.platform.isMobile
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -93,6 +99,26 @@ fun SettingsScope.ThemeGroup(
             title = { Text(stringResource(Lang.settings_theme_dynamic_subject)) },
             description = { Text(stringResource(Lang.settings_theme_dynamic_subject_description)) },
         )
+
+        SwitchItem(
+            checked = themeSettings.enableAnimatedGradientSubjectPage,
+            onCheckedChange = { checked ->
+                state.update(themeSettings.copy(enableAnimatedGradientSubjectPage = checked))
+            },
+            title = { Text(stringResource(Lang.settings_theme_animated_gradient_subject)) },
+            description = { Text(stringResource(Lang.settings_theme_animated_gradient_subject_description)) },
+        )
+
+        if (LocalPlatform.current.isMobile()) {
+            SwitchItem(
+                checked = themeSettings.enableFrostedGlassEffect,
+                onCheckedChange = { checked ->
+                    state.update(themeSettings.copy(enableFrostedGlassEffect = checked))
+                },
+                title = { Text(stringResource(Lang.settings_theme_frosted_glass)) },
+                description = { Text(stringResource(Lang.settings_theme_frosted_glass_description)) },
+            )
+        }
     }
 
     Box(

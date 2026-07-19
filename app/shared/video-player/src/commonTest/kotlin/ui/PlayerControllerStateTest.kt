@@ -15,6 +15,22 @@ import kotlin.test.assertEquals
 
 class PlayerControllerStateTest {
     @Test
+    fun `text input preference returns to player when its owner is released`() {
+        val state = PlayerFocusState()
+        val owner = Any()
+        assertEquals(PlayerFocusTarget.PLAYER, state.preferredTarget)
+
+        state.preferTextInput(owner)
+        assertEquals(PlayerFocusTarget.TEXT_INPUT, state.preferredTarget)
+
+        state.releaseTextInput(Any())
+        assertEquals(PlayerFocusTarget.TEXT_INPUT, state.preferredTarget)
+
+        state.releaseTextInput(owner)
+        assertEquals(PlayerFocusTarget.PLAYER, state.preferredTarget)
+    }
+
+    @Test
     fun `test toggle visibility`() = runTest {
         val state = PlayerControllerState(ControllerVisibility.Visible)
         state.toggleFullVisible()
@@ -45,6 +61,18 @@ class PlayerControllerStateTest {
         state.setRequestProgressBar(requester)
         assertEquals(ControllerVisibility.Visible, state.visibility)
         state.cancelRequestProgressBarVisible(requester)
+        assertEquals(ControllerVisibility.Visible, state.visibility)
+    }
+
+    @Test
+    fun `inline slider request keeps bottom bar while hiding other controls`() {
+        val state = PlayerControllerState(ControllerVisibility.Visible)
+        val requester = Any()
+
+        state.setRequestInlineProgressSlider(requester)
+        assertEquals(ControllerVisibility.InlineSliderOnly, state.visibility)
+
+        state.cancelRequestInlineProgressSlider(requester)
         assertEquals(ControllerVisibility.Visible, state.visibility)
     }
 

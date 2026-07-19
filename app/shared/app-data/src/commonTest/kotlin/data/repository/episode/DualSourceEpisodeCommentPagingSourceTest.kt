@@ -16,7 +16,6 @@ import me.him188.ani.app.data.models.episode.EpisodeComment
 import me.him188.ani.app.data.models.episode.EpisodeCommentSource
 import me.him188.ani.app.data.network.AniEpisodeCommentService
 import me.him188.ani.app.data.network.BangumiCommentService
-import me.him188.ani.app.data.repository.RepositoryNetworkException
 import me.him188.ani.client.apis.EpisodesAniApi
 import me.him188.ani.client.models.AniEpisodeComment
 import me.him188.ani.client.models.AniEpisodeCommentsResponse
@@ -111,6 +110,12 @@ class DualSourceEpisodeCommentPagingSourceTest {
                     cfTurnstileResponse: String,
                     replyToCommentId: Int?,
                 ) = error("unused")
+
+                override suspend fun submitEpisodeCommentReaction(
+                    commentId: String,
+                    value: String,
+                    selected: Boolean,
+                ) = error("unused")
             },
             pageSize = 2,
         )
@@ -187,6 +192,12 @@ class DualSourceEpisodeCommentPagingSourceTest {
                     cfTurnstileResponse: String,
                     replyToCommentId: Int?,
                 ) = error("unused")
+
+                override suspend fun submitEpisodeCommentReaction(
+                    commentId: String,
+                    value: String,
+                    selected: Boolean,
+                ) = error("unused")
             },
             pageSize = 2,
         )
@@ -224,7 +235,48 @@ class DualSourceEpisodeCommentPagingSourceTest {
     }
 
     @Test
-    fun `service exceptions are wrapped as repository errors`() = runTest {
+    fun `bangumi failure falls back to ani comments`() = runTest {
+        val source = createSource(
+            aniPages = mapOf(
+                0 to AniEpisodeCommentsResponse(
+                    total = 1,
+                    items = listOf(aniComment(id = "ani:100", createdAt = 100)),
+                ),
+            ),
+            bangumiCommentService = object : BangumiCommentService {
+                override suspend fun getSubjectComments(subjectId: Int, offset: Int, limit: Int) = error("unused")
+
+                override suspend fun getSubjectEpisodeComments(episodeId: Long): List<EpisodeComment> {
+                    throw IOException("bangumi boom")
+                }
+
+                override suspend fun postEpisodeComment(
+                    episodeId: Long,
+                    content: String,
+                    cfTurnstileResponse: String,
+                    replyToCommentId: Int?,
+                ) = error("unused")
+
+                override suspend fun submitEpisodeCommentReaction(
+                    commentId: String,
+                    value: String,
+                    selected: Boolean,
+                ) = error("unused")
+            },
+            pageSize = 2,
+        )
+
+        val page = assertIs<PagingSource.LoadResult.Page<DualSourceEpisodeCommentPagingSource.Cursor, EpisodeComment>>(
+            source.load(refresh(loadSize = 2)),
+        )
+
+        assertEquals(listOf("ani:100"), page.data.map { it.stableId })
+        assertNull(page.nextKey)
+    }
+
+    @Test
+    fun `ani failure reports failure and falls back to bangumi comments`() = runTest {
+        val failures = mutableListOf<Throwable>()
         val source = createSource(
             aniCommentService = object : AniEpisodeCommentService(UnusedEpisodesApi) {
                 override suspend fun listEpisodeComments(
@@ -238,7 +290,9 @@ class DualSourceEpisodeCommentPagingSourceTest {
             bangumiCommentService = object : BangumiCommentService {
                 override suspend fun getSubjectComments(subjectId: Int, offset: Int, limit: Int) = error("unused")
 
-                override suspend fun getSubjectEpisodeComments(episodeId: Long): List<EpisodeComment> = emptyList()
+                override suspend fun getSubjectEpisodeComments(episodeId: Long): List<EpisodeComment> {
+                    return listOf(bangumiComment(id = "bangumi:100", createdAt = 100))
+                }
 
                 override suspend fun postEpisodeComment(
                     episodeId: Long,
@@ -246,14 +300,25 @@ class DualSourceEpisodeCommentPagingSourceTest {
                     cfTurnstileResponse: String,
                     replyToCommentId: Int?,
                 ) = error("unused")
+
+                override suspend fun submitEpisodeCommentReaction(
+                    commentId: String,
+                    value: String,
+                    selected: Boolean,
+                ) = error("unused")
             },
             pageSize = 2,
+            onAniLoadFailed = { failures += it },
         )
 
-        val result = source.load(refresh(loadSize = 2))
-        val error = assertIs<PagingSource.LoadResult.Error<DualSourceEpisodeCommentPagingSource.Cursor, EpisodeComment>>(result)
+        val page = assertIs<PagingSource.LoadResult.Page<DualSourceEpisodeCommentPagingSource.Cursor, EpisodeComment>>(
+            source.load(refresh(loadSize = 2)),
+        )
 
-        assertIs<RepositoryNetworkException>(error.throwable)
+        assertEquals(listOf("bangumi:100"), page.data.map { it.stableId })
+        assertNull(page.nextKey)
+        assertEquals(1, failures.size)
+        assertIs<IOException>(failures.single())
     }
 
     private fun createSource(
@@ -280,13 +345,21 @@ class DualSourceEpisodeCommentPagingSourceTest {
                 cfTurnstileResponse: String,
                 replyToCommentId: Int?,
             ) = error("unused")
+
+            override suspend fun submitEpisodeCommentReaction(
+                commentId: String,
+                value: String,
+                selected: Boolean,
+            ) = error("unused")
         },
+        onAniLoadFailed: (Throwable) -> Unit = {},
     ): DualSourceEpisodeCommentPagingSource {
         return DualSourceEpisodeCommentPagingSource(
             episodeId = 99L,
             aniCommentService = aniCommentService,
             bangumiCommentService = bangumiCommentService,
             pageSize = pageSize,
+            onAniLoadFailed = onAniLoadFailed,
         )
     }
 
@@ -299,6 +372,7 @@ class DualSourceEpisodeCommentPagingSourceTest {
             createdAtMillis = createdAt,
             replyCount = 0,
             briefReplies = emptyList(),
+            reactions = emptyList(),
             canReply = true,
         )
     }

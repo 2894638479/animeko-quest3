@@ -75,6 +75,10 @@ private class AndroidAudioManager(
         return delegate.getStreamVolume(streamType.android).toFloat() / delegate.getStreamMaxVolume(streamType.android)
     }
 
+    override fun getVolumeStep(streamType: StreamType): Float {
+        return 1f / delegate.getStreamMaxVolume(streamType.android)
+    }
+
     override fun setVolume(streamType: StreamType, levelPercentage: Float) {
         val max = delegate.getStreamMaxVolume(streamType.android)
         return delegate.setStreamVolume(

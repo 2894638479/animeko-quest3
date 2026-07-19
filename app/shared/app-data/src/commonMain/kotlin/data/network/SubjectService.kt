@@ -9,12 +9,10 @@
 
 package me.him188.ani.app.data.network
 
-import androidx.collection.IntList
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.ResponseException
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -23,8 +21,6 @@ import kotlinx.coroutines.withContext
 import me.him188.ani.app.data.models.bangumi.BangumiSyncState
 import me.him188.ani.app.data.models.subject.CharacterInfo
 import me.him188.ani.app.data.models.subject.CharacterRole
-import me.him188.ani.app.data.models.subject.LightSubjectAndEpisodes
-import me.him188.ani.app.data.models.subject.LightSubjectInfo
 import me.him188.ani.app.data.models.subject.PersonInfo
 import me.him188.ani.app.data.models.subject.PersonPosition
 import me.him188.ani.app.data.models.subject.PersonType
@@ -34,17 +30,15 @@ import me.him188.ani.app.data.models.subject.RelatedPersonInfo
 import me.him188.ani.app.data.models.subject.SelfRatingInfo
 import me.him188.ani.app.data.models.subject.SubjectCollectionCounts
 import me.him188.ani.app.data.models.subject.SubjectInfo
-import me.him188.ani.app.domain.search.SubjectType
 import me.him188.ani.app.domain.session.SessionStateProvider
 import me.him188.ani.app.domain.session.checkAccessAniApiNow
+import me.him188.ani.app.platform.getAniUserAgent
 import me.him188.ani.client.apis.SubjectsAniApi
 import me.him188.ani.client.models.AniCollectionType
 import me.him188.ani.client.models.AniPerson
 import me.him188.ani.client.models.AniSubjectCollection
 import me.him188.ani.client.models.AniSubjectRecommendation
 import me.him188.ani.client.models.AniUpdateSubjectCollectionRequest
-import me.him188.ani.datasources.bangumi.BangumiClient
-import me.him188.ani.datasources.bangumi.apis.DefaultApi
 import me.him188.ani.datasources.bangumi.models.BangumiCount
 import me.him188.ani.datasources.bangumi.models.BangumiSubjectCollectionType
 import me.him188.ani.datasources.bangumi.models.BangumiUserSubjectCollection
@@ -72,19 +66,10 @@ interface SubjectService {
      */
     suspend fun getSubjectCollection(subjectId: Int): AniSubjectCollection?
 
-    suspend fun batchGetSubjectDetails(
-        ids: IntList,
-        withCharacterActors: Boolean = true,
-    ): List<BatchSubjectDetails>
-
     suspend fun getSubjectRelations(
         subjectId: Int,
         withCharacterActors: Boolean,
     ): BatchSubjectRelations
-
-    suspend fun batchGetLightSubjectAndEpisodes(
-        subjectIds: IntList,
-    ): List<LightSubjectAndEpisodes>
 
     /**
      * 获取用户对这个条目的收藏状态. flow 一定会 emit 至少一个值或抛出异常. 当用户没有收藏这个条目时 emit `null`. 当没有登录时 emit `null`.
@@ -129,8 +114,6 @@ suspend inline fun SubjectService.setSubjectCollectionTypeOrDelete(
 }
 
 class RemoteSubjectService(
-    private val client: BangumiClient, // only used by GraphQL executor
-    private val api: ApiInvoker<DefaultApi>,
     private val subjectApi: ApiInvoker<SubjectsAniApi>,
     private val sessionManager: SessionStateProvider,
     private val ioDispatcher: CoroutineContext = Dispatchers.IO_,
@@ -164,65 +147,6 @@ class RemoteSubjectService(
 
     override suspend fun getSubjectCollection(subjectId: Int): AniSubjectCollection? {
         return subjectCollectionById(subjectId).first()
-    }
-
-    override suspend fun batchGetSubjectDetails(
-        ids: IntList,
-        withCharacterActors: Boolean
-    ): List<BatchSubjectDetails> {
-        if (ids.isEmpty()) {
-            return emptyList()
-        }
-        return withContext(ioDispatcher) {
-            val respDeferred = async {
-                BangumiSubjectGraphQLExecutor.execute(client, ids)
-            }
-
-            // 等待查询条目信息
-            val (response, errors) = respDeferred.await()
-
-            // 解析条目详情
-            response.mapIndexed { index, element ->
-                if (element == null) { // error
-                    if (errors == null) {
-                        // 没有错误, 说明这个条目是没权限获取
-                        val subjectId = ids[index]
-                        BatchSubjectDetails(
-                            SubjectInfo.Empty.copy(
-                                subjectId = subjectId,
-                                subjectType = SubjectType.ANIME,
-                                nameCn = "账号注册满四个月后可看 $subjectId",
-                                name = "账号注册满四个月后可看 $subjectId",
-                                summary = "此条目已被隐藏, 请尝试登录后再次尝试. 如已登录, 请等待注册时间满四个月后再看.",
-                                nsfw = true,
-                            ),
-                            mainEpisodeCount = 0,
-                            LightSubjectRelations(
-                                emptyList(),
-                                emptyList(),
-                            ),
-                        )
-                    } else {
-                        val subjectId = ids[index]
-                        BatchSubjectDetails(
-                            SubjectInfo.Empty.copy(
-                                subjectId = subjectId, subjectType = SubjectType.ANIME,
-                                nameCn = "<$subjectId 错误>",
-                                name = "<$subjectId 错误>",
-                                summary = errors,
-                            ),
-                            mainEpisodeCount = 0,
-                            LightSubjectRelations(
-                                emptyList(),
-                                emptyList(),
-                            ),
-                        )
-                    }
-                } else {
-                    BangumiSubjectGraphQLParser.parseBatchSubjectDetails(element)
-                }
-            }
-        }
     }
 
     override suspend fun getSubjectRelations(
@@ -261,34 +185,6 @@ class RemoteSubjectService(
         )
     }
 
-    override suspend fun batchGetLightSubjectAndEpisodes(subjectIds: IntList): List<LightSubjectAndEpisodes> {
-        if (subjectIds.isEmpty()) {
-            return emptyList()
-        }
-        return withContext(ioDispatcher) {
-            // 等待查询条目信息
-            val (response, errors) = BangumiLightSubjectGraphQLExecutor.execute(client, subjectIds)
-
-            // 解析条目详情
-            response.mapIndexed { index, element ->
-                if (element == null) { // error
-                    val subjectId = subjectIds[index]
-                    LightSubjectAndEpisodes(
-                        subject = LightSubjectInfo(
-                            subjectId,
-                            name = "错误 $subjectId: $errors",
-                            nameCn = "错误 $subjectId: $errors",
-                            imageLarge = "",
-                        ),
-                        episodes = emptyList(),
-                    )
-                } else {
-                    BangumiSubjectGraphQLParser.parseLightSubjectAndEpisodes(element)
-                }
-            }
-        }
-    }
-
     val subjectCountStatsRestarter = FlowRestarter()
 
     override suspend fun patchSubjectCollection(subjectId: Int, payload: AniUpdateSubjectCollectionRequest) {
@@ -307,7 +203,11 @@ class RemoteSubjectService(
 
     override suspend fun getSubjectRecommendations(subjectId: Int, limit: Int): List<AniSubjectRecommendation> {
         return subjectApi {
-            this.getSubjectRecommendations(subjectId.toLong(), limit = limit).body()
+            this.getSubjectRecommendations(
+                subjectId = subjectId.toLong(),
+                userAgent = getAniUserAgent(),
+                limit = limit,
+            ).body()
         }
     }
 

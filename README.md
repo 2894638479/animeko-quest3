@@ -34,7 +34,7 @@ Animeko 支持云同步观看记录 ([Bangumi][Bangumi])、多视频数据源、
 
 > Animeko 曾用名 Ani，现在也简称 Ani。
 
-[立即下载](https://github.com/open-ani/animeko/releases/latest)
+[立即下载](https://animeko.org/)
 
 https://github.com/user-attachments/assets/e63636c9-30b7-411c-aa6b-e5b78b900726
 
@@ -62,7 +62,7 @@ https://github.com/user-attachments/assets/e63636c9-30b7-411c-aa6b-e5b78b900726
 
 ### 聚合数据源
 
-- 聚合视频数据源，全自动选择
+- [聚合视频数据源](https://github.com/creamycake-anime/ani-subs)，全自动选择
   > 还支持 BitTorrent、Jellyfin、Emby、以及自定义源
 - 聚合全网弹幕源（[弹弹play][ddplay]），以及 Animeko 自己的[弹幕服务](https://danmaku-cn.myani.org/swagger/index.html)
 
@@ -107,31 +107,14 @@ https://github.com/user-attachments/assets/e63636c9-30b7-411c-aa6b-e5b78b900726
 
 Animeko 支持所有主流平台：Android、iOS、Windows、macOS、Linux。
 
-- 稳定版本: 每两周更新, 功能稳定  
-  [下载稳定版本](https://github.com/open-ani/animeko/releases/latest)
+- 稳定版本: 功能稳定  
+  [下载稳定版本](https://animeko.org/downloads/)
 
 通常建议使用稳定版本. 如果你愿意参与测试并拥有一定的对 bug 的处理能力, 也欢迎使用测试版本更快体验新功能.
 具体版本类型可查看下方.
 
-- 测试版本: 每两天更新, 体验最新功能  
-  [下载测试版本](https://github.com/open-ani/animeko/releases)
-
-<details>
-<summary> <b>点击查看具体版本类型</b> </summary>
-
-Animeko 采用语义化版本号, 简单来说就是 `4.x.y` 的格式. 有以下几种版本类型:
-
-- 稳定版本:
-    - **新特性发布**: 当 `x` 更新时, 会有新特性的发布. 通常为 2 周一次.
-    - **Bug 修复**: 当 `y` 更新时, 只会有针对前个版本的重要的 bug 修复. 这些 Bug 修复版本穿插在新特性更新的间隔中,
-      时间不固定.
-- 在稳定版本的发布周期之间, 会发布测试版本:
-    - **Alpha 测试版**: 所有重大新功能都会首先发布到 `alpha` 测试通道, 客户端内可使用 "每日构建"
-      接收更新. 这些新功能非常不稳定, 适合热情的先锋测试员!
-    - **Beta 测试版**: 在功能经过 alpha 测试修复重大问题后, 会进入 `beta` 测试通道,
-      在客户端内名称为 "测试版". 此版本仍然不稳定, 是一个平衡新功能和稳定性的选择
-
-</details>
+- 测试版本: 体验最新功能  
+  [下载测试版本](https://animeko.org/downloads/)
 
 ## 技术总览
 
@@ -158,7 +141,7 @@ Animeko 采用语义化版本号, 简单来说就是 `4.x.y` 的格式. 有以�
 全部视频数据都来自网络, Animeko 本身不存储任何视频数据。
 Animeko 支持两大数据源类型：BT 和在线。BT 源即为公共 BitTorrent P2P 网络，
 每个在 BT
-网络上的人都可分享自己拥有的资源供他人下载。在线源即为其他视频资源网站分享的内容。Animeko
+网络上的人都可分享自己拥有的资源供他人下载。在线源即为其他视频资源网站分享的内容，目前使用 [creamycake ani-subs](https://github.com/creamycake-anime/ani-subs)。Animeko
 本身并不提供任何视频资源。
 
 本着互助精神，使用 BT 源时 Animeko 会自动做种 (分享数据)。

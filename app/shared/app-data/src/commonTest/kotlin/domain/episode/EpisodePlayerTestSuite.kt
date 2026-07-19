@@ -16,9 +16,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import me.him188.ani.app.data.models.preference.VideoScaffoldConfig
 import me.him188.ani.app.data.models.subject.SubjectSeriesInfo
 import me.him188.ani.app.data.models.subject.TestSubjectCollections
+import me.him188.ani.app.domain.media.hls.HlsPlaybackPreparer
+import me.him188.ani.app.domain.media.hls.NoopHlsPlaybackPreparer
+import me.him188.ani.app.domain.settings.GetVideoScaffoldConfigUseCase
 import org.koin.core.Koin
 import org.koin.dsl.module
 import org.openani.mediamp.test.TestMediampPlayer
@@ -30,7 +35,7 @@ class EpisodePlayerTestSuite(
     testScope: TestScope,
     val backgroundScope: CoroutineScope = testScope.backgroundScope,
 ) {
-    val player = TestMediampPlayer()
+    val player = TestMediampPlayer(StandardTestDispatcher(testScope.testScheduler))
 
     @Suppress("DEPRECATION")
     val mediaSelectorTestBuilder = me.him188.ani.app.domain.media.selector.legacy.MediaSelectorTestBuilder(testScope)
@@ -48,10 +53,10 @@ class EpisodePlayerTestSuite(
                                     it.subjectId,
                                     it.episodeId,
                                     TestSubjectCollections[0].run {
-                                        copy(subjectInfo = subjectInfo.copy(subjectId = subjectId))
+                                        copy(subjectInfo = subjectInfo.copy(subjectId = it.subjectId))
                                     },
                                     TestSubjectCollections[0].episodes[0].run {
-                                        copy(episodeInfo = episodeInfo.copy(episodeId = episodeId))
+                                        copy(episodeInfo = episodeInfo.copy(episodeId = it.episodeId))
                                     },
                                     seriesInfo = SubjectSeriesInfo.Fallback,
                                     subjectCompleted = false,
@@ -70,6 +75,14 @@ class EpisodePlayerTestSuite(
                                 ),
                             )
                         }
+                    }
+                    single<GetVideoScaffoldConfigUseCase> {
+                        GetVideoScaffoldConfigUseCase {
+                            flowOf(VideoScaffoldConfig.AllDisabled)
+                        }
+                    }
+                    single<HlsPlaybackPreparer> {
+                        NoopHlsPlaybackPreparer
                     }
                 },
             ),
@@ -99,7 +112,7 @@ class EpisodePlayerTestSuite(
 fun TestScope.createExceptionCapturingSupervisorScope(parentScope: CoroutineScope = backgroundScope): Pair<CoroutineScope, CompletableDeferred<Throwable>> {
     val backgroundException = CompletableDeferred<Throwable>()
     val scope = CoroutineScope(
-        SupervisorJob(parentScope.coroutineContext[Job]) + CoroutineExceptionHandler { _, throwable ->
+        (parentScope.coroutineContext.minusKey(Job)) + SupervisorJob(parentScope.coroutineContext[Job]) + CoroutineExceptionHandler { _, throwable ->
             backgroundException.complete(throwable)
         },
     )

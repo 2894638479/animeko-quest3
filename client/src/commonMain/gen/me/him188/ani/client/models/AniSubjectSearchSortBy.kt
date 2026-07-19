@@ -1,12 +1,3 @@
-/*
- * Copyright (C) 2024-2026 OpenAni and contributors.
- *
- * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
- * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
- *
- * https://github.com/open-ani/ani/blob/main/LICENSE
- */
-
 // @formatter:off
 /**
  *
@@ -26,13 +17,12 @@
 package me.him188.ani.client.models
 
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.*
 
 /**
- * 
  *
- * Values: RELEVANCE,AIR_DATE_ASC,AIR_DATE_DESC,RATING_ASC,RATING_DESC,RANK_ASC,RANK_DESC
+ *
+ * Values: RELEVANCE,AIR_DATE_ASC,AIR_DATE_DESC,RATING_ASC,RATING_DESC,RANK_ASC,RANK_DESC,COLLECTION_DESC
  */
 @Serializable
 enum class AniSubjectSearchSortBy(val value: kotlin.String) {
@@ -56,7 +46,10 @@ enum class AniSubjectSearchSortBy(val value: kotlin.String) {
     RANK_ASC("rankAsc"),
 
     @SerialName(value = "rankDesc")
-    RANK_DESC("rankDesc");
+    RANK_DESC("rankDesc"),
+
+    @SerialName(value = "collectionDesc")
+    COLLECTION_DESC("collectionDesc");
 
     /**
      * Override [toString()] to avoid using the enum variable name as the value, and instead use
@@ -87,3 +80,4 @@ enum class AniSubjectSearchSortBy(val value: kotlin.String) {
 
 
 // @formatter:on
+

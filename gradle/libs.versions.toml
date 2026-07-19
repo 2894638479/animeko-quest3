@@ -33,7 +33,7 @@ undercouch-download = "5.6.0"
 # How to upgrade them? Check compose multiplatform release notes and find the corresponding versions for each library.
 
 # https://github.com/JetBrains/compose-multiplatform/releases
-compose-multiplatform = "1.10.1"
+compose-multiplatform = "1.10.3"
 compose-hot-reload = "1.1.0-alpha05" # https://github.com/JetBrains/compose-hot-reload/releases
 
 # JetBrains compose libraries. Follow the release notes for main Compose Multiplatform for versoins.
@@ -54,9 +54,10 @@ androidx-compose-material3-adaptive = "1.2.0-alpha11"
 
 bytebuddy = "1.17.4" # https://github.com/raphw/byte-buddy/releases
 jna = "5.13.0" # 不要轻易改这个版本, 它可能导致 VLC 兼容性问题
+dbus-java = "5.2.0"
 jsonpathkt-kotlinx = "3.0.2"
 ksoup = "0.2.2"
-filekit = "0.10.0-beta04" # https://github.com/vinceglb/FileKit/releases
+filekit = "0.13.0" # https://github.com/vinceglb/FileKit/releases
 kotlinpoet = "1.18.1" # https://github.com/square/kotlinpoet/releases
 log4j-core = "2.20.0"
 ktor = "3.1.1" # https://github.com/ktorio/ktor/releases
@@ -86,7 +87,11 @@ google-firebase = "22.0.1"
 posthog-android = "3.11.3"
 posthog-java = "1.2.0"
 openapi-generator = "7.13.0"
-mediamp = "0.1.6"
+mediamp = "0.1.16"
+libass-android = "0.5.0-beta01"
+compose-native-tray = "1.3.0"
+kmpalette = "4.0.0-beta02"
+haze = "1.7.2"
 spatialsdk = "0.11.1"
 
 [plugins]
@@ -163,6 +168,7 @@ ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
+ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 
 # Koin
@@ -274,14 +280,21 @@ mediamp-exoplayer = { module = "org.openani.mediamp:mediamp-exoplayer", version.
 mediamp-ffmpeg = { module = "org.openani.mediamp:mediamp-ffmpeg", version.ref = "mediamp" }
 mediamp-ffmpeg-desktop = { module = "org.openani.mediamp:mediamp-ffmpeg-desktop", version.ref = "mediamp" }
 mediamp-ffmpeg-runtime-windows-x64 = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-windows-x64", version.ref = "mediamp" }
+mediamp-ffmpeg-runtime-windows-arm64 = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-windows-arm64", version.ref = "mediamp" }
 mediamp-ffmpeg-runtime-linux-x64 = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-linux-x64", version.ref = "mediamp" }
 mediamp-ffmpeg-runtime-macos-x64 = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-macos-x64", version.ref = "mediamp" }
 mediamp-ffmpeg-runtime-macos-arm64 = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-macos-arm64", version.ref = "mediamp" }
-mediamp-ffmpeg-runtime-ios-arm64 = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-ios-arm64", version.ref = "mediamp" }
-mediamp-ffmpeg-runtime-ios-simulator-arm64 = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-ios-simulator-arm64", version.ref = "mediamp" }
+mediamp-ffmpeg-runtime-ios-xcframework = { module = "org.openani.mediamp:mediamp-ffmpeg-runtime-ios-xcframework", version.ref = "mediamp" }
+# Apple runtime is published as a @zip XCFramework and is resolved explicitly where needed.
+mediamp-mpv = { module = "org.openani.mediamp:mediamp-mpv", version.ref = "mediamp" }
+mediamp-mpv-runtime-windows-x64 = { module = "org.openani.mediamp:mediamp-mpv-runtime-windows-x64", version.ref = "mediamp" }
+mediamp-mpv-runtime-linux-x64 = { module = "org.openani.mediamp:mediamp-mpv-runtime-linux-x64", version.ref = "mediamp" }
+mediamp-mpv-runtime-macos-x64 = { module = "org.openani.mediamp:mediamp-mpv-runtime-macos-x64", version.ref = "mediamp" }
+mediamp-mpv-runtime-macos-arm64 = { module = "org.openani.mediamp:mediamp-mpv-runtime-macos-arm64", version.ref = "mediamp" }
 mediamp-source-ktxio = { module = "org.openani.mediamp:mediamp-source-ktxio", version.ref = "mediamp" }
 mediamp-test = { module = "org.openani.mediamp:mediamp-test", version.ref = "mediamp" }
 mediamp-vlc = { module = "org.openani.mediamp:mediamp-vlc", version.ref = "mediamp" }
+libass-media = { module = "io.github.peerless2012:ass-media", version.ref = "libass-android" }
 
 ### All other libraries ###
 
@@ -297,6 +310,8 @@ ipaddress-parser = { module = "com.github.seancfoley:ipaddress", version.ref = "
 vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
+dbus-java-core = { module = "com.github.hypfvieh:dbus-java-core", version.ref = "dbus-java" }
+dbus-java-transport-native-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 ksoup = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoup" }
 ksoup-kotlinx = { module = "com.fleeksoft.ksoup:ksoup-kotlinx", version.ref = "ksoup" }
@@ -305,6 +320,7 @@ diamondedge-logging = { module = "com.diamondedge:logging", version.ref = "diamo
 jsonpathkt-kotlinx = { module = "com.eygraber:jsonpathkt-kotlinx", version.ref = "jsonpathkt-kotlinx" }
 filekit-dialogs = { module = "io.github.vinceglb:filekit-dialogs", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
+compose-native-tray = { module = "io.github.kdroidfilter:composenativetray", version.ref = "compose-native-tray" }
 # Workaround for Kotlin compiler bug
 stately-common = { module = "co.touchlab:stately-common", version.ref = "stately-common" }
 jsystemthemedetector = { module = "org.openani.jsystemthemedetector:jSystemThemeDetector", version.ref = "jsystemthemedetector" }
@@ -316,6 +332,8 @@ bytebuddy = { module = "net.bytebuddy:byte-buddy", version.ref = "bytebuddy" }
 sentry-kotlin-multiplatform = { module = "io.sentry:sentry-kotlin-multiplatform", version.ref = "sentry-kotlin-multiplatform" }
 sentry-compose-android = { module = "io.sentry:sentry-compose-android", version.ref = "sentry-compose-android" }
 awssdk-s3 = { module = "software.amazon.awssdk:s3", version.ref = "s3" }
+kmpalette-core = { module = "com.materialkolor.palette:core", version.ref = "kmpalette" }
+haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 
 firebase-analytics = { module = "dev.gitlive:firebase-analytics", version.ref = "gitlive-firebase" }
 google-firebase-common = { module = "com.google.firebase:firebase-common", version.ref = "google-firebase" }

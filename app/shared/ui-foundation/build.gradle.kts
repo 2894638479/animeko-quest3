@@ -56,6 +56,8 @@ kotlin {
         api(libs.atomicfu)
 
         api(libs.materialkolor)
+        api(libs.kmpalette.core)
+        api(libs.haze)
     }
     sourceSets.commonTest.dependencies {
         implementation(projects.utils.uiTesting)
@@ -68,6 +70,8 @@ kotlin {
     sourceSets.desktopMain.dependencies {
         implementation(libs.jna)
         implementation(libs.jna.platform)
+        implementation(libs.dbus.java.core)
+        implementation(libs.dbus.java.transport.native.unixsocket)
         api(libs.directories)
     }
 }

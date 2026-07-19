@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -16,10 +16,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -59,6 +61,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -84,6 +87,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectWithLifecycle
 import kotlinx.coroutines.CoroutineScope
@@ -103,6 +107,7 @@ import me.him188.ani.app.navigation.LocalNavigator
 import me.him188.ani.app.ui.adaptive.AniTopAppBar
 import me.him188.ani.app.ui.adaptive.AniTopAppBarDefaults
 import me.him188.ani.app.ui.foundation.LocalPlatform
+import me.him188.ani.app.ui.foundation.ifThen
 import me.him188.ani.app.ui.foundation.layout.AniWindowInsets
 import me.him188.ani.app.ui.foundation.layout.currentWindowAdaptiveInfo1
 import me.him188.ani.app.ui.foundation.layout.isHeightAtLeastMedium
@@ -110,10 +115,27 @@ import me.him188.ani.app.ui.foundation.layout.isWidthAtLeastMedium
 import me.him188.ani.app.ui.foundation.layout.paneHorizontalPadding
 import me.him188.ani.app.ui.foundation.session.SelfAvatar
 import me.him188.ani.app.ui.foundation.theme.AniThemeDefaults
+import me.him188.ani.app.ui.foundation.theme.appChromeFrostedGlass
+import me.him188.ani.app.ui.foundation.theme.appChromeHazeSource
+import me.him188.ani.app.ui.foundation.theme.isAppChromeFrostedGlassActive
 import me.him188.ani.app.ui.foundation.widgets.LocalToaster
 import me.him188.ani.app.ui.foundation.widgets.NsfwMask
 import me.him188.ani.app.ui.foundation.widgets.PullToRefreshBox
 import me.him188.ani.app.ui.foundation.widgets.showLoadError
+import me.him188.ani.app.ui.lang.Lang
+import me.him188.ani.app.ui.lang.exploration_search
+import me.him188.ani.app.ui.lang.login_sign_in
+import me.him188.ani.app.ui.lang.settings
+import me.him188.ani.app.ui.lang.subject_collection_doing
+import me.him188.ani.app.ui.lang.subject_collection_done
+import me.him188.ani.app.ui.lang.subject_collection_dropped
+import me.him188.ani.app.ui.lang.subject_collection_guest_mode_tip
+import me.him188.ani.app.ui.lang.subject_collection_move_to_watched
+import me.him188.ani.app.ui.lang.subject_collection_on_hold
+import me.him188.ani.app.ui.lang.subject_collection_page_title
+import me.him188.ani.app.ui.lang.subject_collection_syncing
+import me.him188.ani.app.ui.lang.subject_collection_uncollected
+import me.him188.ani.app.ui.lang.subject_collection_wish
 import me.him188.ani.app.ui.search.isLoadingFirstPageOrRefreshing
 import me.him188.ani.app.ui.subject.collection.components.EditableSubjectCollectionTypeState
 import me.him188.ani.app.ui.subject.collection.progress.SubjectProgressButton
@@ -130,6 +152,7 @@ import me.him188.ani.utils.coroutines.flows.restartable
 import me.him188.ani.utils.platform.hasScrollingBug
 import me.him188.ani.utils.platform.isDesktop
 import me.him188.ani.utils.platform.isMobile
+import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
 
 
@@ -191,6 +214,7 @@ class UserCollectionsState(
                     // 不再发射初始加载状态，直接发射真实数据
                     emitAll(startSearch(query))
                 }
+                .cachedIn(backgroundScope)
 
             LazyPagingItems(pagingFlow)
         }
@@ -240,7 +264,7 @@ fun CollectionPage(
                 || currentWindowAdaptiveInfo1().windowSizeClass.isWidthAtLeastMedium
             ) {
                 IconButton(onClick = onClickSettings) {
-                    Icon(Icons.Rounded.Settings, "设置")
+                    Icon(Icons.Rounded.Settings, stringResource(Lang.settings))
                 }
             }
         },
@@ -260,7 +284,7 @@ fun CollectionPage(
                 IconButton({ hideBangumiSync = false }) {
                     Icon(
                         imageVector = Icons.Rounded.Sync,
-                        contentDescription = "正在同步",
+                        contentDescription = stringResource(Lang.subject_collection_syncing),
                         modifier = Modifier.rotate(angle),
                     )
                 }
@@ -324,16 +348,27 @@ fun CollectionPage(
         onRefresh = { state.refreshSelectedPage() },
         modifier,
         windowInsets,
-    ) { nestedScrollConnection ->
+    ) { nestedScrollConnection, contentPadding ->
         CollectionPageColumnLayout(
             state,
             modifier = Modifier.fillMaxSize(),
         ) { items, pageIndex ->
+            val pullToRefreshState = rememberPullToRefreshState()
+            val isPullToRefreshing = items.isLoadingFirstPageOrRefreshing
             PullToRefreshBox(
-                items.isLoadingFirstPageOrRefreshing,
+                isPullToRefreshing,
                 onRefresh = { items.refresh() },
-                state = rememberPullToRefreshState(),
+                state = pullToRefreshState,
                 enabled = LocalPlatform.current.isMobile() && !isBangumiSyncing,
+                indicator = {
+                    // 内容延伸到 top bar 下方, 指示器需要避开 top bar.
+                    PullToRefreshDefaults.Indicator(
+                        modifier = Modifier.align(Alignment.TopCenter)
+                            .padding(top = contentPadding.calculateTopPadding()),
+                        isRefreshing = isPullToRefreshing,
+                        state = pullToRefreshState,
+                    )
+                },
             ) {
                 SubjectCollectionsColumn(
                     items,
@@ -355,6 +390,7 @@ fun CollectionPage(
                     modifier = Modifier.fillMaxSize(),
                     enableAnimation = enableAnimation,
                     gridState = remember(pageIndex) { state.getGridState(pageIndex) },
+                    contentPadding = contentPadding,
                 )
             }
         }
@@ -381,7 +417,7 @@ private fun CollectionPageLayout(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
     windowInsets: WindowInsets = AniWindowInsets.forPageContent(),
-    content: @Composable (nestedScrollConnection: NestedScrollConnection?) -> Unit,
+    content: @Composable (nestedScrollConnection: NestedScrollConnection?, contentPadding: PaddingValues) -> Unit,
 ) {
     val isHeightAtLeastMedium = currentWindowAdaptiveInfo1().windowSizeClass.isHeightAtLeastMedium
     val scrollBehavior = if (LocalPlatform.current.hasScrollingBug() || isHeightAtLeastMedium) {
@@ -390,12 +426,22 @@ private fun CollectionPageLayout(
         // 在紧凑高度时收起 Top bar
         TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     }
+    val frostedGlassActive = isAppChromeFrostedGlassActive()
+    val appBarColors = AniThemeDefaults.topAppBarColors()
     Scaffold(
         modifier,
         topBar = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            // 整个 topBar (app bar + tab row) 作为一个毛玻璃面板; 不启用时用不透明背景遮住下方滚动的内容.
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .appChromeFrostedGlass(
+                        enabled = frostedGlassActive,
+                        containerColor = appBarColors.containerColor,
+                    )
+                    .ifThen(!frostedGlassActive) { background(appBarColors.containerColor) },
+            ) {
                 AniTopAppBar(
-                    title = { AniTopAppBarDefaults.Title("追番") },
+                    title = { AniTopAppBarDefaults.Title(stringResource(Lang.subject_collection_page_title)) },
                     modifier = Modifier,
                     actions = {
                         actions()
@@ -415,8 +461,17 @@ private fun CollectionPageLayout(
                         settingsIcon()
                     },
                     avatar = avatar,
+                    colors = if (frostedGlassActive) {
+                        appBarColors.copy(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent,
+                        )
+                    } else {
+                        appBarColors
+                    },
                     windowInsets = AniWindowInsets.forTopAppBarWithoutDesktopTitle(),
                     scrollBehavior = scrollBehavior,
+                    enableFrostedGlass = false, // 由上面的 Column 统一应用
                 )
 
                 filters(CollectionPageFilters)
@@ -426,12 +481,18 @@ private fun CollectionPageLayout(
         containerColor = AniThemeDefaults.pageContentBackgroundColor,
     ) { topBarPaddings ->
         Box(
-            modifier = Modifier.padding(topBarPaddings)
-                .fillMaxSize()
-                .wrapContentWidth()
-                .widthIn(max = 1300.dp),
+            // 毛玻璃 app chrome 的模糊来源. 内容通过 contentPadding 延伸到 chrome 下方.
+            Modifier.appChromeHazeSource(backgroundColor = AniThemeDefaults.pageContentBackgroundColor)
+                .fillMaxSize(),
         ) {
-            content(scrollBehavior?.nestedScrollConnection)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .wrapContentWidth()
+                    .widthIn(max = 1300.dp),
+            ) {
+                content(scrollBehavior?.nestedScrollConnection, topBarPaddings)
+            }
         }
     }
 }
@@ -616,7 +677,11 @@ private fun SubjectCollectionItem(
                         },
                         enabled = !editableSubjectCollectionTypePresentation.isSetSelfCollectionTypeWorking,
                     ) {
-                        Text("移至\"看过\"", Modifier.requiredWidth(IntrinsicSize.Max), softWrap = false)
+                        Text(
+                            stringResource(Lang.subject_collection_move_to_watched),
+                            Modifier.requiredWidth(IntrinsicSize.Max),
+                            softWrap = false,
+                        )
                     }
                 } else {
                     SubjectProgressButton(
@@ -635,15 +700,16 @@ private fun SubjectCollectionItem(
     )
 }
 
+@Composable
 @Stable
 private fun UnifiedCollectionType.displayText(): String {
     return when (this) {
-        UnifiedCollectionType.WISH -> "想看"
-        UnifiedCollectionType.DOING -> "在看"
-        UnifiedCollectionType.DONE -> "看过"
-        UnifiedCollectionType.ON_HOLD -> "搁置"
-        UnifiedCollectionType.DROPPED -> "抛弃"
-        UnifiedCollectionType.NOT_COLLECTED -> "未收藏"
+        UnifiedCollectionType.WISH -> stringResource(Lang.subject_collection_wish)
+        UnifiedCollectionType.DOING -> stringResource(Lang.subject_collection_doing)
+        UnifiedCollectionType.DONE -> stringResource(Lang.subject_collection_done)
+        UnifiedCollectionType.ON_HOLD -> stringResource(Lang.subject_collection_on_hold)
+        UnifiedCollectionType.DROPPED -> stringResource(Lang.subject_collection_dropped)
+        UnifiedCollectionType.NOT_COLLECTED -> stringResource(Lang.subject_collection_uncollected)
     }
 }
 
@@ -655,17 +721,17 @@ private fun GuestTips(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier) {
-        Text("游客模式下请搜索后观看，或登录后使用收藏功能")
+        Text(stringResource(Lang.subject_collection_guest_mode_tip))
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             OutlinedButton(onClickLogin, Modifier.weight(1f)) {
                 Icon(Icons.Rounded.HowToReg, null)
-                Text("登录", Modifier.padding(start = 8.dp))
+                Text(stringResource(Lang.login_sign_in), Modifier.padding(start = 8.dp))
             }
 
             Button(onClickSearch, Modifier.weight(1f)) {
                 Icon(Icons.Rounded.Search, null)
-                Text("搜索", Modifier.padding(start = 8.dp))
+                Text(stringResource(Lang.exploration_search), Modifier.padding(start = 8.dp))
             }
         }
     }

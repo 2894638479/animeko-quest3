@@ -20,6 +20,7 @@ enum class WebCaptchaKind {
     Image,
     Cloudflare,
     CloudflareTurnstile,
+    SliderCaptcha,
     Unknown,
 }
 
@@ -91,6 +92,9 @@ interface WebCaptchaCoordinator {
 
     suspend fun solveInteractively(request: WebCaptchaRequest): WebCaptchaSolveResult
 
+    fun cancelAutoResolutionRequests() {
+    }
+
     fun resetSolvedSession(mediaSourceId: String) {
     }
 }
@@ -125,6 +129,18 @@ object WebCaptchaDetector {
             "challenges.cloudflare.com/turnstile" in lowerHtml
         ) {
             return WebCaptchaKind.CloudflareTurnstile
+        }
+
+        if (
+            "puzzle-container" in lowerHtml
+        ) {
+            return WebCaptchaKind.SliderCaptcha
+        }
+
+        if (
+            "需要输入验证码" in lowerHtml
+        ) {
+            return WebCaptchaKind.Unknown
         }
 
         val hasChallengeUrlMarker =
@@ -213,6 +229,7 @@ fun WebCaptchaKind.displayName(): String = when (this) {
     WebCaptchaKind.Cloudflare -> "Cloudflare 验证"
     WebCaptchaKind.CloudflareTurnstile -> "Cloudflare Turnstile 验证"
     WebCaptchaKind.Unknown -> "验证码"
+    WebCaptchaKind.SliderCaptcha -> "滑动验证"
 }
 
 internal fun WebCaptchaRequest.storageKey(): String {

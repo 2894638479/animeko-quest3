@@ -1,12 +1,3 @@
-/*
- * Copyright (C) 2024-2026 OpenAni and contributors.
- *
- * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
- * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
- *
- * https://github.com/open-ani/ani/blob/main/LICENSE
- */
-
 // @formatter:off
 /**
  *
@@ -25,23 +16,25 @@
 
 package me.him188.ani.client.apis
 
-import io.ktor.client.HttpClient
-import io.ktor.client.HttpClientConfig
-import io.ktor.client.engine.HttpClientEngine
-import kotlinx.serialization.json.Json
-import me.him188.ani.client.infrastructure.ApiClient
-import me.him188.ani.client.infrastructure.HttpResponse
-import me.him188.ani.client.infrastructure.RequestConfig
-import me.him188.ani.client.infrastructure.RequestMethod
-import me.him188.ani.client.infrastructure.wrap
-import me.him188.ani.client.models.AniAuthenticationResponse
 import me.him188.ani.client.models.AniEditEmailRequest
-import me.him188.ani.client.models.AniLoginResponse
 import me.him188.ani.client.models.AniRefreshTokenRequest
 import me.him188.ani.client.models.AniRegisterOrLoginByEmailOtpRequest
 import me.him188.ani.client.models.AniSendEmailOtpRequest
-import me.him188.ani.client.models.AniSendOptResponse
 import me.him188.ani.client.models.AniSetPasswordRequest
+import me.him188.ani.client.models.AniUserAuthRoutingAuthenticationResponse
+import me.him188.ani.client.models.AniUserAuthRoutingLoginResponse
+import me.him188.ani.client.models.AniUserAuthRoutingSendOptResponse
+
+import me.him188.ani.client.infrastructure.*
+import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
+import io.ktor.client.request.forms.formData
+import io.ktor.client.engine.HttpClientEngine
+import kotlinx.serialization.json.Json
+import io.ktor.http.ParametersBuilder
+import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 
 open class UserAuthenticationAniApi : ApiClient {
 
@@ -60,11 +53,11 @@ open class UserAuthenticationAniApi : ApiClient {
     /**
      * 绑定或换绑邮箱
      * 绑定或换绑邮箱
-     * @param aniEditEmailRequest 
-     * @return AniAuthenticationResponse
+     * @param aniEditEmailRequest
+     * @return AniUserAuthRoutingAuthenticationResponse
      */
     @Suppress("UNCHECKED_CAST")
-    open suspend fun editEmail(aniEditEmailRequest: AniEditEmailRequest): HttpResponse<AniAuthenticationResponse> {
+    open suspend fun editEmail(aniEditEmailRequest: AniEditEmailRequest): HttpResponse<AniUserAuthRoutingAuthenticationResponse> {
 
         val localVariableAuthNames = listOf<String>("auth-jwt")
 
@@ -93,11 +86,11 @@ open class UserAuthenticationAniApi : ApiClient {
     /**
      * 刷新会话 token
      * 刷新会话 token
-     * @param aniRefreshTokenRequest 
-     * @return AniLoginResponse
+     * @param aniRefreshTokenRequest
+     * @return AniUserAuthRoutingLoginResponse
      */
     @Suppress("UNCHECKED_CAST")
-    open suspend fun refreshToken(aniRefreshTokenRequest: AniRefreshTokenRequest): HttpResponse<AniLoginResponse> {
+    open suspend fun refreshToken(aniRefreshTokenRequest: AniRefreshTokenRequest): HttpResponse<AniUserAuthRoutingLoginResponse> {
 
         val localVariableAuthNames = listOf<String>("auth-jwt")
 
@@ -126,11 +119,11 @@ open class UserAuthenticationAniApi : ApiClient {
     /**
      * 使用邮箱验证码登录或注册
      * 使用邮箱验证码登录或注册
-     * @param aniRegisterOrLoginByEmailOtpRequest 
-     * @return AniAuthenticationResponse
+     * @param aniRegisterOrLoginByEmailOtpRequest
+     * @return AniUserAuthRoutingAuthenticationResponse
      */
     @Suppress("UNCHECKED_CAST")
-    open suspend fun registerOrLoginByEmailOtp(aniRegisterOrLoginByEmailOtpRequest: AniRegisterOrLoginByEmailOtpRequest): HttpResponse<AniAuthenticationResponse> {
+    open suspend fun registerOrLoginByEmailOtp(aniRegisterOrLoginByEmailOtpRequest: AniRegisterOrLoginByEmailOtpRequest): HttpResponse<AniUserAuthRoutingAuthenticationResponse> {
 
         val localVariableAuthNames = listOf<String>("auth-jwt")
 
@@ -159,11 +152,11 @@ open class UserAuthenticationAniApi : ApiClient {
     /**
      * 发送邮箱验证码
      * 发送邮箱验证码
-     * @param aniSendEmailOtpRequest 
-     * @return AniSendOptResponse
+     * @param aniSendEmailOtpRequest
+     * @return AniUserAuthRoutingSendOptResponse
      */
     @Suppress("UNCHECKED_CAST")
-    open suspend fun sendEmailOtp(aniSendEmailOtpRequest: AniSendEmailOtpRequest): HttpResponse<AniSendOptResponse> {
+    open suspend fun sendEmailOtp(aniSendEmailOtpRequest: AniSendEmailOtpRequest): HttpResponse<AniUserAuthRoutingSendOptResponse> {
 
         val localVariableAuthNames = listOf<String>("auth-jwt")
 
@@ -192,11 +185,11 @@ open class UserAuthenticationAniApi : ApiClient {
     /**
      * 老用户设置密码. 只能设置一次, 之后要使用邮箱修改密码.
      * 老用户设置密码. 只能设置一次, 之后要使用邮箱修改密码.
-     * @param aniSetPasswordRequest 
-     * @return AniAuthenticationResponse
+     * @param aniSetPasswordRequest
+     * @return AniUserAuthRoutingAuthenticationResponse
      */
     @Suppress("UNCHECKED_CAST")
-    open suspend fun setPassword(aniSetPasswordRequest: AniSetPasswordRequest): HttpResponse<AniAuthenticationResponse> {
+    open suspend fun setPassword(aniSetPasswordRequest: AniSetPasswordRequest): HttpResponse<AniUserAuthRoutingAuthenticationResponse> {
 
         val localVariableAuthNames = listOf<String>("auth-jwt")
 
@@ -225,3 +218,4 @@ open class UserAuthenticationAniApi : ApiClient {
 }
 
 // @formatter:on
+

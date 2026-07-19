@@ -43,6 +43,10 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
      */
     val fullscreenSwitchMode: FullscreenSwitchMode = FullscreenSwitchMode.ALWAYS_SHOW_FLOATING,
     /**
+     * 悬浮或拖动播放进度条时显示视频帧预览.
+     */
+    val enableFramePreview: Boolean = true,
+    /**
      * 在编辑弹幕时暂停视频.
      * @since 3.2.0-beta01
      */
@@ -71,6 +75,12 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
      * 在播放器错误时自动切换视频源
      */
     val autoSwitchMediaOnPlayerError: Boolean = true,
+    /**
+     * 过滤 HLS 播放列表中的插播片段.
+     *
+     * @since 5.7
+     */
+    val enableExperimentalHlsSegmentFiltering: Boolean = false,
     /**
      * 用于在安卓上设置屏幕刷新率, 解决某些设备会自动限制刷新率的问题 (三星).
      *
@@ -104,6 +114,7 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
         @OptIn(SerializationOnly::class)
         val AllDisabled = VideoScaffoldConfig(
             fullscreenSwitchMode = FullscreenSwitchMode.ONLY_IN_CONTROLLER,
+            enableFramePreview = false,
             pauseVideoOnEditDanmaku = false,
             autoMarkDone = false,
             hideSelectorOnSelect = false,
@@ -111,6 +122,7 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
             autoPlayNext = false,
             autoSkipOpEd = false,
             autoSwitchMediaOnPlayerError = false,
+            enableExperimentalHlsSegmentFiltering = false,
         )
     }
 

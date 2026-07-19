@@ -12,7 +12,6 @@ package me.him188.ani.app.ui.main
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -73,8 +72,6 @@ import me.him188.ani.app.ui.exploration.schedule.ScheduleScreen
 import me.him188.ani.app.ui.exploration.schedule.ScheduleViewModel
 import me.him188.ani.app.ui.foundation.animation.NavigationMotionScheme
 import me.him188.ani.app.ui.foundation.animation.ProvideAniMotionCompositionLocals
-import me.him188.ani.app.ui.foundation.layout.LocalSharedTransitionScopeProvider
-import me.him188.ani.app.ui.foundation.layout.SharedTransitionScopeProvider
 import me.him188.ani.app.ui.foundation.layout.currentWindowAdaptiveInfo1
 import me.him188.ani.app.ui.foundation.layout.desktopTitleBar
 import me.him188.ani.app.ui.foundation.widgets.BackNavigationIconButton
@@ -89,6 +86,9 @@ import me.him188.ani.app.ui.onboarding.OnboardingCompleteViewModel
 import me.him188.ani.app.ui.onboarding.OnboardingScreen
 import me.him188.ani.app.ui.onboarding.OnboardingViewModel
 import me.him188.ani.app.ui.onboarding.WelcomeScreen
+import me.him188.ani.app.ui.playback.PlaybackHistoryScreen
+import me.him188.ani.app.ui.playback.PlaybackHistorySyncStatusScreen
+import me.him188.ani.app.ui.playback.PlaybackHistoryViewModel
 import me.him188.ani.app.ui.profile.auth.AniContactList
 import me.him188.ani.app.ui.search.SearchScreen
 import me.him188.ani.app.ui.settings.SettingsScreen
@@ -100,6 +100,10 @@ import me.him188.ani.app.ui.settings.mediasource.selector.EditSelectorMediaSourc
 import me.him188.ani.app.ui.settings.tabs.media.torrent.peer.PeerFilterSettingsScreen
 import me.him188.ani.app.ui.settings.tabs.media.torrent.peer.PeerFilterSettingsViewModel
 import me.him188.ani.app.ui.subject.details.SubjectDetailsScreen
+import me.him188.ani.app.ui.subject.person.CharacterDetailsScreen
+import me.him188.ani.app.ui.subject.person.CharacterDetailsViewModel
+import me.him188.ani.app.ui.subject.person.PersonDetailsScreen
+import me.him188.ani.app.ui.subject.person.PersonDetailsViewModel
 import me.him188.ani.app.ui.subject.details.SubjectDetailsViewModel
 import me.him188.ani.app.ui.subject.episode.EpisodeScreen
 import me.him188.ani.app.ui.subject.episode.EpisodeViewModel
@@ -131,6 +135,13 @@ fun AniAppContent(aniNavigator: AniNavigator) {
                     Modifier.fillMaxSize(),
                 )
             }
+            BangumiSessionExpiredPromptHost(
+                viewModel = aniAppViewModel,
+                enabled = appState.initialNavRoute is NavRoutes.Main,
+                onLogin = {
+                    aniNavigator.navigateBangumiAuthorize()
+                },
+            )
         }
     }
 }
@@ -171,77 +182,76 @@ private fun AniAppContentImpl(
     val navMotionScheme by rememberUpdatedState(NavigationMotionScheme.current)
     val emailLoginViewModel = viewModel<EmailLoginViewModel> { EmailLoginViewModel() }
 
-    SharedTransitionLayout {
-        NavHost(navController, startDestination = initialRoute, modifier) {
-            val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition? =
-                { navMotionScheme.enterTransition }
-            val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition? =
-                { navMotionScheme.exitTransition }
-            val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition? =
-                { navMotionScheme.popEnterTransition }
-            val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition? =
-                { navMotionScheme.popExitTransition }
+    NavHost(navController, startDestination = initialRoute, modifier) {
+        val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition? =
+            { navMotionScheme.enterTransition }
+        val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition? =
+            { navMotionScheme.exitTransition }
+        val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition? =
+            { navMotionScheme.popEnterTransition }
+        val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition? =
+            { navMotionScheme.popExitTransition }
 
-            composable<NavRoutes.Welcome>(
-                enterTransition = enterTransition,
-                exitTransition = exitTransition,
-                popEnterTransition = popEnterTransition,
-                popExitTransition = popExitTransition,
-            ) {
-                WelcomeScreen(
-                    onClickContinue = {
-                        // 从 WelcomeScreen 进入 onboarding, 最后 navigateMain 要 popupTo Welcome
-                        aniNavigator.navigateOnboarding(NavRoutes.Welcome)
-                    },
-                    contactActions = { AniContactList() },
-                    Modifier.fillMaxSize(),
-                    windowInsets,
-                )
-            }
-            composable<NavRoutes.EmailLoginStart>(
-                enterTransition = enterTransition,
-                exitTransition = exitTransition,
-                popEnterTransition = popEnterTransition,
-                popExitTransition = popExitTransition,
-            ) {
-                EmailLoginStartScreen(
-                    onOtpSent = {
-                        aniNavigator.navigateEmailLoginVerify()
-                    },
-                    onBangumiLoginClick = {
-                        aniNavigator.navigateBangumiAuthorize()
-                    },
-                    onNavigateSettings = {
-                        aniNavigator.navigateSettings()
-                    },
-                    onNavigateBack = {
-                        aniNavigator.popBackStack(NavRoutes.EmailLoginStart, true)
-                    },
-                    vm = emailLoginViewModel,
-                )
-            }
-            composable<NavRoutes.EmailLoginVerify>(
-                enterTransition = enterTransition,
-                exitTransition = exitTransition,
-                popEnterTransition = popEnterTransition,
-                popExitTransition = popExitTransition,
-            ) {
-                EmailLoginVerifyScreen(
-                    onSuccess = {
-                        aniNavigator.popBackOrNavigateToMain(mainSceneInitialPage)
-                    },
-                    onBangumiLoginClick = {
-                        aniNavigator.navigateBangumiAuthorize()
-                    },
-                    onNavigateSettings = {
-                        aniNavigator.navigateSettings()
-                    },
-                    onNavigateBack = {
-                        aniNavigator.popBackStack(NavRoutes.EmailLoginVerify, true)
-                    },
-                    vm = emailLoginViewModel,
-                )
-            }
+        composable<NavRoutes.Welcome>(
+            enterTransition = enterTransition,
+            exitTransition = exitTransition,
+            popEnterTransition = popEnterTransition,
+            popExitTransition = popExitTransition,
+        ) {
+            WelcomeScreen(
+                onClickContinue = {
+                    // 从 WelcomeScreen 进入 onboarding, 最后 navigateMain 要 popupTo Welcome
+                    aniNavigator.navigateOnboarding(NavRoutes.Welcome)
+                },
+                contactActions = { AniContactList() },
+                Modifier.fillMaxSize(),
+                windowInsets,
+            )
+        }
+        composable<NavRoutes.EmailLoginStart>(
+            enterTransition = enterTransition,
+            exitTransition = exitTransition,
+            popEnterTransition = popEnterTransition,
+            popExitTransition = popExitTransition,
+        ) {
+            EmailLoginStartScreen(
+                onOtpSent = {
+                    aniNavigator.navigateEmailLoginVerify()
+                },
+                onBangumiLoginClick = {
+                    aniNavigator.navigateBangumiAuthorize()
+                },
+                onNavigateSettings = {
+                    aniNavigator.navigateSettings()
+                },
+                onNavigateBack = {
+                    aniNavigator.popBackStack(NavRoutes.EmailLoginStart, true)
+                },
+                vm = emailLoginViewModel,
+            )
+        }
+        composable<NavRoutes.EmailLoginVerify>(
+            enterTransition = enterTransition,
+            exitTransition = exitTransition,
+            popEnterTransition = popEnterTransition,
+            popExitTransition = popExitTransition,
+        ) {
+            EmailLoginVerifyScreen(
+                onSuccess = {
+                    aniNavigator.popBackOrNavigateToMain(mainSceneInitialPage)
+                },
+                onBangumiLoginClick = {
+                    aniNavigator.navigateBangumiAuthorize()
+                },
+                onNavigateSettings = {
+                    aniNavigator.navigateSettings()
+                },
+                onNavigateBack = {
+                    aniNavigator.popBackStack(NavRoutes.EmailLoginVerify, true)
+                },
+                vm = emailLoginViewModel,
+            )
+        }
             composable<NavRoutes.BangumiAuthorize>(
                 enterTransition = enterTransition,
                 exitTransition = exitTransition,
@@ -354,21 +364,21 @@ private fun AniAppContentImpl(
                         }
                     },
                 ) {
-                    CompositionLocalProvider(
+                    /*CompositionLocalProvider(
                         LocalSharedTransitionScopeProvider provides SharedTransitionScopeProvider(
                             this@SharedTransitionLayout, this,
                         ),
-                    ) {
-                        val selfInfo by vm.selfInfo.collectAsState() // not -WithLifecycle
-                        MainScreen(
-                            page = currentPage,
-                            selfInfo = selfInfo,
-                            onNavigateToPage = { currentPage = it },
-                            onNavigateToSettings = { aniNavigator.navigateSettings(it) },
-                            onNavigateToSearch = { aniNavigator.navigateSubjectSearch() },
-                            navigationLayoutType = navigationLayoutType,
-                        )
-                    }
+                    ) {*/
+                    val selfInfo by vm.selfInfo.collectAsState() // not -WithLifecycle
+                    MainScreen(
+                        page = currentPage,
+                        selfInfo = selfInfo,
+                        onNavigateToPage = { currentPage = it },
+                        onNavigateToSettings = { aniNavigator.navigateSettings(it) },
+                        onNavigateToSearch = { aniNavigator.navigateSubjectSearch() },
+                        navigationLayoutType = navigationLayoutType,
+                    )
+                    // }
                 }
             }
             composable<NavRoutes.SubjectSearch>(
@@ -385,6 +395,9 @@ private fun AniAppContentImpl(
                     vm,
                     onNavigateBack = {
                         aniNavigator.popBackStack()
+                    },
+                    onNavigateToSubjectDetails = { subjectId, placeholder ->
+                        navigator.navigateSubjectDetails(subjectId, placeholder)
                     },
                     onNavigateToEpisodeDetails = { subjectId, episodeId ->
                         navigator.navigateEpisodeDetails(subjectId, episodeId)
@@ -408,38 +421,38 @@ private fun AniAppContentImpl(
                     }
                     SubjectDetailsViewModel(details.subjectId, placeholder)
                 }
-                CompositionLocalProvider(
+                /*CompositionLocalProvider(
                     LocalSharedTransitionScopeProvider provides SharedTransitionScopeProvider(
                         this@SharedTransitionLayout, this,
                     ),
-                ) {
-                    SubjectDetailsScreen(
-                        vm,
-                        onPlay = { aniNavigator.navigateEpisodeDetails(details.subjectId, it) },
-                        onLoadErrorRetry = { vm.reload() },
-                        onClickTag = { aniNavigator.navigateSubjectSearch(NavRoutes.SubjectSearch(tags = listOf(it.name))) },
-                        windowInsets = windowInsets,
-                        navigationIcon = {
-                            Row {
-                                BackNavigationIconButton(
-                                    {
-                                        aniNavigator.popBackStack(details, inclusive = true)
-                                    },
+                ) {*/
+                SubjectDetailsScreen(
+                    vm,
+                    onPlay = { aniNavigator.navigateEpisodeDetails(details.subjectId, it) },
+                    onLoadErrorRetry = { vm.reload() },
+                    onClickTag = { aniNavigator.navigateSubjectSearch(NavRoutes.SubjectSearch(tags = listOf(it.name))) },
+                    windowInsets = windowInsets,
+                    navigationIcon = {
+                        Row {
+                            BackNavigationIconButton(
+                                {
+                                    aniNavigator.popBackStack(details, inclusive = true)
+                                },
+                            )
+                            TopAppBarActionButton(
+                                {
+                                    aniNavigator.popBackOrNavigateToMain(mainSceneInitialPage)
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Home,
+                                    contentDescription = null,
                                 )
-                                TopAppBarActionButton(
-                                    {
-                                        aniNavigator.popBackOrNavigateToMain(mainSceneInitialPage)
-                                    },
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Home,
-                                        contentDescription = null,
-                                    )
-                                }
                             }
-                        },
-                    )
-                }
+                        }
+                    },
+                )
+                // }
             }
             composable<NavRoutes.EpisodeDetail>(
                 enterTransition = enterTransition,
@@ -488,6 +501,57 @@ private fun AniAppContentImpl(
                     },
                 )
             }
+            composable<NavRoutes.PlaybackHistory>(
+                enterTransition = enterTransition,
+                exitTransition = exitTransition,
+                popEnterTransition = popEnterTransition,
+                popExitTransition = popExitTransition,
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<NavRoutes.PlaybackHistory>()
+                PlaybackHistoryScreen(
+                    vm = viewModel { PlaybackHistoryViewModel() },
+                    onNavigateBack = { aniNavigator.popBackStack(route, inclusive = true) },
+                    onOpenHistory = { history ->
+                        val subjectId = history.subjectId
+                        if (subjectId != null) {
+                            aniNavigator.navigateEpisodeDetails(subjectId, history.episodeId)
+                        }
+                    },
+                    onOpenSyncStatus = {
+                        aniNavigator.navigatePlaybackHistorySyncStatus()
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    navigationIcon = {
+                        BackNavigationIconButton(
+                            {
+                                aniNavigator.popBackStack(route, inclusive = true)
+                            },
+                        )
+                    },
+                    windowInsets = windowInsetsWithoutTitleBar,
+                )
+            }
+            composable<NavRoutes.PlaybackHistorySyncStatus>(
+                enterTransition = enterTransition,
+                exitTransition = exitTransition,
+                popEnterTransition = popEnterTransition,
+                popExitTransition = popExitTransition,
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<NavRoutes.PlaybackHistorySyncStatus>()
+                PlaybackHistorySyncStatusScreen(
+                    vm = viewModel { PlaybackHistoryViewModel() },
+                    onNavigateBack = { aniNavigator.popBackStack(route, inclusive = true) },
+                    modifier = Modifier.fillMaxSize(),
+                    navigationIcon = {
+                        BackNavigationIconButton(
+                            {
+                                aniNavigator.popBackStack(route, inclusive = true)
+                            },
+                        )
+                    },
+                    windowInsets = windowInsetsWithoutTitleBar,
+                )
+            }
             composable<NavRoutes.Caches>(
                 enterTransition = enterTransition,
                 exitTransition = exitTransition,
@@ -532,6 +596,44 @@ private fun AniAppContentImpl(
                     },
                     Modifier.fillMaxSize(),
                     windowInsets = windowInsets,
+                )
+            }
+            composable<NavRoutes.PersonDetail>(
+                enterTransition = enterTransition,
+                exitTransition = exitTransition,
+                popEnterTransition = popEnterTransition,
+                popExitTransition = popExitTransition,
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<NavRoutes.PersonDetail>()
+                val vm = viewModel<PersonDetailsViewModel>(key = "person-${route.personId}") {
+                    PersonDetailsViewModel(route.personId)
+                }
+                PersonDetailsScreen(
+                    vm,
+                    Modifier.fillMaxSize(),
+                    windowInsets = windowInsets,
+                    navigationIcon = {
+                        BackNavigationIconButton({ aniNavigator.popBackStack(route, inclusive = true) })
+                    },
+                )
+            }
+            composable<NavRoutes.CharacterDetail>(
+                enterTransition = enterTransition,
+                exitTransition = exitTransition,
+                popEnterTransition = popEnterTransition,
+                popExitTransition = popExitTransition,
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<NavRoutes.CharacterDetail>()
+                val vm = viewModel<CharacterDetailsViewModel>(key = "character-${route.characterId}") {
+                    CharacterDetailsViewModel(route.characterId)
+                }
+                CharacterDetailsScreen(
+                    vm,
+                    Modifier.fillMaxSize(),
+                    windowInsets = windowInsets,
+                    navigationIcon = {
+                        BackNavigationIconButton({ aniNavigator.popBackStack(route, inclusive = true) })
+                    },
                 )
             }
             composable<NavRoutes.SubjectCaches>(
@@ -669,7 +771,6 @@ private fun AniAppContentImpl(
                     navController.navigate(initialRoute)
                 }
             }
-        }
     }
 }
 

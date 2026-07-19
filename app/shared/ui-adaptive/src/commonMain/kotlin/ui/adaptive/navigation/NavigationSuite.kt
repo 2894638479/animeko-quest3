@@ -36,12 +36,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.him188.ani.app.ui.foundation.layout.AniWindowInsets
 import me.him188.ani.app.ui.foundation.layout.currentWindowAdaptiveInfo1
 import me.him188.ani.app.ui.foundation.layout.isHeightAtLeastMedium
+import me.him188.ani.app.ui.foundation.theme.appChromeFrostedGlass
+import me.him188.ani.app.ui.foundation.theme.isAppChromeFrostedGlassActive
 import me.him188.ani.utils.platform.currentTimeMillis
 
 /**
@@ -67,6 +70,9 @@ fun AniNavigationSuite(
     val defaultItemColors by rememberUpdatedState(NavigationSuiteDefaults.itemColors())
 
     val viewConfiguration = LocalViewConfiguration.current
+    // 毛玻璃效果仅对底部导航栏启用: 只有 NavigationBar 布局会将内容延伸到导航栏下方.
+    val frostedGlassActive = isAppChromeFrostedGlassActive() &&
+            layoutType == NavigationSuiteType.NavigationBar
 
     @Composable
     fun withDoubleClick(
@@ -93,8 +99,11 @@ fun AniNavigationSuite(
     when (layoutType) {
         NavigationSuiteType.NavigationBar -> {
             NavigationBar(
-                modifier = modifier,
-                containerColor = colors.navigationBarContainerColor,
+                modifier = modifier.appChromeFrostedGlass(
+                    enabled = frostedGlassActive,
+                    containerColor = colors.navigationBarContainerColor,
+                ),
+                containerColor = if (frostedGlassActive) Color.Transparent else colors.navigationBarContainerColor,
                 contentColor = colors.navigationBarContentColor,
                 windowInsets = AniWindowInsets.forNavigationBar(), // Ani added
             ) {

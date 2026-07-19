@@ -9,36 +9,20 @@
 
 package me.him188.ani.app.data.network
 
-import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.him188.ani.app.data.models.subject.CharacterInfo
 import me.him188.ani.app.data.models.subject.CharacterRole
-import me.him188.ani.app.data.models.subject.LightEpisodeInfo
-import me.him188.ani.app.data.models.subject.LightSubjectAndEpisodes
-import me.him188.ani.app.data.models.subject.LightSubjectInfo
 import me.him188.ani.app.data.models.subject.PersonInfo
 import me.him188.ani.app.data.models.subject.PersonPosition
 import me.him188.ani.app.data.models.subject.PersonType
-import me.him188.ani.app.data.models.subject.RatingCounts
-import me.him188.ani.app.data.models.subject.RatingInfo
 import me.him188.ani.app.data.models.subject.RelatedCharacterInfo
 import me.him188.ani.app.data.models.subject.RelatedPersonInfo
-import me.him188.ani.app.data.models.subject.SubjectCollectionStats
-import me.him188.ani.app.data.models.subject.SubjectInfo
-import me.him188.ani.app.data.models.subject.Tag
-import me.him188.ani.app.domain.search.SubjectType
-import me.him188.ani.datasources.api.EpisodeSort
-import me.him188.ani.datasources.api.EpisodeType
-import me.him188.ani.datasources.api.PackedDate
-import me.him188.ani.utils.serialization.BigNum
-import me.him188.ani.utils.serialization.getBooleanOrFail
 import me.him188.ani.utils.serialization.getIntOrFail
 import me.him188.ani.utils.serialization.getOrFail
 import me.him188.ani.utils.serialization.getString
@@ -46,7 +30,6 @@ import me.him188.ani.utils.serialization.getStringOrFail
 import me.him188.ani.utils.serialization.jsonObjectOrNull
 
 object BangumiSubjectGraphQLParser {
-    private val utc9 = TimeZone.of("UTC+9")
     private fun JsonElement.vSequence(): Sequence<String> {
         return when (this) {
             is JsonArray -> this.asSequence().flatMap { it.vSequence() }
@@ -61,12 +44,6 @@ object BangumiSubjectGraphQLParser {
                 yieldAll(jsonElement.jsonObject.getOrFail("values").vSequence())
             }
         }
-    }
-
-    fun parseBatchSubjectDetails(
-        element: JsonObject,
-    ): BatchSubjectDetails {
-        return element.toBatchSubjectDetails()
     }
 
     fun parseBatchSubjectRelations(
@@ -125,130 +102,6 @@ object BangumiSubjectGraphQLParser {
         }
     }
 
-    private fun JsonObject.toBatchSubjectDetails(): BatchSubjectDetails {
-        val completionDate = (this.infobox("播放结束") + this.infobox("放送结束"))
-            .firstOrNull()
-            ?.let {
-                PackedDate.parseFromDate(
-                    it.replace('年', '-')
-                        .replace('月', '-')
-                        .removeSuffix("日"),
-                )
-            }
-            ?: PackedDate.Invalid
-
-        val subjectId = getIntOrFail("id")
-
-        val characters = getOrFail("characters").jsonArray.mapIndexed { _, relatedCharacter ->
-            check(relatedCharacter is JsonObject)
-
-            val role = when (val type = relatedCharacter.getIntOrFail("type")) {
-                1 -> CharacterRole.MAIN
-                2 -> CharacterRole.SUPPORTING
-                3 -> CharacterRole.GUEST
-                else -> CharacterRole(type)
-            }
-
-            val character = relatedCharacter.getOrFail("character").jsonObject
-
-            val characterId = character.getIntOrFail("id")
-            LightRelatedCharacterInfo(
-                id = characterId,
-                name = character.getStringOrFail("name"),
-                nameCn = character.infobox("简体中文名").firstOrNull() ?: "",
-                role = role,
-            )
-        }
-
-        val persons = buildList {
-            for (jsonElement in getOrFail("infobox").jsonArray) {
-                val position = PersonPosition.findByName(jsonElement.jsonObject.getStringOrFail("key"))
-                if (position != PersonPosition.Invalid) {
-                    jsonElement.jsonObject.getOrFail("values").vSequence().forEach {
-                        add(LightRelatedPersonInfo(it, position))
-                    }
-                }
-            }
-        }
-
-        return try {
-            BatchSubjectDetails(
-                SubjectInfo(
-                    subjectId = subjectId,
-                    subjectType = SubjectType.ANIME,
-                    name = getStringOrFail("name"),
-                    nameCn = getStringOrFail("name_cn"),
-                    summary = getStringOrFail("summary"),
-                    nsfw = getBooleanOrFail("nsfw"),
-                    imageLarge = getOrFail("images").jsonObjectOrNull?.getString("large") ?: "", // 有少数没有
-                    totalEpisodes = getIntOrFail("eps"),
-                    airDate = PackedDate.parseFromDate(getOrFail("airtime").jsonObject.getStringOrFail("date")),
-                    tags = getOrFail("tags").jsonArray.map {
-                        val obj = it.jsonObject
-                        Tag(
-                            obj.getStringOrFail("name"),
-                            obj.getIntOrFail("count"),
-                        )
-                    },
-                    aliases = infobox("别名").filter { it.isNotEmpty() }.toList(),
-                    ratingInfo = getOrFail("rating").jsonObject.let { rating ->
-                        RatingInfo(
-                            rank = rating.getIntOrFail("rank"),
-                            total = rating.getIntOrFail("total"),
-                            count = rating.getOrFail("count").jsonArray.let { array ->
-                                RatingCounts(
-                                    s1 = array[0].jsonPrimitive.int,
-                                    s2 = array[1].jsonPrimitive.int,
-                                    s3 = array[2].jsonPrimitive.int,
-                                    s4 = array[3].jsonPrimitive.int,
-                                    s5 = array[4].jsonPrimitive.int,
-                                    s6 = array[5].jsonPrimitive.int,
-                                    s7 = array[6].jsonPrimitive.int,
-                                    s8 = array[7].jsonPrimitive.int,
-                                    s9 = array[8].jsonPrimitive.int,
-                                    s10 = array[9].jsonPrimitive.int,
-                                )
-                            },
-                            score = rating.getStringOrFail("score"),
-                        )
-                    },
-                    collectionStats = getOrFail("collection").jsonObject.let { collection ->
-                        SubjectCollectionStats(
-                            wish = collection.getIntOrFail("wish"),
-                            doing = collection.getIntOrFail("doing"),
-                            done = collection.getIntOrFail("collect"),
-                            onHold = collection.getIntOrFail("on_hold"),
-                            dropped = collection.getIntOrFail("dropped"),
-                        )
-                    },
-                    completeDate = completionDate,
-                ),
-                mainEpisodeCount = getOrFail("episodes").jsonArray
-                    .asSequence()
-                    .map {
-                        it.jsonObject
-                    }
-                    .filter { it.getIntOrFail("type") == 0 }
-                    .count().let {
-                        if (it == 100) {
-                            getIntOrFail("eps") // 太多了所以没查完整, 退一步采用 eps (包含所有剧集类型)
-                        } else {
-                            it
-                        }
-                    },
-                LightSubjectRelations(
-                    lightRelatedPersonInfoList = persons,
-                    lightRelatedCharacterInfoList = characters,
-                ),
-            )
-        } catch (e: Exception) {
-            throw IllegalStateException(
-                "Failed to parse subject details for subject id ${this["id"]}: $this",
-                e,
-            )
-        }
-    }
-
     fun parsePerson(person: JsonObject) = PersonInfo(
         id = person.getIntOrFail("id"),
         name = person.getStringOrFail("name"),
@@ -275,49 +128,5 @@ object BangumiSubjectGraphQLParser {
 
                 action(subjectId, characterId)
             }
-    }
-
-    fun parseLightSubjectAndEpisodes(jsonObject: JsonObject): LightSubjectAndEpisodes {
-        val episodes = jsonObject.getOrFail("episodes").jsonArray.map {
-            val episode = it.jsonObject
-            LightEpisodeInfo(
-                episodeId = episode.getIntOrFail("id"),
-                name = episode.getStringOrFail("name"),
-                nameCn = episode.getStringOrFail("name_cn"),
-                airDate = PackedDate.parseFromDate(episode.getStringOrFail("airdate")),
-                timezone = utc9,
-                sort = EpisodeSort(
-                    BigNum(episode.getStringOrFail("sort")),
-                    type = parseBangumiEpisodeType(episode.getIntOrFail("type")),
-                ),
-                ep = null, // TODO: parseLightSubjectAndEpisodes does not support EP because bangumi graphql API does not provide it
-//                    EpisodeSort(
-//                    episode.getIntOrFail("ep"),
-//                    type = parseBangumiEpisodeType(episode.getIntOrFail("type")),
-//                ),
-            )
-        }
-
-        return LightSubjectAndEpisodes(
-            subject = LightSubjectInfo(
-                subjectId = jsonObject.getIntOrFail("id"),
-                name = jsonObject.getStringOrFail("name"),
-                nameCn = jsonObject.getStringOrFail("name_cn"),
-                imageLarge = jsonObject.getOrFail("images").jsonObjectOrNull?.getStringOrFail("large") ?: "",
-            ),
-            episodes = episodes,
-        )
-    }
-
-    private fun parseBangumiEpisodeType(type: Int): EpisodeType? {
-        return when (type) {
-            0 -> EpisodeType.MainStory
-            1 -> EpisodeType.SP
-            2 -> EpisodeType.OP
-            3 -> EpisodeType.ED
-            4 -> EpisodeType.PV
-            5 -> EpisodeType.MAD
-            else -> null
-        }
     }
 }

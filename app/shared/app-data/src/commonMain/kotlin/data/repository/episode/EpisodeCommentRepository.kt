@@ -13,6 +13,7 @@ import androidx.paging.Pager
 import androidx.paging.PagingData
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import me.him188.ani.app.data.models.episode.EpisodeComment
 import me.him188.ani.app.data.models.episode.EpisodeCommentSource
@@ -21,20 +22,48 @@ import me.him188.ani.app.data.network.BangumiCommentService
 import me.him188.ani.app.data.network.toEpisodeComment
 import me.him188.ani.app.data.repository.Repository
 import me.him188.ani.app.data.repository.runWrappingExceptionAsLoadResult
+import me.him188.ani.utils.logging.logger
+import me.him188.ani.utils.logging.warn
 
 class EpisodeCommentRepository(
     private val aniCommentService: AniEpisodeCommentService,
     private val bangumiCommentService: BangumiCommentService,
 ) : Repository() {
-    fun subjectEpisodeCommentsPager(episodeId: Long): Flow<PagingData<EpisodeComment>> {
+    fun subjectEpisodeCommentsPager(
+        episodeId: Long,
+        onAniLoadFailed: (Throwable) -> Unit = {},
+    ): Flow<PagingData<EpisodeComment>> {
         return Pager(defaultPagingConfig) {
             DualSourceEpisodeCommentPagingSource(
                 episodeId = episodeId,
                 aniCommentService = aniCommentService,
                 bangumiCommentService = bangumiCommentService,
                 pageSize = defaultPagingConfig.pageSize,
+                onAniLoadFailed = onAniLoadFailed,
             )
         }.flow
+    }
+
+    suspend fun submitReaction(
+        episodeId: Long,
+        source: EpisodeCommentSource,
+        commentId: String,
+        value: String,
+        selected: Boolean,
+    ) {
+        when (source) {
+            EpisodeCommentSource.ANI -> {
+                if (selected) {
+                    aniCommentService.addEpisodeCommentReaction(episodeId, commentId, value)
+                } else {
+                    aniCommentService.removeEpisodeCommentReaction(episodeId, commentId, value)
+                }
+            }
+
+            EpisodeCommentSource.BANGUMI -> {
+                bangumiCommentService.submitEpisodeCommentReaction(commentId, value, selected)
+            }
+        }
     }
 }
 
@@ -43,6 +72,7 @@ internal class DualSourceEpisodeCommentPagingSource(
     private val aniCommentService: AniEpisodeCommentService,
     private val bangumiCommentService: BangumiCommentService,
     private val pageSize: Int,
+    private val onAniLoadFailed: (Throwable) -> Unit = {},
 ) : PagingSource<DualSourceEpisodeCommentPagingSource.Cursor, EpisodeComment>() {
     private var initialized = false
     private var bangumiComments: List<EpisodeComment> = emptyList()
@@ -86,19 +116,35 @@ internal class DualSourceEpisodeCommentPagingSource(
     }
 
     private suspend fun initialize() {
-        bangumiComments = bangumiCommentService.getSubjectEpisodeComments(episodeId)
-            .orEmpty()
-            .sortedWith(COMMENT_COMPARATOR)
+        bangumiComments = try {
+            bangumiCommentService.getSubjectEpisodeComments(episodeId)
+                .orEmpty()
+                .sortedWith(COMMENT_COMPARATOR)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to load Bangumi episode comments for episode $episodeId, falling back to Ani comments only" }
+            emptyList()
+        }
         initialized = true
     }
 
     private suspend fun ensureAniCandidate(loadSize: Int) {
         while (aniBuffer.isEmpty() && aniNextOffset < aniTotal) {
-            val response = aniCommentService.listEpisodeComments(
-                episodeId = episodeId,
-                offset = aniNextOffset,
-                limit = maxOf(pageSize, loadSize),
-            )
+            val response = try {
+                aniCommentService.listEpisodeComments(
+                    episodeId = episodeId,
+                    offset = aniNextOffset,
+                    limit = maxOf(pageSize, loadSize),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to load Ani episode comments for episode $episodeId" }
+                aniTotal = aniNextOffset
+                onAniLoadFailed(e)
+                break
+            }
             aniTotal = response.total.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
             val items = response.items
@@ -141,6 +187,7 @@ internal class DualSourceEpisodeCommentPagingSource(
     )
 
     private companion object {
+        val logger = logger<DualSourceEpisodeCommentPagingSource>()
         val COMMENT_COMPARATOR = compareByDescending<EpisodeComment> { it.createdAt }
             .thenBy { if (it.source == EpisodeCommentSource.ANI) 0 else 1 }
             .thenByDescending { it.stableId }

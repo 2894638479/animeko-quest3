@@ -13,17 +13,21 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.SystemBarStyle
-import androidx.appcompat.app.AppCompatDelegate
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.core.os.LocaleListCompat
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.core.view.WindowCompat
+import me.him188.ani.android.BuildConfig
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
-import me.him188.ani.app.data.repository.user.SettingsRepository
 import me.him188.ani.app.navigation.AniNavigator
 import me.him188.ani.app.platform.rememberPlatformWindow
 import me.him188.ani.app.ui.exprovider.ExternalContentProviderFactory
@@ -41,8 +45,6 @@ import org.koin.android.ext.android.inject
 class MainActivity : AniComponentActivity() {
     private val logger = logger<MainActivity>()
     private val aniNavigator = AniNavigator()
-
-    private val settingsRepository: SettingsRepository by inject()
 
     private val externalContentProviderFactory: ExternalContentProviderFactory by inject()
 
@@ -73,7 +75,6 @@ class MainActivity : AniComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        applyLanguage()
         handleStartIntent(intent)
 
         // 允许画到 system bars
@@ -98,22 +99,16 @@ class MainActivity : AniComponentActivity() {
                     LocalPlatformWindow provides rememberPlatformWindow(this),
                     LocalExternalContentProvider provides externalComponentProviderUpdated,
                 ) {
-                    AniAppContent(aniNavigator)
-                }
-            }
-        }
-    }
-
-    private fun applyLanguage() {
-        lifecycleScope.launch {
-            settingsRepository.uiSettings.flow.drop(1).collect { settings ->
-                settings.appLanguage?.let {
-                    try {
-                        val locales = LocaleListCompat.forLanguageTags(it.toLanguageTag())
-                        logger.info("Set locale to $locales")
-                        AppCompatDelegate.setApplicationLocales(locales)
-                    } catch (e: Throwable) {
-                        logger.error(e) { "Failed to set app language, see exception" }
+                    // Expose Modifier.testTag as resource-id in accessibility/uiautomator dumps,
+                    // so UI-automation agents can locate elements by stable ids (debug only).
+                    @OptIn(ExperimentalComposeUiApi::class)
+                    val rootModifier = if (BuildConfig.DEBUG) {
+                        Modifier.semantics { testTagsAsResourceId = true }
+                    } else {
+                        Modifier
+                    }
+                    Box(rootModifier) {
+                        AniAppContent(aniNavigator)
                     }
                 }
             }
