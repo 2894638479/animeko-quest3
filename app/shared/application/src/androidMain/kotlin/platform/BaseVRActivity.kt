@@ -218,6 +218,9 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (systemManager.tryFindSystem<AvatarSystem>() == null) {
             systemManager.registerSystem(AvatarSystem())
         }
+        // Register hand tracking system if the SDK provides one
+        tryRegisterSystem("com.meta.spatial.isdk.IsdkHandTrackingSystem")
+        tryRegisterSystem("com.meta.spatial.toolkit.HandTrackingSystem")
         val entry = PanelEntry(PanelManager.PanelSize.WIDE, PanelPosition.MIDDLE)
         val item = panelEntries[entry]!!
         mainPanelEntity = Entity.create(
@@ -257,6 +260,54 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT)
         scene.setPreferredDisplayRate(120f)
+
+        // Enable hand tracking so the app can be used without controllers.
+        // The Meta Spatial SDK v0.11.1 may expose this through multiple APIs.
+        enableHandTracking()
+    }
+
+    /** Try to register an ECS system by class name via reflection. */
+    private fun tryRegisterSystem(className: String) {
+        try {
+            val clazz = Class.forName(className)
+            val instance = clazz.getDeclaredConstructor().newInstance()
+            val registerMethod = systemManager.javaClass.getMethod(
+                "registerSystem", Class.forName("com.meta.spatial.core.System"),
+            )
+            registerMethod.invoke(systemManager, instance)
+        } catch (_: Exception) {
+            // System class not available in this SDK version
+        }
+    }
+
+    /**
+     * Try every known Meta Spatial SDK API to enable hand tracking.
+     * The exact API varies by SDK version; we try them all via reflection.
+     */
+    private fun enableHandTracking() {
+        // Ordered list of (class, methodName) pairs to try
+        val attempts = listOf(
+            // Most common: Scene.enableHandTracking(boolean)
+            scene to "enableHandTracking",
+            scene to "setHandTrackingEnabled",
+            // Spatial context
+            spatial to "enableHandTracking",
+            spatial to "setHandTrackingEnabled",
+            // Maybe AppSystemActivity itself
+            this@BaseVRActivity to "enableHandTracking",
+            this@BaseVRActivity to "setHandTrackingEnabled",
+        )
+        for ((target, methodName) in attempts) {
+            try {
+                target.javaClass.getMethod(methodName, Boolean::class.javaPrimitiveType)
+                    .invoke(target, true)
+                return // Success — stop trying
+            } catch (_: NoSuchMethodException) {
+                // Method doesn't exist, try next
+            } catch (_: Exception) {
+                // Invocation failed, try next
+            }
+        }
     }
 
     /** Cached hittable state to avoid per-frame setComponent calls. */

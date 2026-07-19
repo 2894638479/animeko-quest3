@@ -71,6 +71,8 @@ class AniApplication : Application() {
                 System.setProperty("kotlinx.coroutines.debug", "on")
                 System.setProperty("kotlinx.coroutines.stacktrace.recovery", "true")
             }
+            // Tell the Meta SDK that hand tracking is supported BEFORE loading native libs
+            System.setProperty("com.oculus.handTrackingEnabled", "true")
             try {
                 System.loadLibrary("MetaSpatialSDK")
                 System.loadLibrary("MetaSpatialSDKIsdk")

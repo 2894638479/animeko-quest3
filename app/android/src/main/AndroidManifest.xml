@@ -47,6 +47,10 @@
             android:theme="@style/Theme.Ani.Transparent"
             android:usesCleartextTraffic="true">
 
+        <meta-data
+                android:name="com.oculus.handtracking.version"
+                android:value="V2.0" />
+
         <activity
                 android:name=".activity.MainActivity"
                 android:exported="true"
@@ -54,6 +58,12 @@
             <meta-data
                     android:name="com.oculus.handtracking.version"
                     android:value="V2.0" />
+            <meta-data
+                    android:name="com.oculus.handtracking.frequency"
+                    android:value="HIGH" />
+            <meta-data
+                    android:name="com.oculus.vr.SupportedInputDevices"
+                    android:value="controller,touch" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
