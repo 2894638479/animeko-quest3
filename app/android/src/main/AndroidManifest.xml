@@ -32,7 +32,8 @@
             tools:ignore="ScopedStorage" />
 
     <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="false" />
-    <uses-feature android:name="com.oculus.feature.HAND_TRACKING" android:required="false" />
+    <uses-feature android:name="oculus.software.handtracking" android:required="false" />
+    <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" />
     <uses-permission android:name="com.oculus.permission.USE_SCENE" />
     <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
 
@@ -61,9 +62,6 @@
             <meta-data
                     android:name="com.oculus.handtracking.frequency"
                     android:value="HIGH" />
-            <meta-data
-                    android:name="com.oculus.vr.SupportedInputDevices"
-                    android:value="controller,touch" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
