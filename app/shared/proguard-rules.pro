@@ -31,6 +31,11 @@
 #-keepattributes *Annotation* # logback-android 推荐添加, 但测试可以不用添加这个
 -dontwarn javax.mail.**
 
+# Meta/Horizon OS missing classes
+-dontwarn horizonos.app.container.TaskContainer
+-dontwarn horizonos.app.container.TaskContainerManager$TaskContainerCallback
+-dontwarn horizonos.app.container.TaskContainerManager
+-dontwarn vros.os.VrosBuild
 
 # anitorrent
 -keep class org.openani.anitorrent.binding.** { *; }

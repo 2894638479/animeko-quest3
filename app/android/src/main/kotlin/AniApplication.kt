@@ -71,6 +71,12 @@ class AniApplication : Application() {
                 System.setProperty("kotlinx.coroutines.debug", "on")
                 System.setProperty("kotlinx.coroutines.stacktrace.recovery", "true")
             }
+            try {
+                System.loadLibrary("MetaSpatialSDK")
+                System.loadLibrary("MetaSpatialSDKIsdk")
+            } catch (_: UnsatisfiedLinkError) {
+                // Not running on Meta Quest device — native spatial libraries not available
+            }
 //            @Suppress("INVISIBLE_MEMBER", "INVISIBLE_REFERENCE")
 //            val v = kotlinx.coroutines.RECOVER_STACK_TRACES
 //            println(v)

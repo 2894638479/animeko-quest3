@@ -37,6 +37,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -117,7 +118,7 @@ fun AniAppContent(aniNavigator: AniNavigator) {
     val navigator = rememberNavController()
     aniNavigator.setNavController(navigator)
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(Modifier.fillMaxSize()) {
         CompositionLocalProvider(
             LocalNavigator provides aniNavigator,
             LocalBrowserNavigator providesDefault aniAppViewModel.browserNavigator,
@@ -129,6 +130,27 @@ fun AniAppContent(aniNavigator: AniNavigator) {
                     appState.mainSceneInitialPage,
                     Modifier.fillMaxSize(),
                 )
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AniSubContent(aniNavigator: AniNavigator,content:@Composable () -> Unit) {
+    val aniAppViewModel = viewModel<AniAppViewModel>()
+    val appState = aniAppViewModel.appState.collectAsStateWithLifecycle(null).value ?: return
+
+    val navigator = rememberNavController()
+    aniNavigator.setNavController(navigator)
+
+    Box(Modifier.fillMaxSize().background(Color.Transparent)) {
+        CompositionLocalProvider(
+            LocalNavigator provides aniNavigator,
+            LocalBrowserNavigator providesDefault aniAppViewModel.browserNavigator,
+        ) {
+            ProvideAniMotionCompositionLocals {
+                content()
             }
         }
     }

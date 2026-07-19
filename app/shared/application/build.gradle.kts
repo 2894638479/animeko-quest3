@@ -40,6 +40,18 @@ kotlin {
     sourceSets.iosMain.dependencies {
         implementation(libs.mediamp.ffmpeg)
     }
+    sourceSets.androidMain.dependencies {
+        implementation(libs.meta.spatial.sdk.base)
+        implementation(libs.meta.spatial.sdk.compose)
+        implementation(libs.meta.spatial.sdk.ovrmetrics)
+        implementation(libs.meta.spatial.sdk.toolkit)
+        implementation(libs.meta.spatial.sdk.vr)
+        implementation(libs.meta.spatial.sdk.isdk)
+        implementation(libs.meta.spatial.sdk.castinputforward)
+        implementation(libs.meta.spatial.sdk.hotreload)
+        implementation(libs.meta.spatial.sdk.datamodelinspector)
+        implementation(libs.meta.spatial.sdk.uiset)
+    }
 }
 
 kotlin {

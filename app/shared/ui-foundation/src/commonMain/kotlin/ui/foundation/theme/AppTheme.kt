@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
+import me.him188.ani.app.ui.foundation.animation.ProvideAniMotionCompositionLocals
 import androidx.compose.ui.unit.IntOffset
 import me.him188.ani.app.data.models.preference.DarkMode
 import me.him188.ani.app.data.models.preference.ThemeSettings
@@ -79,8 +80,11 @@ fun AniTheme(
     MaterialTheme(
         colorScheme = appColorScheme(isDark = isDark),
         typography = MaterialTheme.typography.copyWithPlatformFontFamily(platformFontFamily),
-        content = content,
-    )
+    ) {
+        ProvideAniMotionCompositionLocals {
+            content()
+        }
+    }
 }
 
 @Stable

@@ -13,8 +13,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -77,19 +75,6 @@ class MainActivity : AniComponentActivity() {
         super.onCreate(savedInstanceState)
         applyLanguage()
         handleStartIntent(intent)
-
-        enableEdgeToEdge(
-            // 透明状态栏
-            statusBarStyle = SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT,
-            ),
-            // 透明导航栏
-            navigationBarStyle = SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT,
-            ),
-        )
 
         // 允许画到 system bars
         WindowCompat.setDecorFitsSystemWindows(window, false)

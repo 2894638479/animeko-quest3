@@ -1,6 +1,5 @@
 /*
- * Ani
- * Copyright (C) 2022-2024 Him188
+ * Copyright (C) 2025 him188
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,17 +17,34 @@
 
 package me.him188.ani.app.platform
 
+import android.content.Intent
 import android.net.Uri
-import androidx.activity.SystemBarStyle
-import androidx.activity.enableEdgeToEdge
+import android.os.Bundle
+import android.view.View
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.result.ActivityResultCallback
+import androidx.activity.result.ActivityResultCaller
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.runtime.Stable
+import androidx.core.app.ActivityOptionsCompat
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.HasDefaultViewModelProviderFactory
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.MutableCreationExtras
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.atomicfu.AtomicRef
 import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.CompletableDeferred
@@ -38,9 +54,115 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentLinkedQueue
 
+/**
+ * Base Activity for Ani application components.
+ *
+ * Extends [BaseVRActivity] (Meta Spatial SDK) and manually provides
+ * [ViewModelStoreOwner], [SavedStateRegistryOwner], [OnBackPressedDispatcherOwner],
+ * and [ActivityResultCaller] — interfaces normally provided by
+ * `androidx.activity.ComponentActivity` but not by the Meta SDK's
+ * [com.meta.spatial.toolkit.AppSystemActivity].
+ *
+ * **Lifecycle**: Uses the parent's built-in [Lifecycle] from `AppSystemActivity`.
+ * Unlike the previous implementation, we do NOT create a duplicate [androidx.lifecycle.LifecycleRegistry]
+ * to avoid conflicting lifecycle events with Compose.
+ */
+abstract class BaseComponentActivity : BaseVRActivity(),
+    ViewModelStoreOwner,
+    HasDefaultViewModelProviderFactory,
+    SavedStateRegistryOwner,
+    OnBackPressedDispatcherOwner,
+    ActivityResultCaller,
+    ActivityResultRegistryOwner {
 
-abstract class BaseComponentActivity : AppCompatActivity() {
-    @Stable
+    // ── ViewModel / SavedState / Back (not provided by AppSystemActivity) ─────
+
+    private val _viewModelStore = ViewModelStore()
+    private val _savedStateRegistryController = SavedStateRegistryController.create(this)
+    private val _onBackPressedDispatcher = OnBackPressedDispatcher()
+    private val _activityResultRegistry = object : ActivityResultRegistry() {
+        override fun <I : Any?, O : Any?> onLaunch(
+            requestCode: Int,
+            contract: ActivityResultContract<I, O>,
+            input: I,
+            options: ActivityOptionsCompat?
+        ) {
+            val intent = contract.createIntent(this@BaseComponentActivity, input)
+            this@BaseComponentActivity.startActivityForResult(intent, requestCode, options?.toBundle())
+        }
+    }
+
+    override val viewModelStore: ViewModelStore get() = _viewModelStore
+    override val savedStateRegistry: SavedStateRegistry get() = _savedStateRegistryController.savedStateRegistry
+    override val onBackPressedDispatcher: OnBackPressedDispatcher get() = _onBackPressedDispatcher
+    override val activityResultRegistry: ActivityResultRegistry get() = _activityResultRegistry
+
+    override val defaultViewModelProviderFactory: ViewModelProvider.Factory
+        get() = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+
+    override val defaultViewModelCreationExtras: CreationExtras
+        get() {
+            val extras = MutableCreationExtras()
+            extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] = application
+            extras[VIEW_MODEL_STORE_OWNER_KEY] = this
+            extras[object : CreationExtras.Key<SavedStateRegistryOwner> {}] = this
+            intent?.extras?.let {
+                extras[DEFAULT_ARGS_KEY] = it
+            }
+            return extras
+        }
+
+    override fun <I, O> registerForActivityResult(
+        contract: ActivityResultContract<I, O>,
+        callback: ActivityResultCallback<O>
+    ): ActivityResultLauncher<I> {
+        return _activityResultRegistry.register("req_" + contract.hashCode(), this, contract, callback)
+    }
+
+    override fun <I, O> registerForActivityResult(
+        contract: ActivityResultContract<I, O>,
+        registry: ActivityResultRegistry,
+        callback: ActivityResultCallback<O>
+    ): ActivityResultLauncher<I> {
+        return registry.register("req_" + contract.hashCode(), this, contract, callback)
+    }
+
+    // ── Lifecycle-aware views ─────────────────────────────────────────────────
+
+    override fun setContentView(view: View) {
+        // Use the inherited lifecycle from AppSystemActivity — no duplicate LifecycleRegistry.
+        view.setViewTreeLifecycleOwner(this)
+        view.setViewTreeViewModelStoreOwner(this)
+        view.setViewTreeSavedStateRegistryOwner(this)
+        super.setContentView(view)
+    }
+
+    // ── Lifecycle callbacks (only for non-Lifecycle interfaces) ────────────────
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        _savedStateRegistryController.performRestore(savedInstanceState)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onDestroy() {
+        _viewModelStore.clear()
+        super.onDestroy()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        _savedStateRegistryController.performSave(outState)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!_activityResultRegistry.dispatchResult(requestCode, resultCode, data)) {
+            super.onActivityResult(requestCode, resultCode, data)
+        }
+    }
+
+    // ── Snackbar & Permissions ─────────────────────────────────────────────────
+
     val snackbarHostState = SnackbarHostState()
 
     private val requestPermissionHandlers: MutableCollection<(Boolean) -> Unit> = ConcurrentLinkedQueue()
@@ -71,17 +193,10 @@ abstract class BaseComponentActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Get a document tree with rw permission via DocumentUI.
-     */
     suspend fun requestExternalDocumentTree(): String? {
         val res = CompletableDeferred<String?>()
         val handler: (Uri?) -> Unit = { uri: Uri? -> res.complete(uri?.toString()) }
-
-        if (!requestExternalDocumentTreeHandler.compareAndSet(null, handler)) {
-            return null
-        }
-
+        if (!requestExternalDocumentTreeHandler.compareAndSet(null, handler)) return null
         return try {
             requestExternalDocumentTreeLauncher.launch(null)
             res.await()
@@ -91,13 +206,6 @@ abstract class BaseComponentActivity : AppCompatActivity() {
     }
 
     fun enableDrawingToSystemBars() {
-        enableEdgeToEdge(
-            SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT,
-            ),
-        )
-
         WindowCompat.setDecorFitsSystemWindows(window, false)
     }
 }
@@ -106,16 +214,14 @@ suspend fun BaseComponentActivity.showSnackbar(
     message: String,
     actionLabel: String? = null,
     withDismissAction: Boolean = false,
-    duration: SnackbarDuration = SnackbarDuration.Short
-): SnackbarResult {
-    return snackbarHostState.showSnackbar(message, actionLabel, withDismissAction, duration)
-}
+    duration: SnackbarDuration = SnackbarDuration.Short,
+): SnackbarResult = snackbarHostState.showSnackbar(message, actionLabel, withDismissAction, duration)
 
 fun BaseComponentActivity.showSnackbarAsync(
     message: String,
     actionLabel: String? = null,
     withDismissAction: Boolean = false,
-    duration: SnackbarDuration = SnackbarDuration.Short
+    duration: SnackbarDuration = SnackbarDuration.Short,
 ) {
     lifecycleScope.launch(Dispatchers.Main) {
         try {

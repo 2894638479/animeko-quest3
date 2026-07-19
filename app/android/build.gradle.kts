@@ -138,8 +138,16 @@ dependencies {
 //    implementation(libs.log4j.core)
 //    implementation(libs.log4j.slf4j.impl)
 
-    implementation(libs.ktor.client.core)
-    implementation(libs.mediamp.ffmpeg)
+    implementation(libs.meta.spatial.sdk.base)
+    implementation(libs.meta.spatial.sdk.compose)
+    implementation(libs.meta.spatial.sdk.ovrmetrics)
+    implementation(libs.meta.spatial.sdk.toolkit)
+    implementation(libs.meta.spatial.sdk.vr)
+    implementation(libs.meta.spatial.sdk.isdk)
+    implementation(libs.meta.spatial.sdk.castinputforward)
+    implementation(libs.meta.spatial.sdk.hotreload)
+    implementation(libs.meta.spatial.sdk.datamodelinspector)
+    implementation(libs.meta.spatial.sdk.uiset)
 }
 
 idea {

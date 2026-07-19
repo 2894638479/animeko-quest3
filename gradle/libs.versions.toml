@@ -87,6 +87,7 @@ posthog-android = "3.11.3"
 posthog-java = "1.2.0"
 openapi-generator = "7.13.0"
 mediamp = "0.1.6"
+spatialsdk = "0.11.1"
 
 [plugins]
 # Plugins for projects.
@@ -321,3 +322,19 @@ google-firebase-common = { module = "com.google.firebase:firebase-common", versi
 google-firebase-analytics = { module = "com.google.firebase:firebase-analytics", version.ref = "google-firebase" }
 posthog-android = { module = "com.posthog:posthog-android", version.ref = "posthog-android" }
 posthog-java = { module = "com.posthog.java:posthog", version.ref = "posthog-java" }
+
+# Meta spatial
+meta-spatial-sdk-base = { group = "com.meta.spatial", name = "meta-spatial-sdk", version.ref = "spatialsdk" }
+meta-spatial-sdk-vr = { group = "com.meta.spatial", name = "meta-spatial-sdk-vr", version.ref = "spatialsdk" }
+meta-spatial-sdk-animation = { group = "com.meta.spatial", name = "meta-spatial-sdk-animation", version.ref = "spatialsdk" }
+meta-spatial-sdk-compose = { group = "com.meta.spatial", name = "meta-spatial-sdk-compose", version.ref = "spatialsdk" }
+meta-spatial-sdk-ovrmetrics = { group = "com.meta.spatial", name = "meta-spatial-sdk-ovrmetrics", version.ref = "spatialsdk" }
+meta-spatial-sdk-physics = { group = "com.meta.spatial", name = "meta-spatial-sdk-physics", version.ref = "spatialsdk" }
+meta-spatial-sdk-toolkit = { group = "com.meta.spatial", name = "meta-spatial-sdk-toolkit", version.ref = "spatialsdk" }
+meta-spatial-sdk-mruk = { group = "com.meta.spatial", name = "meta-spatial-sdk-mruk", version.ref = "spatialsdk" }
+meta-spatial-sdk-castinputforward = { group = "com.meta.spatial", name = "meta-spatial-sdk-castinputforward", version.ref = "spatialsdk" }
+meta-spatial-sdk-hotreload = { group = "com.meta.spatial", name = "meta-spatial-sdk-hotreload", version.ref = "spatialsdk" }
+meta-spatial-sdk-datamodelinspector = { group = "com.meta.spatial", name = "meta-spatial-sdk-datamodelinspector", version.ref = "spatialsdk" }
+meta-spatial-sdk-isdk = { group = "com.meta.spatial", name = "meta-spatial-sdk-isdk", version.ref = "spatialsdk" }
+meta-spatial-sdk-spatialaudio = { group = "com.meta.spatial", name = "meta-spatial-sdk-spatialaudio", version.ref = "spatialsdk" }
+meta-spatial-sdk-uiset = { group = "com.meta.spatial", name = "meta-spatial-sdk-uiset", version.ref = "spatialsdk" }

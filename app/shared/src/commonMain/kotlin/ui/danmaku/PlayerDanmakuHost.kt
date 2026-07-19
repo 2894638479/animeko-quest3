@@ -9,10 +9,20 @@
 
 package me.him188.ani.app.ui.danmaku
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.Flow
+import me.him188.ani.app.ui.foundation.LocalPanelManager
+import me.him188.ani.app.ui.foundation.PanelManager
 import me.him188.ani.danmaku.ui.DanmakuHost
 import me.him188.ani.danmaku.ui.DanmakuHostState
 import me.him188.ani.danmaku.ui.DanmakuPresentation
@@ -48,7 +58,17 @@ fun PlayerDanmakuHost(
         }
     }
 
-    DanmakuHost(danmakuHostState, modifier)
+
+    val panelManager = LocalPanelManager.current
+    var panelId by remember { mutableStateOf<Int?>(null) }
+    DisposableEffect(Unit) {
+        panelId = panelManager.openPanel(PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, PanelManager.PanelPosition.MIDDLE, PanelManager.PanelHittable.FALSE)) {
+            DanmakuHost(danmakuHostState, modifier)
+        }
+        onDispose {
+            panelId?.let { panelManager.closePanel(it) }
+        }
+    }
 }
 
 sealed class UIDanmakuEvent {
