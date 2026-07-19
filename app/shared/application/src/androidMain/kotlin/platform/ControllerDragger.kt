@@ -53,8 +53,8 @@ class ControllerDragger(private val host: Host) {
         when {
             !leftValid && !rightValid -> checkOrSet({ Idle() }) {}
             leftValid && rightValid -> {
-                val leftPose = leftFiltered!!.pose
-                val rightPose = rightFiltered!!.pose
+                val leftPose = leftFiltered.pose
+                val rightPose = rightFiltered.pose
                 val currentDistance = leftPose.t.minus(rightPose.t).length()
                 checkOrSet({ TwoHands(currentDistance) }) {
                     // Guard against division by zero / near-zero
@@ -65,7 +65,7 @@ class ControllerDragger(private val host: Host) {
                 }
             }
             leftValid && !rightValid -> {
-                val lp = leftFiltered!!.pose
+                val lp = leftFiltered.pose
                 checkOrSet({ LeftHand(lp.inverse() * host.pose) }) {
                     var newPose = lp * relativePose
                     if (abs(thumbY) > 0.0001f) {
@@ -81,7 +81,7 @@ class ControllerDragger(private val host: Host) {
                 }
             }
             !leftValid && rightValid -> {
-                val rp = rightFiltered!!.pose
+                val rp = rightFiltered.pose
                 checkOrSet({ RightHand(rp.inverse() * host.pose) }) {
                     var newPose = rp * relativePose
                     if (abs(thumbY) > 0.0001f) {

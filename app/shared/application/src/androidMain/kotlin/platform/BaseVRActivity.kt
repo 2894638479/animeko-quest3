@@ -303,13 +303,14 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         var thumbX = 0f
         var thumbY = 0f
 
-        // Only process thumbstick from the single active controller
-        if (leftSqueeze && !rightSqueeze && leftController != null) {
+        // Only process thumbstick from the single active controller.
+        // leftSqueeze/rightSqueeze imply the respective controller is non-null.
+        if (leftSqueeze && !rightSqueeze) {
             if (leftController.buttonState and ButtonBits.ButtonThumbLU != 0) thumbY += 1f
             if (leftController.buttonState and ButtonBits.ButtonThumbLD != 0) thumbY -= 1f
             if (leftController.buttonState and ButtonBits.ButtonThumbLL != 0) thumbX -= 1f
             if (leftController.buttonState and ButtonBits.ButtonThumbLR != 0) thumbX += 1f
-        } else if (rightSqueeze && !leftSqueeze && rightController != null) {
+        } else if (rightSqueeze && !leftSqueeze) {
             if (rightController.buttonState and ButtonBits.ButtonThumbRU != 0) thumbY += 1f
             if (rightController.buttonState and ButtonBits.ButtonThumbRD != 0) thumbY -= 1f
             if (rightController.buttonState and ButtonBits.ButtonThumbRL != 0) thumbX -= 1f

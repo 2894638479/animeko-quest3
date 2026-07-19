@@ -35,10 +35,17 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.core.app.ActivityOptionsCompat
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.DEFAULT_ARGS_KEY
 import androidx.lifecycle.HasDefaultViewModelProviderFactory
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.VIEW_MODEL_STORE_OWNER_KEY
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.savedstate.SavedStateRegistry
@@ -58,14 +65,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * Base Activity for Ani application components.
  *
  * Extends [BaseVRActivity] (Meta Spatial SDK) and manually provides
- * [ViewModelStoreOwner], [SavedStateRegistryOwner], [OnBackPressedDispatcherOwner],
- * and [ActivityResultCaller] — interfaces normally provided by
- * `androidx.activity.ComponentActivity` but not by the Meta SDK's
+ * [androidx.lifecycle.LifecycleOwner], [ViewModelStoreOwner], [SavedStateRegistryOwner],
+ * [OnBackPressedDispatcherOwner], and [ActivityResultCaller] — interfaces normally
+ * provided by `androidx.activity.ComponentActivity` but not by the Meta SDK's
  * [com.meta.spatial.toolkit.AppSystemActivity].
- *
- * **Lifecycle**: Uses the parent's built-in [Lifecycle] from `AppSystemActivity`.
- * Unlike the previous implementation, we do NOT create a duplicate [androidx.lifecycle.LifecycleRegistry]
- * to avoid conflicting lifecycle events with Compose.
  */
 abstract class BaseComponentActivity : BaseVRActivity(),
     ViewModelStoreOwner,
@@ -74,6 +77,11 @@ abstract class BaseComponentActivity : BaseVRActivity(),
     OnBackPressedDispatcherOwner,
     ActivityResultCaller,
     ActivityResultRegistryOwner {
+
+    // ── Lifecycle (not provided by AppSystemActivity) ──────────────────────────
+
+    private val _lifecycleRegistry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = _lifecycleRegistry
 
     // ── ViewModel / SavedState / Back (not provided by AppSystemActivity) ─────
 
@@ -137,14 +145,36 @@ abstract class BaseComponentActivity : BaseVRActivity(),
         super.setContentView(view)
     }
 
-    // ── Lifecycle callbacks (only for non-Lifecycle interfaces) ────────────────
+    // ── Lifecycle callbacks ───────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         _savedStateRegistryController.performRestore(savedInstanceState)
         super.onCreate(savedInstanceState)
+        _lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        _lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        _lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    }
+
+    override fun onPause() {
+        _lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        super.onPause()
+    }
+
+    override fun onStop() {
+        _lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        super.onStop()
     }
 
     override fun onDestroy() {
+        _lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         _viewModelStore.clear()
         super.onDestroy()
     }
