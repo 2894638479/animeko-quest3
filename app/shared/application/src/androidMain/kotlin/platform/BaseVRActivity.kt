@@ -403,23 +403,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     override fun closePanel(id: Int) {
         val active = entityIdMap.remove(id) ?: return
         val entity = active.entity
-        try {
-            entity.removeComponent<Panel>()
-        } catch (_: Exception) {
-            // Panel component may already have been removed
-        }
-        try {
-            entity.removeComponent<TransformParent>()
-        } catch (_: Exception) {
-            // TransformParent may already have been removed
-        }
-        try {
-            entity.destroy()
-        } catch (_: Exception) {
-            // Entity may already have been destroyed
-        }
+        // Remove from panelEntries FIRST so setHittable (render thread) won't touch
+        // this entity while we destroy it below.
         for (item in panelEntries.values) {
             item.panels.remove(entity)
         }
+        // Detach from parent so the entity can be safely destroyed.
+        entity.removeComponent<TransformParent>()
+        // destroy() cascades: all components including Panel are removed,
+        // and the ComposeView is detached by the SDK.
+        entity.destroy()
     }
 }
