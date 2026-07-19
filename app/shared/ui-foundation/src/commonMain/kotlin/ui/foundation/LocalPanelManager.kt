@@ -15,6 +15,25 @@ import androidx.compose.runtime.staticCompositionLocalOf
 interface PanelManager {
     fun openPanel(entry: PanelEntry, content: @Composable () -> Unit): Int
     fun closePanel(id: Int)
+
+    /** Adjust the scale of a specific panel by ID. */
+    fun setPanelScale(id: Int, scale: Float)
+
+    /** Adjust the distance (Z offset) of a specific panel. */
+    fun setPanelDistance(id: Int, distance: Float)
+
+    /** Toggle whether the panel is attached to the main panel via [TransformParent]. */
+    fun togglePanelBind(id: Int)
+
+    /** True if this panel is bound (child of) the main panel. */
+    fun isPanelBound(id: Int): Boolean
+
+    /** Get current panel scale. Returns 1f if panel not found. */
+    fun getPanelScale(id: Int): Float
+
+    /** Replace the panel with one of a different [PanelSize] (aspect ratio). */
+    fun changePanelRatio(id: Int, widthPx: Int, heightPx: Int, content: @Composable () -> Unit): Int
+
     enum class PanelSize(val widthPx: Int,val heightPx: Int) {
         WIDE(3840,2160),TALL(2160,3840),SIDE(960,1920);
         val ratio get() = widthPx.toDouble() / heightPx

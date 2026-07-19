@@ -32,7 +32,9 @@
             tools:ignore="ScopedStorage" />
 
     <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="false" />
+    <uses-feature android:name="com.oculus.feature.HAND_TRACKING" android:required="false" />
     <uses-permission android:name="com.oculus.permission.USE_SCENE" />
+    <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
 
     <application
             android:name="AniApplication"
@@ -49,6 +51,9 @@
                 android:name=".activity.MainActivity"
                 android:exported="true"
                 android:launchMode="singleTask">
+            <meta-data
+                    android:name="com.oculus.handtracking.version"
+                    android:value="V2.0" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -61,6 +61,7 @@ import me.him188.ani.app.ui.exprovider.ExternalContentProviderFactory
 import me.him188.ani.app.ui.exprovider.LocalExternalContentProvider
 import me.him188.ani.app.ui.foundation.LocalPanelManager
 import me.him188.ani.app.ui.foundation.PanelManager
+import me.him188.ani.app.ui.foundation.VrPanelControlBarHost
 import me.him188.ani.app.ui.foundation.PanelManager.PanelEntry
 import me.him188.ani.app.ui.foundation.PanelManager.PanelPosition
 import me.him188.ani.app.ui.foundation.layout.LocalPlatformWindow
@@ -223,7 +224,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             Panel(item.id),
             Scale(Vector3(1f)),
         )
-        item.panels[mainPanelEntity] = { composeContent?.invoke() }
+        val mainId = nextEntityId.getAndIncrement()
+        entityIdMap[mainId] = ActivePanel(mainPanelEntity, entry)
+        entityToPanelId[mainPanelEntity] = mainId
+        boundPanels.add(mainId)
+        item.panels[mainPanelEntity] = {
+            VrPanelControlBarHost(panelManager = this@BaseVRActivity, panelId = mainId) {
+                composeContent?.invoke()
+            }
+        }
         recenterPanel()
 
         val sceneObjectSystem = systemManager.findSystem<SceneObjectSystem>()
@@ -287,30 +296,48 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         } ?: return
 
         val avatarBody = localPlayerAvatar.getComponent<AvatarBody>()
+        val handState = HandTrackingDetector.detect(avatarBody, scene)
+
+        when (handState.mode) {
+            HandTrackingDetector.InputMode.CONTROLLERS -> {
+                tickControllers(handState, avatarBody)
+            }
+            HandTrackingDetector.InputMode.HANDS -> {
+                tickHands(handState)
+            }
+            HandTrackingDetector.InputMode.NONE -> {
+                setHittable(true)
+            }
+        }
+    }
+
+    @OptIn(SpatialSDKExperimentalAPI::class)
+    private fun tickControllers(
+        handState: HandTrackingDetector.HandState,
+        avatarBody: AvatarBody,
+    ) {
         val leftController = avatarBody.leftHand.tryGetComponent<Controller>()
         val rightController = avatarBody.rightHand.tryGetComponent<Controller>()
 
-        val leftSqueeze = leftController?.let { it.buttonState and ButtonBits.ButtonSqueezeL != 0 } ?: false
-        val rightSqueeze = rightController?.let { it.buttonState and ButtonBits.ButtonSqueezeR != 0 } ?: false
+        val leftSqueeze = handState.leftActive
+        val rightSqueeze = handState.rightActive
 
         // Suppress panel interaction while dragging
-        val dragging = leftSqueeze || rightSqueeze
-        setHittable(!dragging)
+        setHittable(!handState.isDragging)
 
-        val leftPose = if (leftSqueeze) scene.getControllerPoseAtTime(true, System.currentTimeMillis()) else null
-        val rightPose = if (rightSqueeze) scene.getControllerPoseAtTime(false, System.currentTimeMillis()) else null
+        val leftPose = handState.leftPose
+        val rightPose = handState.rightPose
 
         var thumbX = 0f
         var thumbY = 0f
 
-        // Only process thumbstick from the single active controller.
-        // leftSqueeze/rightSqueeze imply the respective controller is non-null.
-        if (leftSqueeze && !rightSqueeze) {
+        // Only process thumbstick from the single active controller
+        if (leftSqueeze && !rightSqueeze && leftController != null) {
             if (leftController.buttonState and ButtonBits.ButtonThumbLU != 0) thumbY += 1f
             if (leftController.buttonState and ButtonBits.ButtonThumbLD != 0) thumbY -= 1f
             if (leftController.buttonState and ButtonBits.ButtonThumbLL != 0) thumbX -= 1f
             if (leftController.buttonState and ButtonBits.ButtonThumbLR != 0) thumbX += 1f
-        } else if (rightSqueeze && !leftSqueeze) {
+        } else if (rightSqueeze && !leftSqueeze && rightController != null) {
             if (rightController.buttonState and ButtonBits.ButtonThumbRU != 0) thumbY += 1f
             if (rightController.buttonState and ButtonBits.ButtonThumbRD != 0) thumbY -= 1f
             if (rightController.buttonState and ButtonBits.ButtonThumbRL != 0) thumbX -= 1f
@@ -319,7 +346,41 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         // Disallow diagonal thumbstick to prevent unintended combined actions
         if (thumbX != 0f && thumbY != 0f) { thumbX = 0f; thumbY = 0f }
 
-        controllerDragger.drag(leftPose, rightPose, thumbX, thumbY)
+        // Convert Pose to ControllerPose for the existing dragger interface
+        val leftCp = leftPose?.let { pose ->
+            val cp = scene.getControllerPoseAtTime(true, System.currentTimeMillis())
+            cp ?: scene.getControllerPoseAtTime(true, System.currentTimeMillis())
+        }
+        val rightCp = rightPose?.let {
+            scene.getControllerPoseAtTime(false, System.currentTimeMillis())
+        }
+
+        controllerDragger.drag(
+            if (leftSqueeze) leftCp else null,
+            if (rightSqueeze) rightCp else null,
+            thumbX, thumbY,
+        )
+    }
+
+    @OptIn(SpatialSDKExperimentalAPI::class)
+    private fun tickHands(handState: HandTrackingDetector.HandState) {
+        // Suppress panel interaction while pinching (dragging)
+        setHittable(!handState.isDragging)
+
+        // For hand tracking, convert hand poses to ControllerPose for the dragger.
+        // Hand tracking has no thumbstick — all manipulation is via pinch + hand movement.
+        val leftCp = handState.leftPose?.let { pose ->
+            scene.getControllerPoseAtTime(true, System.currentTimeMillis())
+        }
+        val rightCp = handState.rightPose?.let {
+            scene.getControllerPoseAtTime(false, System.currentTimeMillis())
+        }
+
+        controllerDragger.drag(
+            if (handState.leftActive) leftCp else null,
+            if (handState.rightActive) rightCp else null,
+            thumbX = 0f, thumbY = 0f, // no thumbstick on bare hands
+        )
     }
 
     /** Thread-safe entity ID counter. */
@@ -329,6 +390,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     /** Thread-safe map of active sub-panels. */
     private val entityIdMap = ConcurrentHashMap<Int, ActivePanel>()
+    /** Reverse mapping: Entity → panel ID for control bar wiring. */
+    private val entityToPanelId = ConcurrentHashMap<Entity, Int>()
 
     private fun calculateRelativePose(entry: PanelEntry, scale: Float): Pose {
         val mainWidth = PanelManager.PanelSize.WIDE.defaultWidth * scale
@@ -394,15 +457,27 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             TransformParent(mainPanelEntity),
             Transform(relPose),
         )
-        item.panels[entity] = content
         val id = nextEntityId.getAndIncrement()
+        // Wrap content with control bar host
+        item.panels[entity] = {
+            VrPanelControlBarHost(
+                panelManager = this,
+                panelId = id,
+            ) {
+                content()
+            }
+        }
         entityIdMap[id] = ActivePanel(entity, entry)
+        entityToPanelId[entity] = id
+        boundPanels.add(id)
         return id
     }
 
     override fun closePanel(id: Int) {
         val active = entityIdMap.remove(id) ?: return
+        boundPanels.remove(id)
         val entity = active.entity
+        entityToPanelId.remove(entity)
         // Remove from panelEntries FIRST so setHittable (render thread) won't touch
         // this entity while we destroy it below.
         for (item in panelEntries.values) {
@@ -413,5 +488,68 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         // destroy() cascades: all components including Panel are removed,
         // and the ComposeView is detached by the SDK.
         entity.destroy()
+    }
+
+    // ── Panel manipulation (PanelManager extended) ──────────────────────────
+
+    /** Tracks which panel IDs are bound to the main panel. */
+    private val boundPanels = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+
+    override fun setPanelScale(id: Int, scale: Float) {
+        val active = entityIdMap[id] ?: return
+        val clamped = scale.coerceIn(0.1f..10f)
+        active.entity.setComponent(Scale(Vector3(clamped)))
+    }
+
+    override fun setPanelDistance(id: Int, distance: Float) {
+        val active = entityIdMap[id] ?: return
+        val currentTransform = active.entity.getComponent<Transform>()
+        val currentPose = currentTransform.transform
+        // Adjust Z offset relative to parent
+        val newPos = currentPose.t.plus(
+            currentPose.forward().times(distance),
+        )
+        active.entity.setComponent(Transform(Pose(newPos, currentPose.q)))
+    }
+
+    override fun togglePanelBind(id: Int) {
+        val active = entityIdMap[id] ?: return
+        if (boundPanels.remove(id)) {
+            // Unbind: remove TransformParent, keep world position
+            active.entity.removeComponent<TransformParent>()
+        } else {
+            // Bind: re-attach to main panel
+            active.entity.setComponent(TransformParent(mainPanelEntity))
+            boundPanels.add(id)
+        }
+    }
+
+    override fun isPanelBound(id: Int): Boolean = boundPanels.contains(id)
+
+    override fun getPanelScale(id: Int): Float {
+        val active = entityIdMap[id] ?: return 1f
+        return try {
+            active.entity.getComponent<Scale>().scale.x
+        } catch (_: Exception) {
+            1f
+        }
+    }
+
+    override fun changePanelRatio(
+        id: Int,
+        widthPx: Int,
+        heightPx: Int,
+        content: @Composable (() -> Unit),
+    ): Int {
+        val active = entityIdMap.remove(id) ?: return -1
+        // Close the old panel
+        closePanel(id)
+        // Find or create a PanelSize matching the given resolution
+        val newSize = PanelManager.PanelSize.entries.find {
+            it.widthPx == widthPx && it.heightPx == heightPx
+        } ?: PanelManager.PanelSize.WIDE
+        // Open a new panel with the new size at same position
+        val newEntry = PanelManager.PanelEntry(newSize, active.entry.position, active.entry.hittable)
+        return openPanel(newEntry, content)
     }
 }
