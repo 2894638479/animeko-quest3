@@ -148,8 +148,14 @@ fun VrPanelControlBar(
 }
 
 /**
- * Wraps panel content with a thin clickable zone at the top that toggles
- * the [VrPanelControlBar]. Click the zone to show/hide the control buttons.
+ * Wraps panel content with a control bar at the top.
+ *
+ * The control bar is always visible (semi-transparent) so users can find it.
+ * In VR, the Meta SDK cursor system may not route hover events to Compose,
+ * so we keep the bar persistently visible rather than relying on hover detection.
+ *
+ * A 48dp-high trigger strip at the top provides a generous tap target for
+ * finger/controller pointing. Tapping it toggles the full control bar.
  */
 @Composable
 fun VrPanelControlBarHost(
@@ -157,31 +163,17 @@ fun VrPanelControlBarHost(
     panelId: Int,
     content: @Composable () -> Unit,
 ) {
-    var controlBarVisible by remember { mutableStateOf(false) }
+    var controlBarVisible by remember { mutableStateOf(true) }  // visible by default
     var activeMode by remember { mutableStateOf(PanelControlMode.NONE) }
-    val isBound = remember(panelId) { panelManager.isPanelBound(panelId) }
-    val currentScale by remember { mutableStateOf(panelManager.getPanelScale(panelId)) }
+    val isBound by remember(panelId) { mutableStateOf(panelManager.isPanelBound(panelId)) }
 
     Box {
-        // Main content
-        content()
+        // Main content — push down slightly to leave room for the bar
+        Box(Modifier.padding(top = 44.dp)) {
+            content()
+        }
 
-        // Thin trigger zone at the very top — tap to toggle control bar
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(24.dp)
-                .align(Alignment.TopCenter)
-                .background(Color.Transparent)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    controlBarVisible = !controlBarVisible
-                },
-        )
-
-        // Control bar overlay
+        // Control bar at the top
         VrPanelControlBar(
             visible = controlBarVisible || activeMode != PanelControlMode.NONE,
             isBound = isBound,
@@ -193,11 +185,26 @@ fun VrPanelControlBarHost(
             },
             onRatioSelected = { w, h ->
                 panelManager.changePanelRatio(panelId, w, h) {
-                    // Re-render content with new ratio — content is re-provided by the caller
+                    // Content re-render handled by caller
                 }
                 activeMode = PanelControlMode.NONE
             },
             modifier = Modifier.align(Alignment.TopCenter),
+        )
+
+        // Toggle strip: tapping this 48dp bar shows/hides the full control bar
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .align(Alignment.TopCenter)
+                .background(Color.Black.copy(alpha = 0.15f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    controlBarVisible = !controlBarVisible
+                },
         )
     }
 }
