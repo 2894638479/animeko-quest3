@@ -35,7 +35,9 @@ interface PanelManager {
     fun changePanelRatio(id: Int, widthPx: Int, heightPx: Int, content: @Composable () -> Unit): Int
 
     enum class PanelSize(val widthPx: Int,val heightPx: Int) {
-        WIDE(3840,2160),TALL(2160,3840),SIDE(960,1920);
+        WIDE(3840,2160),TALL(2160,3840),SIDE(960,1920),
+        R4_3(2880,2160),R21_9(3840,1646),R1_1(2160,2160),
+        R9_16(2160,3840),R3_4(1620,2160);
         val ratio get() = widthPx.toDouble() / heightPx
         val defaultWidth get() = widthPx / 1000f
         val defaultHeight get() = heightPx / 1000f

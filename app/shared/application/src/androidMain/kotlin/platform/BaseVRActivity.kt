@@ -610,20 +610,43 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         content: @Composable (() -> Unit),
     ): Int {
         val active = entityIdMap[id] ?: return -1
-        // Don't close/reopen — PanelRegistration doesn't support re-registration.
-        // Instead, adjust the panel's physical scale to approximate the new ratio.
-        val defaultW = PanelManager.PanelSize.WIDE.defaultWidth
-        val defaultH = PanelManager.PanelSize.WIDE.defaultHeight
-        val targetRatio = widthPx.toFloat() / heightPx.toFloat()
-        val currentRatio = defaultW / defaultH // 16:9 ≈ 1.78
-        val ratioAdjust = targetRatio / currentRatio
-        // Scale X to change width ratio; keep same overall scale
-        val currentScale = getPanelScale(id)
-        val scaleX = currentScale * ratioAdjust
-        val scaleY = currentScale
+        val entity = active.entity
+        val oldEntry = active.entry
+        // Find the pre-registered PanelSize matching the requested resolution
+        val newSize = PanelManager.PanelSize.entries.find {
+            it.widthPx == widthPx && it.heightPx == heightPx
+        } ?: return id
+
+        // Build the new PanelEntry with same position/hittable as before
+        val newEntry = PanelManager.PanelEntry(newSize, oldEntry.position, oldEntry.hittable)
+        val newItem = panelEntries[newEntry] ?: return id
+        val oldItem = panelEntries[oldEntry]
+
+        // Get the original content before we touch anything
+        val actualContent = panelContents[id] ?: return id
+
+        // 1. Remove old content from the old entry's panel map
+        oldItem?.panels?.remove(entity)
+
+        // 2. Swap the Panel component to the new registration ID
+        //    (keeps entity, Transform, Scale, TransformParent intact)
         try {
-            active.entity.setComponent(Scale(Vector3(scaleX, scaleY, currentScale)))
+            entity.removeComponent<Panel>()
         } catch (_: Exception) {}
-        return id // same panel, same ID
+        entity.setComponent(
+            if (newEntry.hittable == PanelManager.PanelHittable.TRUE) Panel(newItem.id)
+            else Panel(newItem.id, MeshCollision.NoCollision),
+        )
+
+        // 3. Store the content under the new entry + entity
+        newItem.panels[entity] = {
+            VrPanelControlBarHost(panelManager = this, panelId = id) {
+                actualContent()
+            }
+        }
+
+        // 4. Update our tracking to reflect the new entry
+        entityIdMap[id] = ActivePanel(entity, newEntry)
+        return id
     }
 }
