@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.TaskAlt
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -203,7 +203,7 @@ private fun SetAllEpisodeDoneDialog(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         icon = { Icon(Icons.Rounded.TaskAlt, null) },
         text = { Text(stringResource(Lang.subject_collection_set_all_episodes_watched)) },
@@ -215,7 +215,6 @@ private fun SetAllEpisodeDoneDialog(
             }
         },
         dismissButton = { TextButton(onDismissRequest) { Text(stringResource(Lang.subject_collection_ignore)) } },
-        modifier = modifier,
     )
 }
 

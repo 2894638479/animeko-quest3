@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -82,7 +82,7 @@ fun DownloadingUpdatePopupCard(
     }
 
     if (showConfirmCancel) {
-        AlertDialog(
+        VrAlertDialog(
             onDismissRequest = { showConfirmCancel = false },
             text = {
                 Text(

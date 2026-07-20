@@ -9,7 +9,7 @@
 
 package me.him188.ani.app.ui.settings.tabs.media.source
 
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,7 +64,7 @@ fun ConfirmDiscardChangeDialog(
     modifier: Modifier = Modifier,
 ) {
     if (state.isVisible) {
-        AlertDialog(
+        VrAlertDialog(
             onDismissRequest = state::dismissDialog,
             title = { Text(stringResource(Lang.settings_media_source_discard_changes)) },
             confirmButton = {
@@ -72,7 +72,6 @@ fun ConfirmDiscardChangeDialog(
                     Text(stringResource(Lang.settings_media_source_discard), color = MaterialTheme.colorScheme.error)
                 }
             },
-            modifier = modifier,
             dismissButton = {
                 TextButton(onClick = state::dismissDialog) {
                     Text(stringResource(Lang.settings_media_source_continue_editing))

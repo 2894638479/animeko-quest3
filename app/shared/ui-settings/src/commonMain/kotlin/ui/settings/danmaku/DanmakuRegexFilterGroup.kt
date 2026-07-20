@@ -21,7 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.ElevatedFilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -112,7 +112,7 @@ internal fun SettingsScope.DanmakuRegexFilterGroup(
         val importSuccess = stringResource(Lang.settings_danmaku_import_success)
         val importFailed = stringResource(Lang.settings_danmaku_import_failed)
 
-        AlertDialog(
+        VrAlertDialog(
             onDismissRequest = { showImportDialog = false },
             icon = { Icon(Icons.Rounded.ContentPaste, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text(stringResource(Lang.settings_danmaku_import_title)) },
@@ -225,7 +225,7 @@ fun RegexFilterItem(
     )
 
 //    if (showConfirmDelete) {
-//        AlertDialog(
+//        VrAlertDialog(
 //            onDismissRequest = { showConfirmDelete = false },
 //            icon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) },
 //            title = { Text("删除正则") },
@@ -285,7 +285,7 @@ fun AddRegexFilterDialog(
         focusManager.clearFocus()
     }
 
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             TextButton(

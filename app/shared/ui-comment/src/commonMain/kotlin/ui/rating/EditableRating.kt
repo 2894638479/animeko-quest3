@@ -9,7 +9,7 @@
 
 package me.him188.ani.app.ui.rating
 
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -129,7 +129,7 @@ fun EditableRating(
 @Composable
 fun EditableRatingDialogsHost(state: EditableRatingState) {
     if (state.showRatingRequiresCollectionDialog) {
-        AlertDialog(
+        VrAlertDialog(
             { state.dismissRatingRequiresCollectionDialog() },
             text = { Text(stringResource(Lang.rating_requires_collection)) },
             confirmButton = {

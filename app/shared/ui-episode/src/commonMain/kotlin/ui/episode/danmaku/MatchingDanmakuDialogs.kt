@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ListItem
@@ -62,7 +62,7 @@ fun MatchingDanmakuDialog(
 ) {
     val changeDanmakuText = stringResource(Lang.episode_danmaku_match_change)
     val cancelText = stringResource(Lang.settings_mediasource_cancel)
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
         },
@@ -218,7 +218,7 @@ fun SubjectPickerDialog(
 ) {
     val selectSubjectText = stringResource(Lang.episode_danmaku_match_select_subject)
     val cancelText = stringResource(Lang.settings_mediasource_cancel)
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(selectSubjectText) },
         text = {
@@ -248,7 +248,7 @@ fun EpisodePickerDialog(
 ) {
     val selectEpisodeText = stringResource(Lang.episode_danmaku_match_select_episode)
     val cancelText = stringResource(Lang.settings_mediasource_cancel)
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(selectEpisodeText) },
         text = {

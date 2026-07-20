@@ -9,7 +9,7 @@
 
 package me.him188.ani.app.ui.subject.collection.components
 
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LocalContentColor
@@ -109,7 +109,7 @@ fun EditCollectionTypeDropDown(
         }
 
         if (showConfirmDeleteDialog) {
-            AlertDialog(
+            VrAlertDialog(
                 onDismissRequest = { showConfirmDeleteDialog = false },
                 title = { Text(stringResource(Lang.subject_collection_delete_confirm_title)) },
                 text = { Text(stringResource(Lang.subject_collection_delete_confirm_message)) },

@@ -9,7 +9,7 @@
 
 package me.him188.ani.app.ui.update
 
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,7 +39,7 @@ fun FailedToInstallDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val toaster = LocalToaster.current
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest,
         confirmButton = {
             Button(

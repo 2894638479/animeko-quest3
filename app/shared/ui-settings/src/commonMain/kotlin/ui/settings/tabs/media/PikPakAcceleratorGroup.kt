@@ -10,7 +10,7 @@
 package me.him188.ani.app.ui.settings.tabs.media
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -178,7 +178,7 @@ internal fun SettingsScope.PikPakAcceleratorGroup(
     }
 
     if (showRecommendDialog) {
-        AlertDialog(
+        VrAlertDialog(
             onDismissRequest = { showRecommendDialog = false },
             title = { Text(stringResource(Lang.settings_pikpak_recommend_title)) },
             text = { Text(stringResource(Lang.settings_pikpak_recommend_message)) },

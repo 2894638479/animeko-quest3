@@ -21,7 +21,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -203,7 +203,7 @@ internal fun SettingsScope.MediaSourceSubscriptionGroup(
                 state.addNew(state.editingUrl)
             }
             val isAddInProgressState = state.isAddInProgress.collectAsStateWithLifecycle()
-            AlertDialog(
+            VrAlertDialog(
                 { showAddDialog = false },
                 confirmButton = {
                     AnimatedContent(
@@ -340,7 +340,7 @@ private fun SettingsScope.SubscriptionItem(
         },
     )
     if (showConfirmDelete) {
-        AlertDialog(
+        VrAlertDialog(
             onDismissRequest = { showConfirmDelete = false },
             icon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text(stringResource(Lang.settings_media_source_subscription_delete_dialog)) },

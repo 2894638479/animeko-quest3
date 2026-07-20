@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -221,7 +221,7 @@ internal fun EditMediaSourceDialog(
 //        },
 //    ) { paddingValues ->
 
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest,
         title = {
             Text(state.info.displayName)
@@ -234,10 +234,8 @@ internal fun EditMediaSourceDialog(
         text = {
             if (state.arguments.isEmpty()) {
                 Text(stringResource(Lang.settings_media_source_no_config))
-                return@AlertDialog
-            }
-
-            Column(Modifier.padding()) {
+            } else {
+                Column(Modifier.padding()) {
                 Column(
                     Modifier.verticalScroll(rememberScrollState()).padding(top = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -267,6 +265,7 @@ internal fun EditMediaSourceDialog(
                     }
                 }
             }
+            }
         },
         confirmButton = {
             val canSave by remember(state) {
@@ -292,7 +291,6 @@ internal fun EditMediaSourceDialog(
                 Text(stringResource(Lang.settings_media_source_cancel))
             }
         },
-        modifier = modifier,
     )
 }
 

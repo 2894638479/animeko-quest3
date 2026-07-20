@@ -15,7 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -160,7 +160,7 @@ object RefreshIndicationDefaults {
             )
         }
         if (showErrorDialog) {
-            AlertDialog(
+            VrAlertDialog(
                 { showErrorDialog = false },
                 title = { Text(stringResource(Lang.settings_mediasource_error_title)) },
                 text = {

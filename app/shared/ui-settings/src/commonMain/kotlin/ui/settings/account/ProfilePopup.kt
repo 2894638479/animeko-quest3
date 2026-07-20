@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Icon
@@ -167,7 +167,7 @@ fun AccountLogoutDialog(
     onCancel: () -> Unit,
     confirmEnabled: Boolean = true,
 ) {
-    AlertDialog(
+    VrAlertDialog(
         onCancel,
         icon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
         text = { Text(stringResource(Lang.settings_account_popup_logout_confirm)) },

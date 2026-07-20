@@ -27,7 +27,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -348,7 +348,7 @@ private fun UnbindBangumiDialog(
     onCancel: () -> Unit,
     confirmEnabled: Boolean = true,
 ) {
-    AlertDialog(
+    VrAlertDialog(
         onCancel,
         // icon omitted to reduce dependency on specific icon packs
         text = { Text(stringResource(Lang.settings_account_profile_unbind_bangumi_confirmation)) },
@@ -413,7 +413,7 @@ private fun SettingsScope.UploadAvatarDialog(
         },
     )
 
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             TextButton(
@@ -547,7 +547,7 @@ private fun CropAvatarDialog(
     var lastOffsetX by rememberSaveable { mutableFloatStateOf(0f) }
     var lastOffsetY by rememberSaveable { mutableFloatStateOf(0f) }
 
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             TextButton(

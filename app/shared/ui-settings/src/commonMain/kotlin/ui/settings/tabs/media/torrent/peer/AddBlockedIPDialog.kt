@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -102,7 +102,7 @@ fun AddBlockedIPDialog(
         }
     }
 
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = dismiss,
         title = { Text("添加 IP 地址") },
         text = {

@@ -13,7 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -185,7 +185,7 @@ fun <T : MediaSourceArguments> MediaSourceConfigurationDefaults.DropdownMenuImpo
     )
     if (state.showOverrideDialog) {
         val toaster = LocalToaster.current
-        AlertDialog(
+        VrAlertDialog(
             onDismissRequest = { state.cancelOverride() },
             icon = { Icon(Icons.Rounded.ContentPaste, null) },
             title = { Text(stringResource(Lang.settings_mediasource_import_title)) },
@@ -211,7 +211,7 @@ fun <T : MediaSourceArguments> MediaSourceConfigurationDefaults.DropdownMenuImpo
     }
     val error = state.error
     if (error != null) {
-        AlertDialog(
+        VrAlertDialog(
             { state.dismissError() },
             icon = { Icon(Icons.Rounded.Error, null) },
             title = {

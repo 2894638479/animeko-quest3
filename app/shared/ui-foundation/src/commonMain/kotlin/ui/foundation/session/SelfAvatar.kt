@@ -16,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -170,7 +170,7 @@ private fun SelfAvatarMenus(
         enabled = !running,
     )
     if (showLogoutConfirmation) {
-        AlertDialog(
+        VrAlertDialog(
             { showLogoutConfirmation = false },
             text = { Text(confirmLogoutText) },
             confirmButton = {

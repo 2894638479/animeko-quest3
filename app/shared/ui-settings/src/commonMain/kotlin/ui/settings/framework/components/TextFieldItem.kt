@@ -23,7 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -207,7 +207,7 @@ internal fun SettingsScope.TextFieldDialog(
     extra: @Composable (ColumnScope.() -> Unit) = {},
     textField: @Composable () -> Unit,
 ) {
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             TextButton(

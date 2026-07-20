@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -37,7 +37,7 @@ fun SelectMediaStorageDialog(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(stringResource(Lang.cache_subject_select_storage)) },
         icon = { Icon(Icons.Rounded.Save, null) },
@@ -63,6 +63,5 @@ fun SelectMediaStorageDialog(
                 Spacer(Modifier)
             }
         },
-        modifier = modifier,
     )
 }

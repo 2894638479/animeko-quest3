@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,7 +67,7 @@ fun SimpleErrorDialog(
             clipboard.setClipEntryText(text())
         }
     }
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest,
         confirmButton = {
             TextButton(copy) {

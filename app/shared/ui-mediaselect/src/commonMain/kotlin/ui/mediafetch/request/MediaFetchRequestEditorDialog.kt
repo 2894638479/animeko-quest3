@@ -12,7 +12,7 @@ package me.him188.ani.app.ui.mediafetch.request
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -70,7 +70,7 @@ fun MediaFetchRequestEditorDialog(
     val continueEditingText = stringResource(Lang.mediafetch_request_editor_continue_editing)
     val discardConfirmationText = stringResource(Lang.mediafetch_request_editor_discard_confirmation)
 
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequestWrapped,
         confirmButton = {
             TextButton(
@@ -103,7 +103,7 @@ fun MediaFetchRequestEditorDialog(
     )
 
     if (showConfirmDiscard) {
-        AlertDialog(
+        VrAlertDialog(
             onDismissRequest = {
                 showConfirmDiscard = false
             },

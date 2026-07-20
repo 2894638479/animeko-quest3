@@ -39,7 +39,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -705,7 +705,7 @@ private fun DanmakuTimeShiftDialog(
     val resetText = stringResource(Lang.subject_episode_danmaku_time_shift_reset)
     val restoreText = stringResource(Lang.subject_episode_danmaku_time_shift_restore)
 
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             TextButton(onClick = { onConfirm(shift.roundToLong()) }) {

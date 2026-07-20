@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
@@ -140,7 +140,7 @@ private fun BangumiSessionExpiredDialog(
     onUnbindBangumi: () -> Unit,
     unbindEnabled: Boolean,
 ) {
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         text = {
             Text(stringResource(Lang.bangumi_session_expired_login_again))

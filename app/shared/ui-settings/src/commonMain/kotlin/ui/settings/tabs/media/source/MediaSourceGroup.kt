@@ -42,7 +42,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Reorder
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.AlertDialog
+import me.him188.ani.app.ui.foundation.VrAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -258,7 +258,7 @@ internal fun SettingsScope.MediaSourceGroup(
                     var showMoreDropdown by remember { mutableStateOf(false) }
                     var showConfirmDeletionDialog by rememberSaveable { mutableStateOf(false) }
                     if (showConfirmDeletionDialog) {
-                        AlertDialog(
+                        VrAlertDialog(
                             onDismissRequest = { showConfirmDeletionDialog = false },
                             icon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) },
                             title = { Text(stringResource(Lang.settings_media_source_delete)) },
@@ -565,7 +565,7 @@ internal fun SelectMediaSourceTemplateDialog(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AlertDialog(
+    VrAlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
             Text(stringResource(Lang.settings_media_source_select_template))
@@ -613,7 +613,6 @@ internal fun SelectMediaSourceTemplateDialog(
                 }
             }
         },
-        modifier = modifier,
     )
 }
 
