@@ -610,18 +610,20 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         content: @Composable (() -> Unit),
     ): Int {
         val active = entityIdMap[id] ?: return -1
-        // Use stored original content, falling back to the passed lambda
-        val actualContent = panelContents[id] ?: content
-        val position = active.entry.position
-        val hittable = active.entry.hittable
-        // Close the old panel (this removes from panelContents too)
-        closePanel(id)
-        // Find or create a PanelSize matching the given resolution
-        val newSize = PanelManager.PanelSize.entries.find {
-            it.widthPx == widthPx && it.heightPx == heightPx
-        } ?: PanelManager.PanelSize.WIDE
-        // Open a new panel with the new size at same position
-        val newEntry = PanelManager.PanelEntry(newSize, position, hittable)
-        return openPanel(newEntry, actualContent)
+        // Don't close/reopen — PanelRegistration doesn't support re-registration.
+        // Instead, adjust the panel's physical scale to approximate the new ratio.
+        val defaultW = PanelManager.PanelSize.WIDE.defaultWidth
+        val defaultH = PanelManager.PanelSize.WIDE.defaultHeight
+        val targetRatio = widthPx.toFloat() / heightPx.toFloat()
+        val currentRatio = defaultW / defaultH // 16:9 ≈ 1.78
+        val ratioAdjust = targetRatio / currentRatio
+        // Scale X to change width ratio; keep same overall scale
+        val currentScale = getPanelScale(id)
+        val scaleX = currentScale * ratioAdjust
+        val scaleY = currentScale
+        try {
+            active.entity.setComponent(Scale(Vector3(scaleX, scaleY, currentScale)))
+        } catch (_: Exception) {}
+        return id // same panel, same ID
     }
 }
