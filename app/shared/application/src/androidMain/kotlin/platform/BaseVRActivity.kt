@@ -509,6 +509,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             Transform(relPose),
         )
         val id = nextEntityId.getAndIncrement()
+        // Store original content for ratio changes etc.
+        panelContents[id] = content
         // Wrap content with control bar host
         item.panels[entity] = {
             VrPanelControlBarHost(
@@ -527,6 +529,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     override fun closePanel(id: Int) {
         val active = entityIdMap.remove(id) ?: return
         boundPanels.remove(id)
+        panelContents.remove(id)
         val entity = active.entity
         entityToPanelId.remove(entity)
         // Remove from panelEntries FIRST so setHittable (render thread) won't touch
@@ -545,6 +548,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     /** Tracks which panel IDs are bound to the main panel. */
     private val boundPanels = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+    /** Stores original (unwrapped) content lambdas keyed by panel ID. */
+    private val panelContents = ConcurrentHashMap<Int, @Composable () -> Unit>()
 
     override fun setPanelScale(id: Int, scale: Float) {
         val active = entityIdMap[id] ?: return
@@ -566,12 +571,18 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     override fun togglePanelBind(id: Int) {
         val active = entityIdMap[id] ?: return
         if (boundPanels.remove(id)) {
-            // Unbind: remove TransformParent, keep world position
-            active.entity.removeComponent<TransformParent>()
+            // Unbind: remove TransformParent if present
+            try {
+                if (active.entity.tryGetComponent<TransformParent>() != null) {
+                    active.entity.removeComponent<TransformParent>()
+                }
+            } catch (_: Exception) {}
         } else {
             // Bind: re-attach to main panel
-            active.entity.setComponent(TransformParent(mainPanelEntity))
-            boundPanels.add(id)
+            try {
+                active.entity.setComponent(TransformParent(mainPanelEntity))
+                boundPanels.add(id)
+            } catch (_: Exception) {}
         }
     }
 
@@ -592,15 +603,19 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         heightPx: Int,
         content: @Composable (() -> Unit),
     ): Int {
-        val active = entityIdMap.remove(id) ?: return -1
-        // Close the old panel
+        val active = entityIdMap[id] ?: return -1
+        // Use stored original content, falling back to the passed lambda
+        val actualContent = panelContents[id] ?: content
+        val position = active.entry.position
+        val hittable = active.entry.hittable
+        // Close the old panel (this removes from panelContents too)
         closePanel(id)
         // Find or create a PanelSize matching the given resolution
         val newSize = PanelManager.PanelSize.entries.find {
             it.widthPx == widthPx && it.heightPx == heightPx
         } ?: PanelManager.PanelSize.WIDE
         // Open a new panel with the new size at same position
-        val newEntry = PanelManager.PanelEntry(newSize, active.entry.position, active.entry.hittable)
-        return openPanel(newEntry, content)
+        val newEntry = PanelManager.PanelEntry(newSize, position, hittable)
+        return openPanel(newEntry, actualContent)
     }
 }
