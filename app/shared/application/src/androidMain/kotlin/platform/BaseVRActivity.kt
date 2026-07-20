@@ -537,11 +537,17 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         for (item in panelEntries.values) {
             item.panels.remove(entity)
         }
-        // Detach from parent so the entity can be safely destroyed.
-        entity.removeComponent<TransformParent>()
+        // Detach from parent if the entity has one (main panel never does).
+        try {
+            if (entity.tryGetComponent<TransformParent>() != null) {
+                entity.removeComponent<TransformParent>()
+            }
+        } catch (_: Exception) {}
         // destroy() cascades: all components including Panel are removed,
         // and the ComposeView is detached by the SDK.
-        entity.destroy()
+        try {
+            entity.destroy()
+        } catch (_: Exception) {}
     }
 
     // ── Panel manipulation (PanelManager extended) ──────────────────────────
