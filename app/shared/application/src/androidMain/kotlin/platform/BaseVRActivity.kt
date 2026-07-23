@@ -60,6 +60,7 @@ import me.him188.ani.app.navigation.AniNavigator
 import me.him188.ani.app.ui.exprovider.ExternalContentProviderFactory
 import me.him188.ani.app.ui.exprovider.LocalExternalContentProvider
 import me.him188.ani.app.ui.foundation.LocalPanelManager
+import me.him188.ani.app.ui.foundation.PanelControlMode
 import me.him188.ani.app.ui.foundation.PanelManager
 import me.him188.ani.app.ui.foundation.VrPanelControlBarHost
 import me.him188.ani.app.ui.foundation.PanelManager.PanelEntry
@@ -231,6 +232,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         entityIdMap[mainId] = ActivePanel(mainPanelEntity, entry)
         entityToPanelId[mainPanelEntity] = mainId
         boundPanels.add(mainId)
+        // Store original main panel content for ratio changes
+        panelContents[mainId] = { composeContent?.invoke() }
         item.panels[mainPanelEntity] = {
             VrPanelControlBarHost(panelManager = this@BaseVRActivity, panelId = mainId) {
                 composeContent?.invoke()
@@ -348,6 +351,13 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         val avatarBody = localPlayerAvatar.getComponent<AvatarBody>()
         val handState = HandTrackingDetector.detect(avatarBody, scene)
+
+        // Process active panel manipulation modes (resize/distance/move)
+        // NOTE: uses lastHandState (previous frame) to compute deltas
+        processPanelModes(handState)
+
+        // Cache for next frame's delta computation
+        lastHandState = handState
 
         when (handState.mode) {
             HandTrackingDetector.InputMode.CONTROLLERS -> {
@@ -556,6 +566,52 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private val boundPanels = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
     /** Stores original (unwrapped) content lambdas keyed by panel ID. */
     private val panelContents = ConcurrentHashMap<Int, @Composable () -> Unit>()
+    /** Active panel manipulation modes, processed in onSceneTick. */
+    private val panelModes = ConcurrentHashMap<Int, PanelControlMode>()
+    /** Cached last HandState for gesture-driven panel modes. */
+    private var lastHandState: HandTrackingDetector.HandState? = null
+
+    override fun startPanelMode(id: Int, mode: PanelControlMode) {
+        panelModes[id] = mode
+    }
+
+    override fun stopPanelMode(id: Int) {
+        panelModes.remove(id)
+    }
+
+    /**
+     * Process per-panel manipulation modes using hand/controller pose.
+     * Called every frame from onSceneTick.
+     */
+    private fun processPanelModes(handState: HandTrackingDetector.HandState) {
+        if (panelModes.isEmpty()) return
+        // Use the first available hand pose for manipulation
+        val activePose = handState.leftPose ?: handState.rightPose ?: return
+        val prevState = lastHandState
+        val prevPose = prevState?.leftPose ?: prevState?.rightPose
+        // If no previous pose (first frame of mode), skip delta computation
+        val dx = if (prevPose != null) activePose.t.x - prevPose.t.x else 0f
+        val dz = if (prevPose != null) activePose.t.z - prevPose.t.z else 0f
+
+        for ((id, mode) in panelModes.toList()) {
+            val active = entityIdMap[id] ?: continue
+            when (mode) {
+                PanelControlMode.RESIZE -> {
+                    val cur = getPanelScale(id)
+                    setPanelScale(id, (cur + dx).coerceIn(0.1f, 10f))
+                }
+                PanelControlMode.DISTANCE -> {
+                    setPanelDistance(id, dz)
+                }
+                PanelControlMode.MOVE -> {
+                    try {
+                        active.entity.setComponent(Transform(activePose))
+                    } catch (_: Exception) {}
+                }
+                else -> {}
+            }
+        }
+    }
 
     override fun setPanelScale(id: Int, scale: Float) {
         val active = entityIdMap[id] ?: return
@@ -576,6 +632,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     override fun togglePanelBind(id: Int) {
         val active = entityIdMap[id] ?: return
+        // Never allow binding the main panel to itself (circular dependency crash)
+        if (active.entity == mainPanelEntity && !boundPanels.contains(id)) return
         if (boundPanels.remove(id)) {
             // Unbind: remove TransformParent if present
             try {
@@ -622,8 +680,10 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val newItem = panelEntries[newEntry] ?: return id
         val oldItem = panelEntries[oldEntry]
 
-        // Get the original content before we touch anything
-        val actualContent = panelContents[id] ?: return id
+        // Get the original content before we touch anything.
+        // Fall back to the existing wrapped content if not in panelContents.
+        val actualContent: @Composable () -> Unit = panelContents[id]
+            ?: (oldItem?.panels?.get(entity) ?: return id)
 
         // 1. Remove old content from the old entry's panel map
         oldItem?.panels?.remove(entity)

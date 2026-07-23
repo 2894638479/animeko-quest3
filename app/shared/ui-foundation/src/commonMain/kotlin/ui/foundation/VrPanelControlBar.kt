@@ -173,19 +173,34 @@ fun VrPanelControlBarHost(
             visible = controlBarVisible || activeMode != PanelControlMode.NONE,
             isBound = isBound,
             onResize = {
-                val cur = panelManager.getPanelScale(panelId)
-                panelManager.setPanelScale(panelId, cur * 1.1f)
-                activeMode = PanelControlMode.NONE
+                if (activeMode == PanelControlMode.RESIZE) {
+                    panelManager.stopPanelMode(panelId)
+                    activeMode = PanelControlMode.NONE
+                } else {
+                    panelManager.stopPanelMode(panelId) // stop any other mode
+                    panelManager.startPanelMode(panelId, PanelControlMode.RESIZE)
+                    activeMode = PanelControlMode.RESIZE
+                }
             },
             onDistance = {
-                panelManager.setPanelDistance(panelId, 0.3f)
-                activeMode = PanelControlMode.NONE
+                if (activeMode == PanelControlMode.DISTANCE) {
+                    panelManager.stopPanelMode(panelId)
+                    activeMode = PanelControlMode.NONE
+                } else {
+                    panelManager.stopPanelMode(panelId)
+                    panelManager.startPanelMode(panelId, PanelControlMode.DISTANCE)
+                    activeMode = PanelControlMode.DISTANCE
+                }
             },
             onMove = {
-                // Recenter: reset pose & scale
-                panelManager.setPanelScale(panelId, 1f)
-                panelManager.setPanelDistance(panelId, -1f)
-                activeMode = PanelControlMode.NONE
+                if (activeMode == PanelControlMode.MOVE) {
+                    panelManager.stopPanelMode(panelId)
+                    activeMode = PanelControlMode.NONE
+                } else {
+                    panelManager.stopPanelMode(panelId)
+                    panelManager.startPanelMode(panelId, PanelControlMode.MOVE)
+                    activeMode = PanelControlMode.MOVE
+                }
             },
             onToggleBind = { panelManager.togglePanelBind(panelId) },
             onRatioSelected = { w, h ->
@@ -197,8 +212,6 @@ fun VrPanelControlBarHost(
         )
     }
 }
-
-enum class PanelControlMode { NONE, RESIZE, DISTANCE, MOVE }
 
 private val COMMON_RATIOS = listOf(
     Triple("16:9", 3840, 2160),

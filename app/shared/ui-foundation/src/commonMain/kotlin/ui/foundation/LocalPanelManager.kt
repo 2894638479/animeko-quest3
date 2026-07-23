@@ -34,6 +34,13 @@ interface PanelManager {
     /** Replace the panel with one of a different [PanelSize] (aspect ratio). */
     fun changePanelRatio(id: Int, widthPx: Int, heightPx: Int, content: @Composable () -> Unit): Int
 
+    /** Start a continuous panel manipulation mode (resize/distance/move).
+     *  The mode stays active until [stopPanelMode] is called. */
+    fun startPanelMode(id: Int, mode: PanelControlMode)
+
+    /** Stop the current panel manipulation mode. */
+    fun stopPanelMode(id: Int)
+
     enum class PanelSize(val widthPx: Int,val heightPx: Int) {
         WIDE(3840,2160),TALL(2160,3840),SIDE(960,1920),
         R4_3(2880,2160),R21_9(3840,1646),R1_1(2160,2160),
@@ -67,3 +74,6 @@ interface PanelManager {
  * running in a VR environment (regular Android / Desktop).
  */
 val LocalPanelManager = staticCompositionLocalOf<PanelManager?> { null }
+
+/** Which panel control operation is currently active. */
+enum class PanelControlMode { NONE, RESIZE, DISTANCE, MOVE }
