@@ -585,11 +585,14 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
      */
     private fun processPanelModes(handState: HandTrackingDetector.HandState) {
         if (panelModes.isEmpty()) return
-        // Use the first available hand pose for manipulation
-        val activePose = handState.leftPose ?: handState.rightPose ?: return
+        // Always query the current hand/controller pose, not just when pinching
+        val activePose: Pose? = scene.getControllerPoseAtTime(true, System.currentTimeMillis())?.pose
+            ?: scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
+            ?: handState.leftPose
+            ?: handState.rightPose
+            ?: return
         val prevState = lastHandState
         val prevPose = prevState?.leftPose ?: prevState?.rightPose
-        // If no previous pose (first frame of mode), skip delta computation
         val dx = if (prevPose != null) activePose.t.x - prevPose.t.x else 0f
         val dz = if (prevPose != null) activePose.t.z - prevPose.t.z else 0f
 
@@ -604,9 +607,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                     setPanelDistance(id, dz)
                 }
                 PanelControlMode.MOVE -> {
-                    try {
-                        active.entity.setComponent(Transform(activePose))
-                    } catch (_: Exception) {}
+                    try { active.entity.setComponent(Transform(activePose)) } catch (_: Exception) {}
                 }
                 else -> {}
             }
