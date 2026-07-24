@@ -164,6 +164,12 @@ fun VrPanelControlBarHost(
     var activeMode by remember { mutableStateOf(PanelControlMode.NONE) }
     val isBound by remember(panelId) { mutableStateOf(panelManager.isPanelBound(panelId)) }
 
+    // Sync with actual state: if mode was ended externally (pinch), reset local state
+    val actualMode = panelManager.getPanelActiveMode(panelId)
+    if (activeMode != PanelControlMode.NONE && actualMode == PanelControlMode.NONE) {
+        activeMode = PanelControlMode.NONE
+    }
+
     Box {
         // Main content
         content()

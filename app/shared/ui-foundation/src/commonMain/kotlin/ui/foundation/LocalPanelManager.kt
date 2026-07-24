@@ -41,6 +41,9 @@ interface PanelManager {
     /** Stop the current panel manipulation mode. */
     fun stopPanelMode(id: Int)
 
+    /** Returns the currently active mode for a panel, or NONE. */
+    fun getPanelActiveMode(id: Int): PanelControlMode
+
     enum class PanelSize(val widthPx: Int,val heightPx: Int) {
         WIDE(3840,2160),TALL(2160,3840),SIDE(960,1920),
         R4_3(2880,2160),R21_9(3840,1646),R1_1(2160,2160),
