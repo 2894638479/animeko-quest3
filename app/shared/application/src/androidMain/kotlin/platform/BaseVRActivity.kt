@@ -252,6 +252,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                     buttonState: Int,
                     downTime: Long
                 ): Boolean {
+                    // Record which hand/controller triggered this input
+                    lastInputHandEntity = sourceOfInput
                     // Suppress input if Squeeze is held
                     return (buttonState and (ButtonBits.ButtonSqueezeL or ButtonBits.ButtonSqueezeR)) != 0
                 }
@@ -350,7 +352,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         } ?: return
 
         val avatarBody = localPlayerAvatar.getComponent<AvatarBody>()
-        cachedAvatarBody = avatarBody
+        lastFrameAvatarBody = avatarBody
         val handState = HandTrackingDetector.detect(avatarBody, scene)
 
         // Process active panel manipulation modes (resize/distance/move)
@@ -533,6 +535,19 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         entityIdMap[id] = ActivePanel(entity, entry)
         entityToPanelId[entity] = id
         boundPanels.add(id)
+        // Record which hand clicked on this sub-panel
+        val sso = systemManager.findSystem<SceneObjectSystem>()
+        sso.getSceneObject(entity)?.thenAccept { sobj ->
+            sobj.addInputListener(object : InputListener {
+                override fun onInput(
+                    receiver: SceneObject, hitInfo: HitInfo,
+                    sourceOfInput: Entity, changed: Int, buttonState: Int, downTime: Long,
+                ): Boolean {
+                    lastInputHandEntity = sourceOfInput
+                    return false
+                }
+            })
+        }
         return id
     }
 
@@ -576,18 +591,19 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private var moveRelativePose: Pose? = null
     /** Which hand clicked the button to start the mode (true=left, false=right). */
     private var preferLeftHand: Boolean? = null
-    /** Cached avatar body for button-state checks in startPanelMode. */
-    private var cachedAvatarBody: AvatarBody? = null
+    /** Entity of the last hand/controller that triggered an input event. */
+    private var lastInputHandEntity: Entity? = null
+    /** Avatar body from the most recent frame. */
+    private var lastFrameAvatarBody: AvatarBody? = null
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     override fun startPanelMode(id: Int, mode: PanelControlMode) {
-        // Determine which hand clicked: the one with a non-zero buttonState
-        val ab = cachedAvatarBody
-        val leftBtn = ab?.leftHand?.tryGetComponent<Controller>()?.buttonState ?: 0
-        val rightBtn = ab?.rightHand?.tryGetComponent<Controller>()?.buttonState ?: 0
+        // Determine which hand clicked from the last input source entity
+        val lastInput = lastInputHandEntity
+        val ab = lastFrameAvatarBody
         preferLeftHand = when {
-            leftBtn != 0 -> true
-            rightBtn != 0 -> false
+            lastInput != null && lastInput == ab?.leftHand -> true
+            lastInput != null && lastInput == ab?.rightHand -> false
             else -> null
         }
         panelModes[id] = mode
