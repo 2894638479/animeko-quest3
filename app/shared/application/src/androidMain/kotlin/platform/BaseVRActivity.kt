@@ -570,6 +570,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private val panelModes = ConcurrentHashMap<Int, PanelControlMode>()
     /** Cached last HandState for gesture-driven panel modes. */
     private var lastHandState: HandTrackingDetector.HandState? = null
+    /** Previous frame's raw hand/controller pose, for delta computation. */
+    private var lastRawPose: Pose? = null
 
     override fun startPanelMode(id: Int, mode: PanelControlMode) {
         panelModes[id] = mode
@@ -577,6 +579,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     override fun stopPanelMode(id: Int) {
         panelModes.remove(id)
+        if (panelModes.isEmpty()) lastRawPose = null
     }
 
     /**
@@ -592,8 +595,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             ?: handState.leftPose
             ?: handState.rightPose
         val activePose = rawPose ?: return
-        val prevState = lastHandState
-        val prevPose = prevState?.leftPose ?: prevState?.rightPose
+        val prevPose = lastRawPose
+        lastRawPose = activePose // cache for next frame's delta
         val dx = if (prevPose != null) activePose.t.x - prevPose.t.x else 0f
         val dz = if (prevPose != null) activePose.t.z - prevPose.t.z else 0f
 
