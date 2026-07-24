@@ -353,8 +353,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val handState = HandTrackingDetector.detect(avatarBody, scene)
 
         // Process active panel manipulation modes (resize/distance/move)
-        // NOTE: uses lastHandState (previous frame) to compute deltas
-        processPanelModes(handState)
+        processPanelModes(handState, avatarBody)
 
         // Cache for next frame's delta computation
         lastHandState = handState
@@ -599,7 +598,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
      * Called every frame from onSceneTick.
      */
     @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun processPanelModes(handState: HandTrackingDetector.HandState) {
+    private fun processPanelModes(handState: HandTrackingDetector.HandState, avatarBody: AvatarBody) {
         if (panelModes.isEmpty()) {
             activeHandIsLeft = null
             lastRawPose = null
@@ -607,8 +606,13 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             return
         }
 
-        // Pinch/squeeze/grip to end: any gesture that activates a hand → stop all modes
-        if (handState.leftActive || handState.rightActive || handState.isDragging) {
+        // End mode on grip, trigger, or any button press (hand pinch maps to virtual button)
+        val leftBtn = avatarBody.leftHand.tryGetComponent<Controller>()?.buttonState ?: 0
+        val rightBtn = avatarBody.rightHand.tryGetComponent<Controller>()?.buttonState ?: 0
+        val endMask = ButtonBits.ButtonSqueezeL or ButtonBits.ButtonSqueezeR or
+                      ButtonBits.ButtonA or ButtonBits.ButtonB or
+                      ButtonBits.ButtonX or ButtonBits.ButtonY
+        if (handState.isDragging || (leftBtn and endMask) != 0 || (rightBtn and endMask) != 0) {
             panelModes.clear()
             activeHandIsLeft = null
             lastRawPose = null
