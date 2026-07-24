@@ -574,14 +574,24 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private var lastRawPose: Pose? = null
     /** Which hand is currently driving the manipulation (true=left, false=right, null=undecided). */
     private var activeHandIsLeft: Boolean? = null
+    /** For MOVE mode: relative offset from hand to panel, maintained each frame. */
+    private var moveRelativePose: Pose? = null
 
     override fun startPanelMode(id: Int, mode: PanelControlMode) {
         panelModes[id] = mode
+        if (mode == PanelControlMode.MOVE) {
+            // Capture the initial relative offset for grab-like behavior
+            moveRelativePose = null // will be set on first frame with valid poses
+        }
     }
 
     override fun stopPanelMode(id: Int) {
         panelModes.remove(id)
-        if (panelModes.isEmpty()) lastRawPose = null
+        if (panelModes.isEmpty()) {
+            lastRawPose = null
+            activeHandIsLeft = null
+            moveRelativePose = null
+        }
     }
 
     /**
@@ -593,14 +603,16 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (panelModes.isEmpty()) {
             activeHandIsLeft = null
             lastRawPose = null
+            moveRelativePose = null
             return
         }
 
-        // Pinch/squeeze to end: any grip/pinch gesture → stop all modes
-        if (handState.leftActive || handState.rightActive) {
+        // Pinch/squeeze/grip to end: any gesture that activates a hand → stop all modes
+        if (handState.leftActive || handState.rightActive || handState.isDragging) {
             panelModes.clear()
             activeHandIsLeft = null
             lastRawPose = null
+            moveRelativePose = null
             return
         }
 
@@ -610,13 +622,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val rightPose: Pose? = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
             ?: handState.rightPose
 
-        // Lock onto one hand; prefer the hand with pose data, then right hand
+        // Lock onto one hand
         if (activeHandIsLeft == null) {
-            activeHandIsLeft = if (leftPose != null && rightPose != null) false // prefer right
-            else leftPose != null
+            activeHandIsLeft = if (leftPose != null) true else rightPose != null
         }
 
-        val activePose: Pose = if (activeHandIsLeft == true) leftPose else rightPose ?: return
+        val activePose: Pose = if (activeHandIsLeft == true) leftPose ?: return else rightPose ?: return
 
         val prevPose = lastRawPose
         lastRawPose = activePose
@@ -635,14 +646,13 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                 }
                 PanelControlMode.MOVE -> {
                     try {
-                        if (prevPose != null) {
-                            val delta = activePose.t.minus(prevPose.t)
-                            val curLocal = active.entity.getComponent<Transform>().transform.t
-                            active.entity.setComponent(Transform(Pose(
-                                curLocal.plus(delta),
-                                active.entity.getComponent<Transform>().transform.q,
-                            )))
+                        // Grab-like: maintain fixed offset from hand to panel (position + rotation)
+                        if (moveRelativePose == null) {
+                            val panelLocal = active.entity.getComponent<Transform>().transform
+                            moveRelativePose = activePose.inverse() * panelLocal
                         }
+                        val rel = moveRelativePose ?: continue
+                        active.entity.setComponent(Transform(activePose * rel))
                     } catch (_: Exception) {}
                 }
                 else -> {}
