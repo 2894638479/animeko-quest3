@@ -572,8 +572,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private var lastHandState: HandTrackingDetector.HandState? = null
     /** Previous frame's raw hand/controller pose, for delta computation. */
     private var lastRawPose: Pose? = null
-    /** Whether the user was pinching last frame (for detecting pinch-to-end). */
-    private var wasPinching: Boolean = false
+    /** Which hand is currently driving the manipulation (true=left, false=right, null=undecided). */
+    private var activeHandIsLeft: Boolean? = null
 
     override fun startPanelMode(id: Int, mode: PanelControlMode) {
         panelModes[id] = mode
@@ -591,35 +591,32 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun processPanelModes(handState: HandTrackingDetector.HandState) {
         if (panelModes.isEmpty()) {
-            wasPinching = false
-            return
-        }
-
-        // Detect pinch-to-end: start pinching while in a mode → stop all modes
-        val nowPinching = handState.leftPinching || handState.rightPinching
-        if (nowPinching && !wasPinching) {
-            panelModes.clear()
+            activeHandIsLeft = null
             lastRawPose = null
-            wasPinching = true
             return
         }
-        wasPinching = nowPinching
 
-        // Get both hand poses; prefer the right hand (most users are right-handed),
-        // then the hand that's actually moving.
+        // Pinch/squeeze to end: any grip/pinch gesture → stop all modes
+        if (handState.leftActive || handState.rightActive) {
+            panelModes.clear()
+            activeHandIsLeft = null
+            lastRawPose = null
+            return
+        }
+
+        // Get both hand poses
         val leftPose: Pose? = scene.getControllerPoseAtTime(true, System.currentTimeMillis())?.pose
             ?: handState.leftPose
         val rightPose: Pose? = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
             ?: handState.rightPose
 
-        // Pick the hand with the larger movement since last frame
-        val prev = lastRawPose
-        val activePose: Pose = if (prev != null && leftPose != null && rightPose != null) {
-            if (rightPose.t.minus(prev.t).length() >= leftPose.t.minus(prev.t).length())
-                rightPose else leftPose
-        } else {
-            rightPose ?: leftPose
-        } ?: return
+        // Lock onto one hand; prefer the hand with pose data, then right hand
+        if (activeHandIsLeft == null) {
+            activeHandIsLeft = if (leftPose != null && rightPose != null) false // prefer right
+            else leftPose != null
+        }
+
+        val activePose: Pose = if (activeHandIsLeft == true) leftPose else rightPose ?: return
 
         val prevPose = lastRawPose
         lastRawPose = activePose
@@ -639,7 +636,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                 PanelControlMode.MOVE -> {
                     try {
                         if (prevPose != null) {
-                            // Apply world-space hand movement delta to current local position
                             val delta = activePose.t.minus(prevPose.t)
                             val curLocal = active.entity.getComponent<Transform>().transform.t
                             active.entity.setComponent(Transform(Pose(
