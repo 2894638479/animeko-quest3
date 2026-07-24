@@ -587,11 +587,11 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private fun processPanelModes(handState: HandTrackingDetector.HandState) {
         if (panelModes.isEmpty()) return
         // Always query the current hand/controller pose, not just when pinching
-        val activePose: Pose? = scene.getControllerPoseAtTime(true, System.currentTimeMillis())?.pose
+        val rawPose: Pose? = scene.getControllerPoseAtTime(true, System.currentTimeMillis())?.pose
             ?: scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
             ?: handState.leftPose
             ?: handState.rightPose
-            ?: return
+        val activePose = rawPose ?: return
         val prevState = lastHandState
         val prevPose = prevState?.leftPose ?: prevState?.rightPose
         val dx = if (prevPose != null) activePose.t.x - prevPose.t.x else 0f
