@@ -350,6 +350,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         } ?: return
 
         val avatarBody = localPlayerAvatar.getComponent<AvatarBody>()
+        cachedAvatarBody = avatarBody
         val handState = HandTrackingDetector.detect(avatarBody, scene)
 
         // Process active panel manipulation modes (resize/distance/move)
@@ -575,27 +576,19 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private var moveRelativePose: Pose? = null
     /** Which hand clicked the button to start the mode (true=left, false=right). */
     private var preferLeftHand: Boolean? = null
+    /** Cached avatar body for button-state checks in startPanelMode. */
+    private var cachedAvatarBody: AvatarBody? = null
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     override fun startPanelMode(id: Int, mode: PanelControlMode) {
-        val active = entityIdMap[id] ?: return
-        // Determine which hand clicked: get both hand poses, pick the one closer
-        // to the panel's current world position
-        val leftP = scene.getControllerPoseAtTime(true, System.currentTimeMillis())
-        val rightP = scene.getControllerPoseAtTime(false, System.currentTimeMillis())
-        if (leftP != null && rightP != null) {
-            val panelWorld = try {
-                active.entity.getComponent<Transform>().transform.t
-            } catch (_: Exception) { null }
-            if (panelWorld != null) {
-                val leftDist = leftP.pose.t.minus(panelWorld).length()
-                val rightDist = rightP.pose.t.minus(panelWorld).length()
-                preferLeftHand = leftDist < rightDist
-            } else {
-                preferLeftHand = null
-            }
-        } else {
-            preferLeftHand = if (leftP != null) true else if (rightP != null) false else null
+        // Determine which hand clicked: the one with a non-zero buttonState
+        val ab = cachedAvatarBody
+        val leftBtn = ab?.leftHand?.tryGetComponent<Controller>()?.buttonState ?: 0
+        val rightBtn = ab?.rightHand?.tryGetComponent<Controller>()?.buttonState ?: 0
+        preferLeftHand = when {
+            leftBtn != 0 -> true
+            rightBtn != 0 -> false
+            else -> null
         }
         panelModes[id] = mode
         if (mode == PanelControlMode.MOVE) {
