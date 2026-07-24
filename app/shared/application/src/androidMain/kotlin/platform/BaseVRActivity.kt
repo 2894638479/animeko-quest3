@@ -571,8 +571,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private var lastHandState: HandTrackingDetector.HandState? = null
     /** Previous frame's raw hand/controller pose, for delta computation. */
     private var lastRawPose: Pose? = null
-    /** Which hand is currently driving the manipulation (true=left, false=right, null=undecided). */
-    private var activeHandIsLeft: Boolean? = null
     /** For MOVE mode: relative offset from hand to panel, maintained each frame. */
     private var moveRelativePose: Pose? = null
 
@@ -588,7 +586,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         panelModes.remove(id)
         if (panelModes.isEmpty()) {
             lastRawPose = null
-            activeHandIsLeft = null
             moveRelativePose = null
         }
     }
@@ -603,7 +600,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun processPanelModes(handState: HandTrackingDetector.HandState, avatarBody: AvatarBody) {
         if (panelModes.isEmpty()) {
-            activeHandIsLeft = null
             lastRawPose = null
             moveRelativePose = null
             return
@@ -617,7 +613,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                       ButtonBits.ButtonX or ButtonBits.ButtonY
         if (handState.isDragging || (leftBtn and endMask) != 0 || (rightBtn and endMask) != 0) {
             panelModes.clear()
-            activeHandIsLeft = null
             lastRawPose = null
             moveRelativePose = null
             return
@@ -629,15 +624,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val rightPose: Pose? = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
             ?: handState.rightPose
 
-        // Pick hand each frame — the one with valid pose, preferring right if both valid
-        activeHandIsLeft = when {
-            leftPose != null && rightPose != null -> false  // right if both valid
-            leftPose != null -> true
-            rightPose != null -> false
-            else -> activeHandIsLeft  // neither valid → keep previous
-        }
-
-        val activePose: Pose = if (activeHandIsLeft == true) leftPose ?: return else rightPose ?: return
+        // Use whatever hand has a valid pose — no locking, no preference
+        val activePose: Pose = leftPose ?: rightPose ?: return
 
         val prevPose = lastRawPose
         lastRawPose = activePose
