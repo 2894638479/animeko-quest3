@@ -573,12 +573,33 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private var lastRawPose: Pose? = null
     /** For MOVE mode: relative offset from hand to panel, maintained each frame. */
     private var moveRelativePose: Pose? = null
+    /** Which hand clicked the button to start the mode (true=left, false=right). */
+    private var preferLeftHand: Boolean? = null
 
+    @OptIn(SpatialSDKExperimentalAPI::class)
     override fun startPanelMode(id: Int, mode: PanelControlMode) {
+        val active = entityIdMap[id] ?: return
+        // Determine which hand clicked: get both hand poses, pick the one closer
+        // to the panel's current world position
+        val leftP = scene.getControllerPoseAtTime(true, System.currentTimeMillis())
+        val rightP = scene.getControllerPoseAtTime(false, System.currentTimeMillis())
+        if (leftP != null && rightP != null) {
+            val panelWorld = try {
+                active.entity.getComponent<Transform>().transform.t
+            } catch (_: Exception) { null }
+            if (panelWorld != null) {
+                val leftDist = leftP.pose.t.minus(panelWorld).length()
+                val rightDist = rightP.pose.t.minus(panelWorld).length()
+                preferLeftHand = leftDist < rightDist
+            } else {
+                preferLeftHand = null
+            }
+        } else {
+            preferLeftHand = if (leftP != null) true else if (rightP != null) false else null
+        }
         panelModes[id] = mode
         if (mode == PanelControlMode.MOVE) {
-            // Capture the initial relative offset for grab-like behavior
-            moveRelativePose = null // will be set on first frame with valid poses
+            moveRelativePose = null
         }
     }
 
@@ -587,6 +608,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (panelModes.isEmpty()) {
             lastRawPose = null
             moveRelativePose = null
+            preferLeftHand = null
         }
     }
 
@@ -602,6 +624,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (panelModes.isEmpty()) {
             lastRawPose = null
             moveRelativePose = null
+            preferLeftHand = null
             return
         }
 
@@ -615,6 +638,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             panelModes.clear()
             lastRawPose = null
             moveRelativePose = null
+            preferLeftHand = null
             return
         }
 
@@ -624,8 +648,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val rightPose: Pose? = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
             ?: handState.rightPose
 
-        // Use whatever hand has a valid pose — no locking, no preference
-        val activePose: Pose = leftPose ?: rightPose ?: return
+        // Use the hand that was closest to the panel when mode started
+        val activePose: Pose = when {
+            preferLeftHand == true -> leftPose
+            preferLeftHand == false -> rightPose
+            else -> leftPose ?: rightPose
+        } ?: return
 
         val prevPose = lastRawPose
         lastRawPose = activePose
