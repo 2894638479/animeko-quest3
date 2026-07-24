@@ -626,11 +626,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val dx = if (prevPose != null) activePose.t.x - prevPose.t.x else 0f
         val dz = if (prevPose != null) activePose.t.z - prevPose.t.z else 0f
 
-        // Get parent's world transform for MOVE mode local-space conversion
-        val parentWorld: Pose? = try {
-            mainPanelEntity.getComponent<Transform>().transform
-        } catch (_: Exception) { null }
-
         for ((id, mode) in panelModes.toList()) {
             val active = entityIdMap[id] ?: continue
             when (mode) {
@@ -643,13 +638,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                 }
                 PanelControlMode.MOVE -> {
                     try {
-                        // Convert world hand pose to local space relative to parent
-                        val localPose = if (parentWorld != null && isPanelBound(id)) {
-                            parentWorld.inverse() * activePose
-                        } else {
-                            activePose
+                        if (prevPose != null) {
+                            // Apply world-space hand movement delta to current local position
+                            val delta = activePose.t.minus(prevPose.t)
+                            val curLocal = active.entity.getComponent<Transform>().transform.t
+                            active.entity.setComponent(Transform(Pose(
+                                curLocal.plus(delta),
+                                active.entity.getComponent<Transform>().transform.q,
+                            )))
                         }
-                        active.entity.setComponent(Transform(localPose))
                     } catch (_: Exception) {}
                 }
                 else -> {}
