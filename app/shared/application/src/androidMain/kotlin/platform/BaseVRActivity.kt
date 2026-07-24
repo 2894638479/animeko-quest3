@@ -583,6 +583,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
      * Process per-panel manipulation modes using hand/controller pose.
      * Called every frame from onSceneTick.
      */
+    @OptIn(SpatialSDKExperimentalAPI::class)
     private fun processPanelModes(handState: HandTrackingDetector.HandState) {
         if (panelModes.isEmpty()) return
         // Always query the current hand/controller pose, not just when pinching
