@@ -629,18 +629,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val rightPose: Pose? = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
             ?: handState.rightPose
 
-        // Lock onto one hand; prefer the one that's actually moving
-        if (activeHandIsLeft == null) {
-            val prev = lastRawPose
-            activeHandIsLeft = when {
-                leftPose != null && rightPose != null && prev != null -> {
-                    if (rightPose.t.minus(prev.t).length() >= leftPose.t.minus(prev.t).length())
-                        false else true  // pick the hand closer to last known position
-                }
-                rightPose != null -> false  // prefer right
-                leftPose != null -> true
-                else -> null
-            }
+        // Pick hand each frame — the one with valid pose, preferring right if both valid
+        activeHandIsLeft = when {
+            leftPose != null && rightPose != null -> false  // right if both valid
+            leftPose != null -> true
+            rightPose != null -> false
+            else -> activeHandIsLeft  // neither valid → keep previous
         }
 
         val activePose: Pose = if (activeHandIsLeft == true) leftPose ?: return else rightPose ?: return
