@@ -287,6 +287,9 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         for ((entry, item) in panelEntries) {
             for ((entity, _) in item.panels) {
+                // Don't disable hittable on unbound panels — they can be grabbed independently
+                val panelId = entityToPanelId[entity]
+                if (!enableInteraction && panelId != null && !boundPanels.contains(panelId)) continue
                 val hittable = if (!enableInteraction) {
                     MeshCollision.NoCollision
                 } else when (entry.hittable) {
@@ -380,33 +383,94 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             scene.getControllerPoseAtTime(false, System.currentTimeMillis())
         }
 
-        controllerDragger.drag(
-            if (leftSqueeze) leftCp else null,
-            if (rightSqueeze) rightCp else null,
-            thumbX, thumbY,
-        )
+        val target = findUnboundDragTarget(leftPose, rightPose)
+        if (target != null) {
+            dragUnboundPanel(target, leftPose, rightPose, thumbX, thumbY)
+        } else {
+            controllerDragger.drag(
+                if (leftSqueeze) leftCp else null,
+                if (rightSqueeze) rightCp else null,
+                thumbX, thumbY,
+            )
+        }
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun tickHands(handState: HandTrackingDetector.HandState) {
-        // Suppress panel interaction while pinching (dragging)
         setHittable(!handState.isDragging)
+        val leftPose = handState.leftPose
+        val rightPose = handState.rightPose
+        val leftCp = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+        val rightCp = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
 
-        // For hand tracking, convert hand poses to ControllerPose for the dragger.
-        // Hand tracking has no thumbstick — all manipulation is via pinch + hand movement.
-        val leftCp = handState.leftPose?.let { pose ->
-            scene.getControllerPoseAtTime(true, System.currentTimeMillis())
+        val target = findUnboundDragTarget(leftPose, rightPose)
+        if (target != null) {
+            dragUnboundPanel(target, leftPose, rightPose, 0f, 0f)
+        } else {
+            controllerDragger.drag(
+                if (handState.leftActive) leftCp else null,
+                if (handState.rightActive) rightCp else null,
+                thumbX = 0f, thumbY = 0f,
+            )
         }
-        val rightCp = handState.rightPose?.let {
-            scene.getControllerPoseAtTime(false, System.currentTimeMillis())
-        }
-
-        controllerDragger.drag(
-            if (handState.leftActive) leftCp else null,
-            if (handState.rightActive) rightCp else null,
-            thumbX = 0f, thumbY = 0f, // no thumbstick on bare hands
-        )
     }
+
+    /** Find the unbound panel closest to the active controller, within grab range. */
+    private fun findUnboundDragTarget(leftPose: Pose?, rightPose: Pose?): Int? {
+        val handPos = leftPose?.t ?: rightPose?.t ?: return null
+        var bestId: Int? = null
+        var bestDist = Float.MAX_VALUE
+        for ((id, active) in entityIdMap) {
+            if (boundPanels.contains(id)) continue
+            val panelPos = try {
+                active.entity.getComponent<Transform>().transform.t
+            } catch (_: Exception) { continue }
+            val dist = handPos.minus(panelPos).length()
+            if (dist < 0.5f && dist < bestDist) {
+                bestDist = dist
+                bestId = id
+            }
+        }
+        return bestId
+    }
+
+    /** Apply drag to an unbound panel, maintaining relative pose like the main dragger. */
+    @OptIn(SpatialSDKExperimentalAPI::class)
+    private fun dragUnboundPanel(id: Int, leftPose: Pose?, rightPose: Pose?, thumbX: Float, thumbY: Float) {
+        if (unboundDragTargetId != id) {
+            unboundDragTargetId = id
+            unboundDragStatus = ControllerDragger.Idle()
+        }
+        val active = entityIdMap[id] ?: return
+        val entity = active.entity
+        // Simple single-hand drag for unbound panels
+        val pose = leftPose ?: rightPose ?: run {
+            unboundDragTargetId = null
+            return
+        }
+
+        val status = unboundDragStatus
+        // Use the same state pattern as ControllerDragger
+        if (status is ControllerDragger.LeftHand) {
+            entity.setComponent(Transform(pose * status.relativePose))
+            if (abs(thumbY) > 0.0001f || abs(thumbX) > 0.0001f) {
+                unboundDragStatus = ControllerDragger.LeftHand(pose.inverse() * entity.getComponent<Transform>().transform)
+            }
+        } else if (status is ControllerDragger.RightHand) {
+            entity.setComponent(Transform(pose * status.relativePose))
+            if (abs(thumbY) > 0.0001f || abs(thumbX) > 0.0001f) {
+                unboundDragStatus = ControllerDragger.RightHand(pose.inverse() * entity.getComponent<Transform>().transform)
+            }
+        } else {
+            // First frame: capture relative pose
+            val rel = pose.inverse() * entity.getComponent<Transform>().transform
+            unboundDragStatus = ControllerDragger.LeftHand(rel)
+        }
+    }
+
+    /** Dragger state for unbound panel that is currently being grabbed. */
+    private var unboundDragTargetId: Int? = null
+    private var unboundDragStatus: ControllerDragger.Status = ControllerDragger.Idle()
 
     /** Thread-safe entity ID counter. */
     private val nextEntityId = AtomicInteger(0)
