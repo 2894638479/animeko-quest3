@@ -156,62 +156,50 @@ fun VrPanelControlBar(
  */
 @Composable
 fun VrPanelControlBarHost(
-    panelManager: PanelManager,
-    panelId: Int,
+    panel: PanelHandle,
     content: @Composable () -> Unit,
 ) {
     var controlBarVisible by remember { mutableStateOf(true) }
     var activeMode by remember { mutableStateOf(PanelControlMode.NONE) }
-    val isBound by remember(panelId) { mutableStateOf(panelManager.isPanelBound(panelId)) }
+    val isBound by remember { mutableStateOf(panel.isBound) }
 
     // Sync with actual state: if mode was ended externally (pinch), reset local state
-    val actualMode = panelManager.getPanelActiveMode(panelId)
-    if (activeMode != PanelControlMode.NONE && actualMode == PanelControlMode.NONE) {
+    if (activeMode != PanelControlMode.NONE && panel.activeMode == PanelControlMode.NONE) {
         activeMode = PanelControlMode.NONE
     }
 
     Box {
-        // Main content
         content()
-
-        // Control bar overlay at top — sits ABOVE content in z-order
         VrPanelControlBar(
             visible = controlBarVisible || activeMode != PanelControlMode.NONE,
             isBound = isBound,
             onResize = {
                 if (activeMode == PanelControlMode.RESIZE) {
-                    panelManager.stopPanelMode(panelId)
-                    activeMode = PanelControlMode.NONE
+                    panel.stopMode(); activeMode = PanelControlMode.NONE
                 } else {
-                    panelManager.stopPanelMode(panelId) // stop any other mode
-                    panelManager.startPanelMode(panelId, PanelControlMode.RESIZE)
+                    panel.stopMode(); panel.startMode(PanelControlMode.RESIZE)
                     activeMode = PanelControlMode.RESIZE
                 }
             },
             onDistance = {
                 if (activeMode == PanelControlMode.DISTANCE) {
-                    panelManager.stopPanelMode(panelId)
-                    activeMode = PanelControlMode.NONE
+                    panel.stopMode(); activeMode = PanelControlMode.NONE
                 } else {
-                    panelManager.stopPanelMode(panelId)
-                    panelManager.startPanelMode(panelId, PanelControlMode.DISTANCE)
+                    panel.stopMode(); panel.startMode(PanelControlMode.DISTANCE)
                     activeMode = PanelControlMode.DISTANCE
                 }
             },
             onMove = {
                 if (activeMode == PanelControlMode.MOVE) {
-                    panelManager.stopPanelMode(panelId)
-                    activeMode = PanelControlMode.NONE
+                    panel.stopMode(); activeMode = PanelControlMode.NONE
                 } else {
-                    panelManager.stopPanelMode(panelId)
-                    panelManager.startPanelMode(panelId, PanelControlMode.MOVE)
+                    panel.stopMode(); panel.startMode(PanelControlMode.MOVE)
                     activeMode = PanelControlMode.MOVE
                 }
             },
-            onToggleBind = { panelManager.togglePanelBind(panelId) },
+            onToggleBind = { panel.toggleBind() },
             onRatioSelected = { w, h ->
-                panelManager.changePanelRatio(panelId, w, h) { /* uses stored original content */ }
-                activeMode = PanelControlMode.NONE
+                panel.changeRatio(w, h); activeMode = PanelControlMode.NONE
             },
             onToggleVisibility = { controlBarVisible = !controlBarVisible },
             modifier = Modifier.align(Alignment.TopCenter),

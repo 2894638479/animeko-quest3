@@ -12,37 +12,30 @@ package me.him188.ani.app.ui.foundation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 
+/**
+ * Handle to a spatial panel created via [PanelManager.openPanel].
+ * All panel manipulation operations are methods on this handle —
+ * no need for integer IDs.
+ */
+interface PanelHandle {
+    fun close()
+    fun setScale(scale: Float)
+    fun setDistance(distance: Float)
+    fun toggleBind()
+    val isBound: Boolean
+    val scale: Float
+    fun startMode(mode: PanelControlMode)
+    fun stopMode()
+    val activeMode: PanelControlMode
+    fun changeRatio(widthPx: Int, heightPx: Int)
+}
+
+/**
+ * Factory for creating spatial panels. Only exposes [openPanel];
+ * all other operations are on the returned [PanelHandle].
+ */
 interface PanelManager {
-    fun openPanel(entry: PanelEntry, content: @Composable () -> Unit): Int
-    fun closePanel(id: Int)
-
-    /** Adjust the scale of a specific panel by ID. */
-    fun setPanelScale(id: Int, scale: Float)
-
-    /** Adjust the distance (Z offset) of a specific panel. */
-    fun setPanelDistance(id: Int, distance: Float)
-
-    /** Toggle whether the panel is attached to the main panel via [TransformParent]. */
-    fun togglePanelBind(id: Int)
-
-    /** True if this panel is bound (child of) the main panel. */
-    fun isPanelBound(id: Int): Boolean
-
-    /** Get current panel scale. Returns 1f if panel not found. */
-    fun getPanelScale(id: Int): Float
-
-    /** Replace the panel with one of a different [PanelSize] (aspect ratio). */
-    fun changePanelRatio(id: Int, widthPx: Int, heightPx: Int, content: @Composable () -> Unit): Int
-
-    /** Start a continuous panel manipulation mode (resize/distance/move).
-     *  The mode stays active until [stopPanelMode] is called. */
-    fun startPanelMode(id: Int, mode: PanelControlMode)
-
-    /** Stop the current panel manipulation mode. */
-    fun stopPanelMode(id: Int)
-
-    /** Returns the currently active mode for a panel, or NONE. */
-    fun getPanelActiveMode(id: Int): PanelControlMode
+    fun openPanel(entry: PanelEntry, content: @Composable () -> Unit): PanelHandle
 
     enum class PanelSize(val widthPx: Int,val heightPx: Int) {
         WIDE(3840,2160),TALL(2160,3840),SIDE(960,1920),
@@ -61,8 +54,8 @@ interface PanelManager {
     }
     data class PanelEntry(val size: PanelSize,val position: PanelPosition,val hittable: PanelHittable = PanelHittable.TRUE) {
         companion object {
-            val all = PanelSize.entries.flatMap { 
-                PanelPosition.entries.flatMap { pos -> 
+            val all = PanelSize.entries.flatMap {
+                PanelPosition.entries.flatMap { pos ->
                     PanelHittable.entries.map { hittable ->
                         PanelEntry(it,pos,hittable)
                     }

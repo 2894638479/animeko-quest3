@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.him188.ani.app.ui.foundation.LocalPanelManager
+import me.him188.ani.app.ui.foundation.PanelHandle
 import me.him188.ani.app.ui.foundation.PanelManager
 
 @Composable
@@ -79,14 +80,14 @@ fun ModalSideSheet(
     val focusManager = LocalFocusManager.current
 
     val panelManager = LocalPanelManager.current ?: return
-    var panelId by remember { mutableStateOf<Int?>(null) }
+    var panel by remember { mutableStateOf<PanelHandle?>(null) }
     LaunchedEffect(state.dismissed) {
         if (state.dismissed) {
-            panelId?.let { panelManager.closePanel(it) }
-            panelId = null
+            panel?.close()
+            panel = null
             onDismiss()
-        } else if (panelId == null) {
-            panelId = panelManager.openPanel(PanelManager.PanelEntry(PanelManager.PanelSize.SIDE, PanelManager.PanelPosition.RIGHT)) {
+        } else if (panel == null) {
+            panel = panelManager.openPanel(PanelManager.PanelEntry(PanelManager.PanelSize.SIDE, PanelManager.PanelPosition.RIGHT)) {
                 Surface(
                     modifier = modifier.fillMaxSize(),
                     shape = shape,

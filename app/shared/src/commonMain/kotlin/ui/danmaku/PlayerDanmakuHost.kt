@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.Flow
 import me.him188.ani.app.ui.foundation.LocalPanelManager
+import me.him188.ani.app.ui.foundation.PanelHandle
 import me.him188.ani.app.ui.foundation.PanelManager
 import me.him188.ani.danmaku.ui.DanmakuHost
 import me.him188.ani.danmaku.ui.DanmakuHostState
@@ -60,13 +61,13 @@ fun PlayerDanmakuHost(
 
 
     val panelManager = LocalPanelManager.current ?: return
-    var panelId by remember { mutableStateOf<Int?>(null) }
+    var panel by remember { mutableStateOf<PanelHandle?>(null) }
     DisposableEffect(Unit) {
-        panelId = panelManager.openPanel(PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, PanelManager.PanelPosition.MIDDLE, PanelManager.PanelHittable.FALSE)) {
+        panel = panelManager.openPanel(PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, PanelManager.PanelPosition.MIDDLE, PanelManager.PanelHittable.FALSE)) {
             DanmakuHost(danmakuHostState, modifier)
         }
         onDispose {
-            panelId?.let { panelManager.closePanel(it) }
+            panel?.close()
         }
     }
 }

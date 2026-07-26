@@ -41,19 +41,17 @@ fun VrPanelDialog(
 
     if (panelManager != null) {
         // VR environment: render content in a spatial panel
-        var panelId by remember { mutableStateOf<Int?>(null) }
+        var panel by remember { mutableStateOf<PanelHandle?>(null) }
         DisposableEffect(Unit) {
-            panelId = panelManager.openPanel(
+            panel = panelManager.openPanel(
                 PanelManager.PanelEntry(
                     PanelManager.PanelSize.SIDE,
                     position,
                     PanelManager.PanelHittable.TRUE,
                 ),
-            ) {
-                content()
-            }
+            ) { content() }
             onDispose {
-                panelId?.let { id -> panelManager.closePanel(id) }
+                panel?.close()
                 onDismissRequest()
             }
         }
