@@ -39,8 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import me.him188.ani.app.ui.foundation.VrPanelDialog
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -191,10 +190,7 @@ fun EpisodeComment(
                 onClickReport = {},
             )
             if (canAddReaction && showReactionPicker) {
-                Popup(
-                    onDismissRequest = { showReactionPicker = false },
-                    properties = PopupProperties(focusable = true),
-                ) {
+                VrPanelDialog(onDismissRequest = { showReactionPicker = false }) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
                         tonalElevation = 6.dp,
