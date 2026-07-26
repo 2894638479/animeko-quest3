@@ -196,7 +196,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val mainPanel = SpatialPanel(mainPanelEntity, entry, this)
         mainPanel.content = { composeContent?.invoke() }
         panelByEntity[mainPanelEntity] = mainPanel
-        item.panels[mainPanelEntity] = { VrPanelControlBarHost(mainPanel) { composeContent?.invoke() } }
+        item.panels[mainPanelEntity] = { VrPanelControlBarHost(mainPanel, isMainPanel = true) { composeContent?.invoke() } }
         recenterPanel()
 
         systemManager.findSystem<SceneObjectSystem>().getSceneObject(mainPanelEntity)?.thenAccept { o ->
@@ -372,7 +372,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             Scale(Vector3(ms)), TransformParent(mainPanelEntity), Transform(rp))
         val panel = SpatialPanel(entity, entry, this)
         panel.content = content
-        item.panels[entity] = { VrPanelControlBarHost(panel) { content() } }
+        item.panels[entity] = { VrPanelControlBarHost(panel, isMainPanel = false) { content() } }
         panelByEntity[entity] = panel
         systemManager.findSystem<SceneObjectSystem>().getSceneObject(entity)?.thenAccept { o ->
             o.addInputListener(trackInputHand(false))
@@ -405,7 +405,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         try { entity.removeComponent<Panel>() } catch (_: Exception) {}
         entity.setComponent(if (newEntry.hittable == PanelManager.PanelHittable.TRUE) Panel(newItem.id)
                             else Panel(newItem.id, MeshCollision.NoCollision))
-        newItem.panels[entity] = { VrPanelControlBarHost(panel) { c() } }
+        newItem.panels[entity] = { VrPanelControlBarHost(panel, isMainPanel = false) { c() } }
         panel.entry = newEntry
     }
 
@@ -421,7 +421,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val endMask = ButtonBits.ButtonSqueezeL or ButtonBits.ButtonSqueezeR or
                       ButtonBits.ButtonA or ButtonBits.ButtonB or ButtonBits.ButtonX or ButtonBits.ButtonY
         if (hs.isDragging || (leftBtn and endMask) != 0 || (rightBtn and endMask) != 0) {
-            for (p in active) { p.activeMode = PanelControlMode.NONE; p.moveRelativePose = null }
+            for (p in active) { p.stopMode() }
             lastRawPose = null; preferLeftHand = null; return
         }
 

@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 fun VrPanelControlBar(
     visible: Boolean,
     isBound: Boolean,
+    isMainPanel: Boolean,
     onResize: () -> Unit,
     onDistance: () -> Unit,
     onMove: () -> Unit,
@@ -114,12 +115,15 @@ fun VrPanelControlBar(
                     IconButton(onClick = onMove, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Rounded.OpenWith, "Move", modifier = Modifier.size(20.dp))
                     }
-                    IconButton(onClick = onToggleBind, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            if (isBound) Icons.Rounded.Link else Icons.Rounded.LinkOff,
-                            if (isBound) "Unbind" else "Bind",
-                            modifier = Modifier.size(20.dp),
-                        )
+                    // Main panel: no bind button. Bound panel: only unbind. Unbound: all buttons.
+                    if (!isMainPanel) {
+                        IconButton(onClick = onToggleBind, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Rounded.LinkOff,
+                                if (isBound) "Unbind" else "Bind",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -157,6 +161,7 @@ fun VrPanelControlBar(
 @Composable
 fun VrPanelControlBarHost(
     panel: PanelHandle,
+    isMainPanel: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     var controlBarVisible by remember { mutableStateOf(true) }
@@ -173,29 +178,18 @@ fun VrPanelControlBarHost(
         VrPanelControlBar(
             visible = controlBarVisible || activeMode != PanelControlMode.NONE,
             isBound = isBound,
+            isMainPanel = isMainPanel,
             onResize = {
-                if (activeMode == PanelControlMode.RESIZE) {
-                    panel.stopMode(); activeMode = PanelControlMode.NONE
-                } else {
-                    panel.stopMode(); panel.startMode(PanelControlMode.RESIZE)
-                    activeMode = PanelControlMode.RESIZE
-                }
+                panel.startMode(PanelControlMode.RESIZE)
+                activeMode = PanelControlMode.RESIZE
             },
             onDistance = {
-                if (activeMode == PanelControlMode.DISTANCE) {
-                    panel.stopMode(); activeMode = PanelControlMode.NONE
-                } else {
-                    panel.stopMode(); panel.startMode(PanelControlMode.DISTANCE)
-                    activeMode = PanelControlMode.DISTANCE
-                }
+                panel.startMode(PanelControlMode.DISTANCE)
+                activeMode = PanelControlMode.DISTANCE
             },
             onMove = {
-                if (activeMode == PanelControlMode.MOVE) {
-                    panel.stopMode(); activeMode = PanelControlMode.NONE
-                } else {
-                    panel.stopMode(); panel.startMode(PanelControlMode.MOVE)
-                    activeMode = PanelControlMode.MOVE
-                }
+                panel.startMode(PanelControlMode.MOVE)
+                activeMode = PanelControlMode.MOVE
             },
             onToggleBind = { panel.toggleBind() },
             onRatioSelected = { w, h ->

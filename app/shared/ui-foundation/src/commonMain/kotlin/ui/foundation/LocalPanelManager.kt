@@ -19,6 +19,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
  */
 interface PanelHandle {
     fun close()
+    fun setHittable(enabled: Boolean)
     fun setScale(scale: Float)
     fun setDistance(distance: Float)
     fun toggleBind()

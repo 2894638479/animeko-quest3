@@ -7,6 +7,7 @@ package me.him188.ani.app.platform
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Vector3
+import com.meta.spatial.toolkit.Hittable
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.Panel
 import com.meta.spatial.toolkit.Scale
@@ -48,6 +49,14 @@ class SpatialPanel internal constructor(
 
     override fun close() = host.removePanel(this)
 
+    override fun setHittable(enabled: Boolean) {
+        val h = if (enabled) {
+            if (entry.hittable == PanelManager.PanelHittable.TRUE) MeshCollision.LineTest
+            else MeshCollision.NoCollision
+        } else MeshCollision.NoCollision
+        try { entity.setComponent(Hittable(h)) } catch (_: Exception) {}
+    }
+
     override fun setScale(scale: Float) {
         entity.setComponent(Scale(Vector3(scale.coerceIn(0.1f, 10f))))
     }
@@ -74,11 +83,13 @@ class SpatialPanel internal constructor(
     override fun startMode(mode: PanelControlMode) {
         activeMode = mode
         moveRelativePose = null
+        setHittable(false)
     }
 
     override fun stopMode() {
         activeMode = PanelControlMode.NONE
         moveRelativePose = null
+        setHittable(true)
     }
 
     override fun changeRatio(widthPx: Int, heightPx: Int) {
