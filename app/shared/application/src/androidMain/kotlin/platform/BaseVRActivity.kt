@@ -418,9 +418,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         val leftBtn = ab.leftHand.tryGetComponent<Controller>()?.buttonState ?: 0
         val rightBtn = ab.rightHand.tryGetComponent<Controller>()?.buttonState ?: 0
-        val endMask = ButtonBits.ButtonSqueezeL or ButtonBits.ButtonSqueezeR or
-                      ButtonBits.ButtonA or ButtonBits.ButtonB or ButtonBits.ButtonX or ButtonBits.ButtonY
-        if (hs.isDragging || (leftBtn and endMask) != 0 || (rightBtn and endMask) != 0) {
+        // Any button press exits mode
+        if (hs.isDragging || leftBtn != 0 || rightBtn != 0) {
             for (p in active) { p.stopMode() }
             lastRawPose = null; preferLeftHand = null; return
         }

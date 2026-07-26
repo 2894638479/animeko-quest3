@@ -115,11 +115,11 @@ fun VrPanelControlBar(
                     IconButton(onClick = onMove, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Rounded.OpenWith, "Move", modifier = Modifier.size(20.dp))
                     }
-                    // Main panel: no bind button. Bound panel: only unbind. Unbound: all buttons.
+                    // Main panel: no bind button. Bound panel: show unbind (Link). Unbound: show bind (LinkOff).
                     if (!isMainPanel) {
                         IconButton(onClick = onToggleBind, modifier = Modifier.size(36.dp)) {
                             Icon(
-                                Icons.Rounded.LinkOff,
+                                if (isBound) Icons.Rounded.Link else Icons.Rounded.LinkOff,
                                 if (isBound) "Unbind" else "Bind",
                                 modifier = Modifier.size(20.dp),
                             )
