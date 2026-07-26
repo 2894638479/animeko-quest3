@@ -239,22 +239,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         recenterPanel()
 
         val sceneObjectSystem = systemManager.findSystem<SceneObjectSystem>()
-        sceneObjectSystem.getSceneObject(mainPanelEntity)?.thenAccept { sceneObject ->
-            sceneObject.addInputListener(object : InputListener {
-                override fun onInput(
-                    receiver: SceneObject,
-                    hitInfo: HitInfo,
-                    sourceOfInput: Entity,
-                    changed: Int,
-                    buttonState: Int,
-                    downTime: Long
-                ): Boolean {
-                    // Record which hand/controller triggered this input
-                    lastInputHandEntity = sourceOfInput
-                    // Suppress input if Squeeze is held
-                    return (buttonState and (ButtonBits.ButtonSqueezeL or ButtonBits.ButtonSqueezeR)) != 0
-                }
-            })
+        sceneObjectSystem.getSceneObject(mainPanelEntity)?.thenAccept { o ->
+            o.addInputListener(trackInputHand(true))
         }
 
         scene.enablePassthrough(true)
@@ -262,6 +248,33 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT)
         scene.setPreferredDisplayRate(120f)
+    }
+
+    /**
+     * Creates an [InputListener] that records which hand triggered a click.
+     * Only records on actual button state CHANGES (not hover/move events).
+     *
+     * @param suppressOnSqueeze if true, returns true when squeeze is held to
+     *   prevent the event from reaching Compose (used for main panel drag).
+     */
+    private fun trackInputHand(suppressOnSqueeze: Boolean): InputListener {
+        return object : InputListener {
+            override fun onInput(
+                receiver: SceneObject,
+                hitInfo: HitInfo,
+                sourceOfInput: Entity,
+                changed: Int,
+                buttonState: Int,
+                downTime: Long,
+            ): Boolean {
+                // Only record on actual button presses, not hover/move
+                if (changed != 0) {
+                    lastInputHandEntity = sourceOfInput
+                }
+                return suppressOnSqueeze &&
+                    (buttonState and (ButtonBits.ButtonSqueezeL or ButtonBits.ButtonSqueezeR)) != 0
+            }
+        }
     }
 
     /** Cached hittable state to avoid per-frame setComponent calls. */
@@ -484,18 +497,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         entityIdMap[id] = ActivePanel(entity, entry)
         entityToPanelId[entity] = id
         boundPanels.add(id)
-        // Record which hand clicked on this sub-panel
-        val sso = systemManager.findSystem<SceneObjectSystem>()
-        sso.getSceneObject(entity)?.thenAccept { sobj ->
-            sobj.addInputListener(object : InputListener {
-                override fun onInput(
-                    receiver: SceneObject, hitInfo: HitInfo,
-                    sourceOfInput: Entity, changed: Int, buttonState: Int, downTime: Long,
-                ): Boolean {
-                    lastInputHandEntity = sourceOfInput
-                    return false
-                }
-            })
+        systemManager.findSystem<SceneObjectSystem>().getSceneObject(entity)?.thenAccept { o ->
+            o.addInputListener(trackInputHand(false))
         }
         return id
     }
