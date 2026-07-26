@@ -70,7 +70,6 @@ import me.him188.ani.app.ui.foundation.widgets.LocalToaster
 import me.him188.ani.app.ui.foundation.widgets.Toaster
 import me.him188.ani.app.ui.main.AniApp
 import me.him188.ani.app.ui.main.AniSubContent
-import kotlin.math.abs
 import org.koin.android.ext.android.inject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -346,52 +345,74 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     ) {
         val leftController = avatarBody.leftHand.tryGetComponent<Controller>()
         val rightController = avatarBody.rightHand.tryGetComponent<Controller>()
-
         val leftSqueeze = handState.leftActive
         val rightSqueeze = handState.rightActive
-
-        // Suppress panel interaction while dragging
         setHittable(!handState.isDragging)
-
         val leftPose = handState.leftPose
         val rightPose = handState.rightPose
 
-        var thumbX = 0f
-        var thumbY = 0f
+        // Determine per-hand targets
+        val leftTarget = if (leftSqueeze) findOrKeepTarget(leftPose, ref = leftDragTarget) else null
+        val rightTarget = if (rightSqueeze) findOrKeepTarget(rightPose, ref = rightDragTarget) else null
+        leftDragTarget = leftTarget
+        rightDragTarget = rightTarget
 
-        // Only process thumbstick from the single active controller
-        if (leftSqueeze && !rightSqueeze && leftController != null) {
-            if (leftController.buttonState and ButtonBits.ButtonThumbLU != 0) thumbY += 1f
-            if (leftController.buttonState and ButtonBits.ButtonThumbLD != 0) thumbY -= 1f
-            if (leftController.buttonState and ButtonBits.ButtonThumbLL != 0) thumbX -= 1f
-            if (leftController.buttonState and ButtonBits.ButtonThumbLR != 0) thumbX += 1f
-        } else if (rightSqueeze && !leftSqueeze && rightController != null) {
-            if (rightController.buttonState and ButtonBits.ButtonThumbRU != 0) thumbY += 1f
-            if (rightController.buttonState and ButtonBits.ButtonThumbRD != 0) thumbY -= 1f
-            if (rightController.buttonState and ButtonBits.ButtonThumbRL != 0) thumbX -= 1f
-            if (rightController.buttonState and ButtonBits.ButtonThumbRR != 0) thumbX += 1f
-        }
-        // Disallow diagonal thumbstick to prevent unintended combined actions
-        if (thumbX != 0f && thumbY != 0f) { thumbX = 0f; thumbY = 0f }
-
-        // Convert Pose to ControllerPose for the existing dragger interface
-        val leftCp = leftPose?.let { pose ->
-            val cp = scene.getControllerPoseAtTime(true, System.currentTimeMillis())
-            cp ?: scene.getControllerPoseAtTime(true, System.currentTimeMillis())
-        }
-        val rightCp = rightPose?.let {
-            scene.getControllerPoseAtTime(false, System.currentTimeMillis())
+        // Route: if both hands target the SAME unbound panel → two-hand drag
+        if (leftTarget != null && leftTarget == rightTarget) {
+            val cpL = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+            val cpR = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+            draggerFor(leftTarget!!).drag(cpL, cpR, 0f, 0f)
+            return
         }
 
-        val target = findUnboundDragTarget(leftPose, rightPose)
-        if (target != null) {
-            dragUnboundPanel(target, leftPose, rightPose, thumbX, thumbY)
-        } else {
-            controllerDragger.drag(
-                if (leftSqueeze) leftCp else null,
-                if (rightSqueeze) rightCp else null,
-                thumbX, thumbY,
-            )
+        // Route left hand to its target (or main panel)
+        if (leftSqueeze) {
+            if (leftTarget != null) {
+                val cp = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+                draggerFor(leftTarget!!).drag(cp, null, 0f, 0f)
+            } else {
+                val cp = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+                controllerDragger.drag(cp, null, 0f, 0f)
+            }
+        }
+
+        // Route right hand to its target (or main panel)
+        if (rightSqueeze) {
+            if (rightTarget != null) {
+                val cp = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+                draggerFor(rightTarget!!).drag(cp, null, 0f, 0f)
+            } else {
+                val cp = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+                controllerDragger.drag(cp, null, 0f, 0f)
+            }
+        }
+
+        // If neither hand is squeezing, reset targets
+        if (!leftSqueeze && !rightSqueeze) {
+            leftDragTarget = null; rightDragTarget = null
+        }
+
+        // Thumbstick (main panel only)
+        if (leftSqueeze && !rightSqueeze && leftTarget == null && leftController != null) {
+            var tx = 0f; var ty = 0f
+            if (leftController.buttonState and ButtonBits.ButtonThumbLU != 0) ty += 1f
+            if (leftController.buttonState and ButtonBits.ButtonThumbLD != 0) ty -= 1f
+            if (leftController.buttonState and ButtonBits.ButtonThumbLL != 0) tx -= 1f
+            if (leftController.buttonState and ButtonBits.ButtonThumbLR != 0) tx += 1f
+            if (tx != 0f || ty != 0f) {
+                val cp = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+                controllerDragger.drag(cp, null, tx, ty)
+            }
+        } else if (rightSqueeze && !leftSqueeze && rightTarget == null && rightController != null) {
+            var tx = 0f; var ty = 0f
+            if (rightController.buttonState and ButtonBits.ButtonThumbRU != 0) ty += 1f
+            if (rightController.buttonState and ButtonBits.ButtonThumbRD != 0) ty -= 1f
+            if (rightController.buttonState and ButtonBits.ButtonThumbRL != 0) tx -= 1f
+            if (rightController.buttonState and ButtonBits.ButtonThumbRR != 0) tx += 1f
+            if (tx != 0f || ty != 0f) {
+                val cp = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+                controllerDragger.drag(cp, null, tx, ty)
+            }
         }
     }
 
@@ -400,78 +421,87 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         setHittable(!handState.isDragging)
         val leftPose = handState.leftPose
         val rightPose = handState.rightPose
-        val leftCp = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
-        val rightCp = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+        val leftActive = handState.leftActive
+        val rightActive = handState.rightActive
 
-        val target = findUnboundDragTarget(leftPose, rightPose)
-        if (target != null) {
-            dragUnboundPanel(target, leftPose, rightPose, 0f, 0f)
-        } else {
-            controllerDragger.drag(
-                if (handState.leftActive) leftCp else null,
-                if (handState.rightActive) rightCp else null,
-                thumbX = 0f, thumbY = 0f,
-            )
+        val leftTarget = if (leftActive) findOrKeepTarget(leftPose, ref = leftDragTarget) else null
+        val rightTarget = if (rightActive) findOrKeepTarget(rightPose, ref = rightDragTarget) else null
+        leftDragTarget = leftTarget
+        rightDragTarget = rightTarget
+
+        if (leftTarget != null && leftTarget == rightTarget) {
+            val cpL = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+            val cpR = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+            draggerFor(leftTarget!!).drag(cpL, cpR, 0f, 0f)
+            return
+        }
+
+        if (leftActive) {
+            if (leftTarget != null) {
+                val cp = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+                draggerFor(leftTarget!!).drag(cp, null, 0f, 0f)
+            } else {
+                val cp = leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) }
+                controllerDragger.drag(cp, null, 0f, 0f)
+            }
+        }
+        if (rightActive) {
+            if (rightTarget != null) {
+                val cp = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+                draggerFor(rightTarget!!).drag(cp, null, 0f, 0f)
+            } else {
+                val cp = rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }
+                controllerDragger.drag(cp, null, 0f, 0f)
+            }
+        }
+        if (!leftActive && !rightActive) {
+            leftDragTarget = null; rightDragTarget = null
         }
     }
 
-    /** Find the unbound panel closest to the active controller, within grab range. */
-    private fun findUnboundDragTarget(leftPose: Pose?, rightPose: Pose?): Int? {
-        val handPos = leftPose?.t ?: rightPose?.t ?: return null
+    /** Find the unbound panel closest to the given hand position, within grab range. */
+    private fun findOrKeepTarget(handPose: Pose?, ref: Int?): Int? {
+        val pos = handPose?.t ?: return ref // keep existing target if no pose
+        // If already locked to a target, keep it while squeeze is held
+        if (ref != null) return ref
         var bestId: Int? = null
         var bestDist = Float.MAX_VALUE
         for ((id, active) in entityIdMap) {
-            // Check actual component state, not tracking set
             if (active.entity.tryGetComponent<TransformParent>() != null) continue
-            val panelPos = try {
-                active.entity.getComponent<Transform>().transform.t
-            } catch (_: Exception) { continue }
-            val dist = handPos.minus(panelPos).length()
-            if (dist < 0.5f && dist < bestDist) {
-                bestDist = dist
-                bestId = id
-            }
+            val panelPos = try { active.entity.getComponent<Transform>().transform.t }
+                catch (_: Exception) { continue }
+            val dist = pos.minus(panelPos).length()
+            if (dist < 0.5f && dist < bestDist) { bestDist = dist; bestId = id }
         }
         return bestId
     }
 
-    /** Apply drag to an unbound panel, maintaining relative pose like the main dragger. */
-    @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun dragUnboundPanel(id: Int, leftPose: Pose?, rightPose: Pose?, thumbX: Float, thumbY: Float) {
-        if (unboundDragTargetId != id) {
-            unboundDragTargetId = id
-            unboundDragStatus = ControllerDragger.Idle()
-        }
-        val active = entityIdMap[id] ?: return
-        val entity = active.entity
-        // Simple single-hand drag for unbound panels
-        val pose = leftPose ?: rightPose ?: run {
-            unboundDragTargetId = null
-            return
-        }
+    /** Draggers for unbound panels, keyed by panel ID. */
+    private val panelDraggers = ConcurrentHashMap<Int, ControllerDragger>()
+    /** Which unbound panel each hand is currently dragging (left, right). */
+    private var leftDragTarget: Int? = null
+    private var rightDragTarget: Int? = null
 
-        val status = unboundDragStatus
-        // Use the same state pattern as ControllerDragger
-        if (status is ControllerDragger.LeftHand) {
-            entity.setComponent(Transform(pose * status.relativePose))
-            if (abs(thumbY) > 0.0001f || abs(thumbX) > 0.0001f) {
-                unboundDragStatus = ControllerDragger.LeftHand(pose.inverse() * entity.getComponent<Transform>().transform)
+    /** Per-panel [ControllerDragger.Host] that reads/writes a single entity. */
+    private inner class PanelDragHost(private val entity: Entity) : ControllerDragger.Host {
+        override var pose: Pose
+            get() = entity.getComponent<Transform>().transform
+            set(value) { entity.setComponent(Transform(value)) }
+        override var scale: Float
+            get() = try { entity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
+            set(value) {
+                val s = value.coerceIn(0.1f, 10f)
+                entity.setComponent(Scale(Vector3(s)))
             }
-        } else if (status is ControllerDragger.RightHand) {
-            entity.setComponent(Transform(pose * status.relativePose))
-            if (abs(thumbY) > 0.0001f || abs(thumbX) > 0.0001f) {
-                unboundDragStatus = ControllerDragger.RightHand(pose.inverse() * entity.getComponent<Transform>().transform)
-            }
-        } else {
-            // First frame: capture relative pose
-            val rel = pose.inverse() * entity.getComponent<Transform>().transform
-            unboundDragStatus = ControllerDragger.LeftHand(rel)
-        }
     }
 
-    /** Dragger state for unbound panel that is currently being grabbed. */
-    private var unboundDragTargetId: Int? = null
-    private var unboundDragStatus: ControllerDragger.Status = ControllerDragger.Idle()
+    /** Get or create a dragger for an unbound panel. */
+    private fun draggerFor(id: Int): ControllerDragger {
+        return panelDraggers.getOrPut(id) {
+            val entity = entityIdMap[id]?.entity ?: error("no entity for $id")
+            ControllerDragger(PanelDragHost(entity))
+        }
+    }
 
     /** Thread-safe entity ID counter. */
     private val nextEntityId = AtomicInteger(0)
@@ -572,6 +602,9 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val active = entityIdMap.remove(id) ?: return
         boundPanels.remove(id)
         panelContents.remove(id)
+        panelDraggers.remove(id)
+        if (leftDragTarget == id) leftDragTarget = null
+        if (rightDragTarget == id) rightDragTarget = null
         val entity = active.entity
         entityToPanelId.remove(entity)
         // Remove from panelEntries FIRST so setHittable (render thread) won't touch
