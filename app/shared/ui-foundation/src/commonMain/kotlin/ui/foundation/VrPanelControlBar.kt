@@ -100,20 +100,22 @@ fun VrPanelControlBar(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onResize, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Rounded.ZoomIn, "Resize", modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(onClick = onDistance, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Rounded.FitScreen, "Distance", modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(
-                        onClick = { showRatioPicker = !showRatioPicker },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(Icons.Rounded.AspectRatio, "Ratio", modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(onClick = onMove, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Rounded.OpenWith, "Move", modifier = Modifier.size(20.dp))
+                    if (!isBound) {
+                        IconButton(onClick = onResize, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Rounded.ZoomIn, "Resize", modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = onDistance, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Rounded.FitScreen, "Distance", modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(
+                            onClick = { showRatioPicker = !showRatioPicker },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(Icons.Rounded.AspectRatio, "Ratio", modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = onMove, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Rounded.OpenWith, "Move", modifier = Modifier.size(20.dp))
+                        }
                     }
                     // Main panel: no bind button. Bound panel: show unbind (Link). Unbound: show bind (LinkOff).
                     if (!isMainPanel) {
