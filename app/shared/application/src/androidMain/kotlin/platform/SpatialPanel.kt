@@ -84,6 +84,7 @@ class SpatialPanel internal constructor(
         activeMode = mode
         moveRelativePose = null
         setHittable(false)
+        host.detectClickingHand()?.let { host.preferLeftHand = it }
     }
 
     override fun stopMode() {

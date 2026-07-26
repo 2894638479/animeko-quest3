@@ -238,7 +238,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private var lastInputHandEntity: Entity? = null
     private var lastHandState: HandTrackingDetector.HandState? = null
     private var lastRawPose: Pose? = null
-    private var preferLeftHand: Boolean? = null
+    internal var preferLeftHand: Boolean? = null
     private var leftDragTarget: SpatialPanel? = null
     private var rightDragTarget: SpatialPanel? = null
 
@@ -416,9 +416,13 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             lastRawPose = null; preferLeftHand = null; return
         }
 
-        val lp: Pose? = scene.getControllerPoseAtTime(true, System.currentTimeMillis())?.pose ?: hs.leftPose
-        val rp: Pose? = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose ?: hs.rightPose
-        val ap: Pose = when { preferLeftHand == true -> lp; preferLeftHand == false -> rp; else -> lp ?: rp } ?: return
+        val lp = scene.getControllerPoseAtTime(true, System.currentTimeMillis()).pose
+        val rp = scene.getControllerPoseAtTime(false, System.currentTimeMillis()).pose
+        val ap: Pose = when (preferLeftHand) {
+            true -> lp
+            false -> rp
+            else -> return
+        } ?: return
         val pp = lastRawPose; lastRawPose = ap
         val dx = if (pp != null) ap.t.x - pp.t.x else 0f
         val dz = if (pp != null) ap.t.z - pp.t.z else 0f
