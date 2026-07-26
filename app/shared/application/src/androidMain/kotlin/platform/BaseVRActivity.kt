@@ -88,9 +88,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         get() = if (::mainPanelEntity.isInitialized)
             mainPanelEntity.tryGetComponent<Transform>(null)?.transform ?: Pose()
         else Pose()
-        set(value) {
-            if (::mainPanelEntity.isInitialized) mainPanelEntity.setComponent(Transform(value))
-        }
+        set(value) { if (::mainPanelEntity.isInitialized) mainPanelEntity.setComponent(Transform(value)) }
 
     override var scale: Float
         get() = if (::mainPanelEntity.isInitialized)
@@ -101,10 +99,9 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             val clamped = value.coerceIn(0.1f..10f)
             mainPanelEntity.setComponent(Scale(Vector3(clamped)))
             for (panel in panelByEntity.values) {
-                if (panel.entity.tryGetComponent<TransformParent>() != null) {
+                if (panel.isBound) {
                     panel.entity.setComponent(Scale(Vector3(clamped)))
-                    panel.entity.setComponent(
-                        Transform(calculateRelativePose(panel.entry, clamped)))
+                    panel.entity.setComponent(Transform(calculateRelativePose(panel.entry, clamped)))
                 }
             }
         }
@@ -136,9 +133,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                     LocalPlatformWindow provides rememberPlatformWindow(),
                     LocalExternalContentProvider provides externalComponentProviderUpdated,
                 ) {
-                    AniApp {
-                        AniSubContent(navigator) { content() }
-                    }
+                    AniApp { AniSubContent(navigator) { content() } }
                 }
             }
         }
@@ -156,16 +151,13 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     override fun registerPanels() = panelEntries.map { (entry, item) ->
         PanelRegistration(item.id) {
             config {
-                width = entry.size.defaultWidth
-                height = entry.size.defaultHeight
-                layoutWidthInPx = entry.size.widthPx
-                layoutHeightInPx = entry.size.heightPx
+                width = entry.size.defaultWidth; height = entry.size.defaultHeight
+                layoutWidthInPx = entry.size.widthPx; layoutHeightInPx = entry.size.heightPx
                 layoutDpi = entry.size.defaultDpi
                 includeGlass = false
                 layerBlendType = PanelShapeLayerBlendType.ALPHA_BLEND
                 layerConfig = LayerConfig(filters = LayerFilters.HIGHEST_QUALITY)
-                enableTransparent = true
-                alphaMode = AlphaMode.TRANSLUCENT
+                enableTransparent = true; alphaMode = AlphaMode.TRANSLUCENT
                 themeResourceId = R.style.PanelAppThemeTransparent
             }
             subView { item.panels[it]?.invoke() }
@@ -181,30 +173,22 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     protected fun recenterPanel() {
         if (!::mainPanelEntity.isInitialized) return
-        val viewerPose = scene.getViewerPose()
-        val newPosition = viewerPose.t.plus(viewerPose.forward().times(2f))
-        mainPanelEntity.setComponent(Transform(Pose(newPosition, viewerPose.q)))
+        val vp = scene.getViewerPose()
+        mainPanelEntity.setComponent(Transform(Pose(vp.t.plus(vp.forward().times(2f)), vp.q)))
         mainPanelEntity.setComponent(Scale(1f))
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     override fun onSceneReady() {
         super.onSceneReady()
-        ComponentRegistrations.all().forEach { registration ->
-            try {
-                componentManager.registerComponent(
-                    registration.clazz, registration.clazz.simpleName ?: "",
-                    registration.sendRate, registration.companionObjectInstance)
-            } catch (_: Exception) {}
+        ComponentRegistrations.all().forEach { reg ->
+            try { componentManager.registerComponent(reg.clazz, reg.clazz.simpleName ?: "", reg.sendRate, reg.companionObjectInstance) }
+            catch (_: Exception) {}
         }
-        val isdkSystem = systemManager.tryFindSystem<IsdkSystem>()
-            ?: IsdkSystem().also { systemManager.registerSystem(it) }
-        if (systemManager.tryFindSystem<IsdkDefaultCursorSystem>() == null)
-            systemManager.registerSystem(IsdkDefaultCursorSystem(this, isdkSystem))
-        if (systemManager.tryFindSystem<IsdkComponentCreationSystem>() == null)
-            systemManager.registerSystem(IsdkComponentCreationSystem())
-        if (systemManager.tryFindSystem<AvatarSystem>() == null)
-            systemManager.registerSystem(AvatarSystem())
+        val isdk = systemManager.tryFindSystem<IsdkSystem>() ?: IsdkSystem().also { systemManager.registerSystem(it) }
+        if (systemManager.tryFindSystem<IsdkDefaultCursorSystem>() == null) systemManager.registerSystem(IsdkDefaultCursorSystem(this, isdk))
+        if (systemManager.tryFindSystem<IsdkComponentCreationSystem>() == null) systemManager.registerSystem(IsdkComponentCreationSystem())
+        if (systemManager.tryFindSystem<AvatarSystem>() == null) systemManager.registerSystem(AvatarSystem())
 
         val entry = PanelEntry(PanelManager.PanelSize.WIDE, PanelPosition.MIDDLE)
         val item = panelEntries[entry]!!
@@ -212,26 +196,20 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val mainPanel = SpatialPanel(mainPanelEntity, entry, this)
         mainPanel.content = { composeContent?.invoke() }
         panelByEntity[mainPanelEntity] = mainPanel
-        item.panels[mainPanelEntity] = {
-            VrPanelControlBarHost(mainPanel) { composeContent?.invoke() }
-        }
-        mainPanels.add(mainPanel)
+        item.panels[mainPanelEntity] = { VrPanelControlBarHost(mainPanel) { composeContent?.invoke() } }
         recenterPanel()
 
-        systemManager.findSystem<SceneObjectSystem>()
-            .getSceneObject(mainPanelEntity)?.thenAccept { o ->
-                o.addInputListener(trackInputHand(true))
-            }
+        systemManager.findSystem<SceneObjectSystem>().getSceneObject(mainPanelEntity)?.thenAccept { o ->
+            o.addInputListener(trackInputHand(true))
+        }
 
-        scene.enablePassthrough(true)
-        scene.setReferenceSpace(ReferenceSpace.LOCAL)
-        spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT)
-        scene.setPreferredDisplayRate(120f)
+        scene.enablePassthrough(true); scene.setReferenceSpace(ReferenceSpace.LOCAL)
+        spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT); scene.setPreferredDisplayRate(120f)
     }
 
-    // ── Shared InputListener factory ─────────────────────────────────────────
+    // ── Shared InputListener ─────────────────────────────────────────────────
 
-    private fun trackInputHand(suppressOnSqueeze: Boolean): InputListener = object : InputListener {
+    private fun trackInputHand(suppressOnSqueeze: Boolean) = object : InputListener {
         override fun onInput(receiver: SceneObject, hitInfo: HitInfo,
                              sourceOfInput: Entity, changed: Int,
                              buttonState: Int, downTime: Long): Boolean {
@@ -241,7 +219,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         }
     }
 
-    // ── Hittable management ──────────────────────────────────────────────────
+    // ── Hittable ─────────────────────────────────────────────────────────────
 
     private var lastHittableEnabled: Boolean? = null
 
@@ -251,116 +229,101 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         for ((entry, item) in panelEntries) {
             for ((entity, _) in item.panels) {
                 if (!enableInteraction && entity.tryGetComponent<TransformParent>() == null) continue
-                val hittable = if (!enableInteraction) MeshCollision.NoCollision
+                val h = if (!enableInteraction) MeshCollision.NoCollision
                 else when (entry.hittable) {
                     PanelManager.PanelHittable.TRUE -> MeshCollision.LineTest
                     PanelManager.PanelHittable.FALSE -> MeshCollision.NoCollision
                 }
-                try { entity.setComponent(Hittable(hittable)) } catch (_: Exception) {}
+                try { entity.setComponent(Hittable(h)) } catch (_: Exception) {}
             }
         }
     }
 
-    // ── Per-frame tick ───────────────────────────────────────────────────────
+    // ── Per-frame state ──────────────────────────────────────────────────────
 
     private var lastFrameAvatarBody: AvatarBody? = null
     private var lastInputHandEntity: Entity? = null
     private var lastHandState: HandTrackingDetector.HandState? = null
     private var lastRawPose: Pose? = null
-    private var moveRelativePose: Pose? = null
     private var preferLeftHand: Boolean? = null
+    private var leftDragTarget: SpatialPanel? = null
+    private var rightDragTarget: SpatialPanel? = null
+
+    // ── Per-frame tick ───────────────────────────────────────────────────────
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     override fun onSceneTick() {
         super.onSceneTick()
         if (!::mainPanelEntity.isInitialized) return
-
-        val query = Query.where { has(AvatarBody.id) }.eval()
-        val localPlayerAvatar = query.firstOrNull {
-            it.isLocal() && it.getComponent<AvatarBody>().isPlayerControlled
-        } ?: return
-
-        val avatarBody = localPlayerAvatar.getComponent<AvatarBody>()
+        val q = Query.where { has(AvatarBody.id) }.eval()
+        val la = q.firstOrNull { it.isLocal() && it.getComponent<AvatarBody>().isPlayerControlled } ?: return
+        val avatarBody = la.getComponent<AvatarBody>()
         lastFrameAvatarBody = avatarBody
-        val handState = HandTrackingDetector.detect(avatarBody, scene)
-        processPanelModes(handState, avatarBody)
-        lastHandState = handState
-
-        when (handState.mode) {
-            HandTrackingDetector.InputMode.CONTROLLERS -> tickControllers(handState, avatarBody)
-            HandTrackingDetector.InputMode.HANDS -> tickHands(handState)
+        val hs = HandTrackingDetector.detect(avatarBody, scene)
+        processPanelModes(hs, avatarBody)
+        lastHandState = hs
+        when (hs.mode) {
+            HandTrackingDetector.InputMode.CONTROLLERS -> tickControllers(hs, avatarBody)
+            HandTrackingDetector.InputMode.HANDS -> tickHands(hs)
             HandTrackingDetector.InputMode.NONE -> setHittable(true)
         }
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun tickControllers(handState: HandTrackingDetector.HandState, avatarBody: AvatarBody) {
-        val leftSqueeze = handState.leftActive
-        val rightSqueeze = handState.rightActive
-        setHittable(!handState.isDragging)
-        val leftPose = handState.leftPose
-        val rightPose = handState.rightPose
+    private fun tickControllers(hs: HandTrackingDetector.HandState, ab: AvatarBody) {
+        setHittable(!hs.isDragging)
+        val lp = hs.leftPose; val rp = hs.rightPose
+        val ls = hs.leftActive; val rs = hs.rightActive
 
-        val leftTarget = if (leftSqueeze) findOrKeepTarget(leftPose, ref = leftDragTarget) else null
-        val rightTarget = if (rightSqueeze) findOrKeepTarget(rightPose, ref = rightDragTarget) else null
-        leftDragTarget = leftTarget
-        rightDragTarget = rightTarget
+        val lt = if (ls) findOrKeepTarget(lp, leftDragTarget) else null
+        val rt = if (rs) findOrKeepTarget(rp, rightDragTarget) else null
+        leftDragTarget = lt; rightDragTarget = rt
 
-        if (leftTarget != null && leftTarget == rightTarget) {
-            draggerFor(leftTarget!!).drag(
-                leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) },
-                rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) },
-                0f, 0f)
+        if (lt != null && lt == rt) {
+            lt.dragger.drag(lp?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) },
+                            rp?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }, 0f, 0f)
             return
         }
-        if (leftSqueeze) routeDrag(leftTarget, leftPose, isLeft = true)
-        if (rightSqueeze) routeDrag(rightTarget, rightPose, isLeft = false)
+        if (ls) routeDrag(lt, lp, true)
+        if (rs) routeDrag(rt, rp, false)
+        if (!ls && !rs) { leftDragTarget = null; rightDragTarget = null }
 
-        if (!leftSqueeze && !rightSqueeze) { leftDragTarget = null; rightDragTarget = null }
-
-        // Thumbstick on main panel only
-        val leftCtrl = avatarBody.leftHand.tryGetComponent<Controller>()
-        val rightCtrl = avatarBody.rightHand.tryGetComponent<Controller>()
-        if (leftSqueeze && !rightSqueeze && leftTarget == null && leftCtrl != null)
-            thumbstickDrag(leftCtrl, leftPose, isLeft = true)
-        else if (rightSqueeze && !leftSqueeze && rightTarget == null && rightCtrl != null)
-            thumbstickDrag(rightCtrl, rightPose, isLeft = false)
+        val lc = ab.leftHand.tryGetComponent<Controller>()
+        val rc = ab.rightHand.tryGetComponent<Controller>()
+        if (ls && !rs && lt == null && lc != null) thumbstick(lc, lp, true)
+        else if (rs && !ls && rt == null && rc != null) thumbstick(rc, rp, false)
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun tickHands(handState: HandTrackingDetector.HandState) {
-        setHittable(!handState.isDragging)
-        val leftPose = handState.leftPose
-        val rightPose = handState.rightPose
-        val leftActive = handState.leftActive
-        val rightActive = handState.rightActive
+    private fun tickHands(hs: HandTrackingDetector.HandState) {
+        setHittable(!hs.isDragging)
+        val lp = hs.leftPose; val rp = hs.rightPose
+        val la = hs.leftActive; val ra = hs.rightActive
 
-        val leftTarget = if (leftActive) findOrKeepTarget(leftPose, ref = leftDragTarget) else null
-        val rightTarget = if (rightActive) findOrKeepTarget(rightPose, ref = rightDragTarget) else null
-        leftDragTarget = leftTarget; rightDragTarget = rightTarget
+        val lt = if (la) findOrKeepTarget(lp, leftDragTarget) else null
+        val rt = if (ra) findOrKeepTarget(rp, rightDragTarget) else null
+        leftDragTarget = lt; rightDragTarget = rt
 
-        if (leftTarget != null && leftTarget == rightTarget) {
-            draggerFor(leftTarget!!).drag(
-                leftPose?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) },
-                rightPose?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) },
-                0f, 0f)
+        if (lt != null && lt == rt) {
+            lt.dragger.drag(lp?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) },
+                            rp?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }, 0f, 0f)
             return
         }
-        if (leftActive) routeDrag(leftTarget, leftPose, isLeft = true)
-        if (rightActive) routeDrag(rightTarget, rightPose, isLeft = false)
-        if (!leftActive && !rightActive) { leftDragTarget = null; rightDragTarget = null }
+        if (la) routeDrag(lt, lp, true)
+        if (ra) routeDrag(rt, rp, false)
+        if (!la && !ra) { leftDragTarget = null; rightDragTarget = null }
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun routeDrag(target: SpatialPanel?, handPose: Pose?, isLeft: Boolean) {
         val cp = if (isLeft) scene.getControllerPoseAtTime(true, System.currentTimeMillis())
                  else scene.getControllerPoseAtTime(false, System.currentTimeMillis())
-        if (target != null) draggerFor(target).drag(cp, null, 0f, 0f)
+        if (target != null) target.dragger.drag(cp, null, 0f, 0f)
         else controllerDragger.drag(cp, null, 0f, 0f)
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun thumbstickDrag(ctrl: Controller, handPose: Pose?, isLeft: Boolean) {
+    private fun thumbstick(ctrl: Controller, handPose: Pose?, isLeft: Boolean) {
         var tx = 0f; var ty = 0f
         if (isLeft) {
             if (ctrl.buttonState and ButtonBits.ButtonThumbLU != 0) ty += 1f
@@ -374,78 +337,52 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             if (ctrl.buttonState and ButtonBits.ButtonThumbRR != 0) tx += 1f
         }
         if (tx == 0f && ty == 0f) return
-        val cp = if (isLeft) scene.getControllerPoseAtTime(true, System.currentTimeMillis())
-                 else scene.getControllerPoseAtTime(false, System.currentTimeMillis())
-        controllerDragger.drag(cp, null, tx, ty)
+        controllerDragger.drag(
+            if (isLeft) scene.getControllerPoseAtTime(true, System.currentTimeMillis()) else null,
+            null, tx, ty)
     }
 
     private fun findOrKeepTarget(handPose: Pose?, ref: SpatialPanel?): SpatialPanel? {
         val pos = handPose?.t ?: return ref
         if (ref != null) return ref
-        var best: SpatialPanel? = null
-        var bestDist = Float.MAX_VALUE
-        for (panel in panelByEntity.values) {
-            if (panel.entity.tryGetComponent<TransformParent>() != null) continue
-            val pp = try { panel.entity.getComponent<Transform>().transform.t }
-                catch (_: Exception) { continue }
-            val dist = pos.minus(pp).length()
-            if (dist < 0.5f && dist < bestDist) { bestDist = dist; best = panel }
+        var best: SpatialPanel? = null; var bestDist = Float.MAX_VALUE
+        for (p in panelByEntity.values) {
+            if (p.isBound) continue
+            val pp = try { p.entity.getComponent<Transform>().transform.t } catch (_: Exception) { continue }
+            val d = pos.minus(pp).length()
+            if (d < 0.5f && d < bestDist) { bestDist = d; best = p }
         }
         return best
     }
 
-    // ── Panel manipulation (PanelManager + internal helpers) ─────────────────
+    // ── Panel registry ───────────────────────────────────────────────────────
 
     private val panelByEntity = ConcurrentHashMap<Entity, SpatialPanel>()
-    private val panelDraggers = ConcurrentHashMap<Entity, ControllerDragger>()
-    private val mainPanels = mutableSetOf<SpatialPanel>()
-    private var leftDragTarget: SpatialPanel? = null
-    private var rightDragTarget: SpatialPanel? = null
-    private val panelModes = ConcurrentHashMap<Entity, PanelControlMode>()
-
-    private fun draggerFor(panel: SpatialPanel): ControllerDragger =
-        panelDraggers.getOrPut(panel.entity) {
-            ControllerDragger(object : ControllerDragger.Host {
-                override var pose: Pose
-                    get() = panel.entity.getComponent<Transform>().transform
-                    set(v) { panel.entity.setComponent(Transform(v)) }
-                override var scale: Float
-                    get() = try { panel.entity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
-                    set(v) { panel.entity.setComponent(Scale(Vector3(v.coerceIn(0.1f, 10f)))) }
-            })
-        }
 
     // ── PanelManager.openPanel ───────────────────────────────────────────────
 
     override fun openPanel(entry: PanelEntry, content: @Composable (() -> Unit)): PanelHandle {
         if (!::mainPanelEntity.isInitialized) error("scene not ready")
         val item = panelEntries[entry] ?: error("no registration for $entry")
-        val mainScale = try { mainPanelEntity.getComponent<Scale>().scale.x }
-            catch (_: Exception) { 1f }
-        val relPose = calculateRelativePose(entry, mainScale)
+        val ms = try { mainPanelEntity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
+        val rp = calculateRelativePose(entry, ms)
         val entity = Entity.create(
             if (entry.hittable == PanelManager.PanelHittable.TRUE) Panel(item.id)
             else Panel(item.id, MeshCollision.NoCollision),
-            Scale(Vector3(mainScale)),
-            TransformParent(mainPanelEntity),
-            Transform(relPose))
+            Scale(Vector3(ms)), TransformParent(mainPanelEntity), Transform(rp))
         val panel = SpatialPanel(entity, entry, this)
         panel.content = content
-        item.panels[entity] = {
-            VrPanelControlBarHost(panel) { content() }
-        }
+        item.panels[entity] = { VrPanelControlBarHost(panel) { content() } }
         panelByEntity[entity] = panel
-        systemManager.findSystem<SceneObjectSystem>()
-            .getSceneObject(entity)?.thenAccept { o -> o.addInputListener(trackInputHand(false)) }
+        systemManager.findSystem<SceneObjectSystem>().getSceneObject(entity)?.thenAccept { o ->
+            o.addInputListener(trackInputHand(false))
+        }
         return panel
     }
 
     internal fun removePanel(panel: SpatialPanel) {
         val entity = panel.entity
         panelByEntity.remove(entity) ?: return
-        mainPanels.remove(panel)
-        panelDraggers.remove(entity)
-        panelModes.remove(entity)
         if (leftDragTarget == panel) leftDragTarget = null
         if (rightDragTarget == panel) rightDragTarget = null
         for (item in panelEntries.values) { item.panels.remove(entity) }
@@ -454,120 +391,84 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         try { entity.destroy() } catch (_: Exception) {}
     }
 
-    // ── Internal helpers (called by SpatialPanel) ────────────────────────────
-
-    internal fun setPanelMode(panel: SpatialPanel, mode: PanelControlMode) {
-        panelModes[panel.entity] = mode
-    }
-
-    internal fun clearPanelMode(panel: SpatialPanel) {
-        panelModes.remove(panel.entity)
-        if (panelModes.isEmpty()) { lastRawPose = null; moveRelativePose = null; preferLeftHand = null }
-    }
-
-    internal fun getPanelMode(panel: SpatialPanel): PanelControlMode =
-        panelModes[panel.entity] ?: PanelControlMode.NONE
+    // ── Ratio swap (internal, called by SpatialPanel) ───────────────────────
 
     internal fun swapPanelRatio(panel: SpatialPanel, widthPx: Int, heightPx: Int) {
         val entity = panel.entity
         val oldEntry = panel.entry
-        val newSize = PanelManager.PanelSize.entries.find {
-            it.widthPx == widthPx && it.heightPx == heightPx
-        } ?: return
+        val newSize = PanelManager.PanelSize.entries.find { it.widthPx == widthPx && it.heightPx == heightPx } ?: return
         val newEntry = PanelManager.PanelEntry(newSize, oldEntry.position, oldEntry.hittable)
         val newItem = panelEntries[newEntry] ?: return
         val oldItem = panelEntries[oldEntry]
-        val content = panel.content ?: (oldItem?.panels?.get(entity) ?: return)
-
+        val c = panel.content ?: (oldItem?.panels?.get(entity) ?: return)
         oldItem?.panels?.remove(entity)
         try { entity.removeComponent<Panel>() } catch (_: Exception) {}
-        entity.setComponent(
-            if (newEntry.hittable == PanelManager.PanelHittable.TRUE) Panel(newItem.id)
-            else Panel(newItem.id, MeshCollision.NoCollision))
-        newItem.panels[entity] = { VrPanelControlBarHost(panel) { content() } }
+        entity.setComponent(if (newEntry.hittable == PanelManager.PanelHittable.TRUE) Panel(newItem.id)
+                            else Panel(newItem.id, MeshCollision.NoCollision))
+        newItem.panels[entity] = { VrPanelControlBarHost(panel) { c() } }
         panel.entry = newEntry
     }
 
     // ── processPanelModes ────────────────────────────────────────────────────
 
     @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun processPanelModes(handState: HandTrackingDetector.HandState, avatarBody: AvatarBody) {
-        if (panelModes.isEmpty()) {
-            lastRawPose = null; moveRelativePose = null; preferLeftHand = null; return
-        }
-        val leftBtn = avatarBody.leftHand.tryGetComponent<Controller>()?.buttonState ?: 0
-        val rightBtn = avatarBody.rightHand.tryGetComponent<Controller>()?.buttonState ?: 0
+    private fun processPanelModes(hs: HandTrackingDetector.HandState, ab: AvatarBody) {
+        val active = panelByEntity.values.filter { it.activeMode != PanelControlMode.NONE }
+        if (active.isEmpty()) return
+
+        val leftBtn = ab.leftHand.tryGetComponent<Controller>()?.buttonState ?: 0
+        val rightBtn = ab.rightHand.tryGetComponent<Controller>()?.buttonState ?: 0
         val endMask = ButtonBits.ButtonSqueezeL or ButtonBits.ButtonSqueezeR or
-                      ButtonBits.ButtonA or ButtonBits.ButtonB or
-                      ButtonBits.ButtonX or ButtonBits.ButtonY
-        if (handState.isDragging || (leftBtn and endMask) != 0 || (rightBtn and endMask) != 0) {
-            panelModes.clear(); lastRawPose = null; moveRelativePose = null; preferLeftHand = null; return
+                      ButtonBits.ButtonA or ButtonBits.ButtonB or ButtonBits.ButtonX or ButtonBits.ButtonY
+        if (hs.isDragging || (leftBtn and endMask) != 0 || (rightBtn and endMask) != 0) {
+            for (p in active) { p.activeMode = PanelControlMode.NONE; p.moveRelativePose = null }
+            lastRawPose = null; preferLeftHand = null; return
         }
 
-        val leftPose = scene.getControllerPoseAtTime(true, System.currentTimeMillis())?.pose
-            ?: handState.leftPose
-        val rightPose = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose
-            ?: handState.rightPose
-        val activePose: Pose = when { preferLeftHand == true -> leftPose
-            preferLeftHand == false -> rightPose; else -> leftPose ?: rightPose } ?: return
+        val lp: Pose? = scene.getControllerPoseAtTime(true, System.currentTimeMillis())?.pose ?: hs.leftPose
+        val rp: Pose? = scene.getControllerPoseAtTime(false, System.currentTimeMillis())?.pose ?: hs.rightPose
+        val ap: Pose = when { preferLeftHand == true -> lp; preferLeftHand == false -> rp; else -> lp ?: rp } ?: return
+        val pp = lastRawPose; lastRawPose = ap
+        val dx = if (pp != null) ap.t.x - pp.t.x else 0f
+        val dz = if (pp != null) ap.t.z - pp.t.z else 0f
 
-        val prevPose = lastRawPose; lastRawPose = activePose
-        val dx = if (prevPose != null) activePose.t.x - prevPose.t.x else 0f
-        val dz = if (prevPose != null) activePose.t.z - prevPose.t.z else 0f
-
-        for ((entity, mode) in panelModes.toList()) {
-            val panel = panelByEntity[entity] ?: continue
-            when (mode) {
-                PanelControlMode.RESIZE -> panel.setScale((panel.scale + dx).coerceIn(0.1f, 10f))
-                PanelControlMode.DISTANCE -> panel.setDistance(dz)
-                PanelControlMode.MOVE -> {
-                    try {
-                        if (moveRelativePose == null) {
-                            val loc = entity.getComponent<Transform>().transform
-                            moveRelativePose = activePose.inverse() * loc
-                        }
-                        entity.setComponent(Transform(activePose * (moveRelativePose ?: continue)))
-                    } catch (_: Exception) {}
-                }
+        for (p in active) {
+            when (p.activeMode) {
+                PanelControlMode.RESIZE -> p.setScale((p.scale + dx).coerceIn(0.1f, 10f))
+                PanelControlMode.DISTANCE -> p.setDistance(dz)
+                PanelControlMode.MOVE -> try {
+                    if (p.moveRelativePose == null) p.moveRelativePose = ap.inverse() * p.entity.getComponent<Transform>().transform
+                    p.entity.setComponent(Transform(ap * (p.moveRelativePose ?: continue)))
+                } catch (_: Exception) {}
                 else -> {}
             }
         }
     }
 
-    // ── PanelManager.openPanel (start mode detection) ────────────────────────
+    // ── Clicking-hand detection ─────────────────────────────────────────────
 
-    @OptIn(SpatialSDKExperimentalAPI::class)
     internal fun detectClickingHand(): Boolean? {
-        val lastInput = lastInputHandEntity ?: return null
+        val li = lastInputHandEntity ?: return null
         val ab = lastFrameAvatarBody ?: return null
-        return when {
-            lastInput == ab.leftHand -> true
-            lastInput == ab.rightHand -> false
-            else -> null
-        }
+        return when { li == ab.leftHand -> true; li == ab.rightHand -> false; else -> null }
     }
 
-    // ── Pose calculation ─────────────────────────────────────────────────────
+    // ── Pose helper ─────────────────────────────────────────────────────────
 
     private fun calculateRelativePose(entry: PanelEntry, scale: Float): Pose {
-        val mainW = PanelManager.PanelSize.WIDE.defaultWidth * scale
-        val mainH = PanelManager.PanelSize.WIDE.defaultHeight * scale
-        val subW = entry.size.defaultWidth * scale
-        val subH = entry.size.defaultHeight * scale
-        val margin = 0.08f * scale
-        val hingePos: Vector3; val offsetPos: Vector3; var rY = 0f; var rX = 0f
+        val mw = PanelManager.PanelSize.WIDE.defaultWidth * scale
+        val mh = PanelManager.PanelSize.WIDE.defaultHeight * scale
+        val sw = entry.size.defaultWidth * scale; val sh = entry.size.defaultHeight * scale
+        val mg = 0.08f * scale
+        val hp: Vector3; val op: Vector3; var ry = 0f; var rx = 0f
         when (entry.position) {
-            PanelPosition.LEFT -> {
-                hingePos = Vector3(-(mainW / 2 + margin), 0f, 0f); offsetPos = Vector3(-subW / 2, 0f, 0f); rY = -25f }
-            PanelPosition.RIGHT -> {
-                hingePos = Vector3(mainW / 2 + margin, 0f, 0f); offsetPos = Vector3(subW / 2, 0f, 0f); rY = 25f }
-            PanelPosition.TOP -> {
-                hingePos = Vector3(0f, mainH / 2 + margin, 0f); offsetPos = Vector3(0f, subH / 2, 0f); rX = -15f }
-            PanelPosition.BOTTOM -> {
-                hingePos = Vector3(0f, -(mainH / 2 + margin), 0f); offsetPos = Vector3(0f, -subH / 2, 0f); rX = 15f }
-            PanelPosition.MIDDLE -> return Pose(Vector3(0f, 0f, -0.2f * scale), Quaternion.fromEuler(0f, 0f, 0f))
+            PanelPosition.LEFT -> { hp = Vector3(-(mw/2+mg),0f,0f); op = Vector3(-sw/2,0f,0f); ry = -25f }
+            PanelPosition.RIGHT -> { hp = Vector3(mw/2+mg,0f,0f); op = Vector3(sw/2,0f,0f); ry = 25f }
+            PanelPosition.TOP -> { hp = Vector3(0f,mh/2+mg,0f); op = Vector3(0f,sh/2,0f); rx = -15f }
+            PanelPosition.BOTTOM -> { hp = Vector3(0f,-(mh/2+mg),0f); op = Vector3(0f,-sh/2,0f); rx = 15f }
+            PanelPosition.MIDDLE -> return Pose(Vector3(0f,0f,-0.2f*scale), Quaternion.fromEuler(0f,0f,0f))
         }
-        val q = Quaternion.fromEuler(rX, rY, 0f)
-        return Pose(hingePos.plus(q.times(offsetPos)).plus(Vector3(0f, 0f, 0.02f * scale)), q)
+        val q = Quaternion.fromEuler(rx, ry, 0f)
+        return Pose(hp.plus(q.times(op)).plus(Vector3(0f,0f,0.02f*scale)), q)
     }
 }

@@ -6,7 +6,6 @@ package me.him188.ani.app.platform
 
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
-import com.meta.spatial.core.Quaternion
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.Panel
@@ -17,26 +16,40 @@ import me.him188.ani.app.ui.foundation.PanelControlMode
 import me.him188.ani.app.ui.foundation.PanelHandle
 import me.him188.ani.app.ui.foundation.PanelManager
 
-/**
- * Implementation of [PanelHandle] backed by a Meta Spatial SDK [Entity].
- * All manipulation methods operate directly on the entity's ECS components.
- */
 class SpatialPanel internal constructor(
     val entity: Entity,
     var entry: PanelManager.PanelEntry,
     private val host: BaseVRActivity,
 ) : PanelHandle {
 
-    /** Stored content lambda for ratio changes and re-renders. */
     internal var content: (@androidx.compose.runtime.Composable () -> Unit)? = null
+
+    // ── Per-panel state (no global maps) ─────────────────────────────────────
+
+    override var activeMode: PanelControlMode = PanelControlMode.NONE
+        internal set
+
+    /** Dragger for when this panel is grabbed independently (unbound). */
+    internal val dragger: ControllerDragger by lazy {
+        ControllerDragger(object : ControllerDragger.Host {
+            override var pose: Pose
+                get() = entity.getComponent<Transform>().transform
+                set(v) { entity.setComponent(Transform(v)) }
+            override var scale: Float
+                get() = try { entity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
+                set(v) { entity.setComponent(Scale(Vector3(v.coerceIn(0.1f, 10f)))) }
+        })
+    }
+
+    /** For MOVE mode: relative offset from hand to panel. */
+    internal var moveRelativePose: Pose? = null
 
     // ── PanelHandle ──────────────────────────────────────────────────────────
 
     override fun close() = host.removePanel(this)
 
     override fun setScale(scale: Float) {
-        val s = scale.coerceIn(0.1f, 10f)
-        entity.setComponent(Scale(Vector3(s)))
+        entity.setComponent(Scale(Vector3(scale.coerceIn(0.1f, 10f))))
     }
 
     override fun setDistance(distance: Float) {
@@ -48,7 +61,6 @@ class SpatialPanel internal constructor(
         if (entity.tryGetComponent<TransformParent>() != null) {
             entity.removeComponent<TransformParent>()
         } else if (entity != host.mainPanelEntity) {
-            // Don't bind main panel to itself
             entity.setComponent(TransformParent(host.mainPanelEntity))
         }
     }
@@ -60,15 +72,14 @@ class SpatialPanel internal constructor(
         get() = try { entity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
 
     override fun startMode(mode: PanelControlMode) {
-        host.setPanelMode(this, mode)
+        activeMode = mode
+        moveRelativePose = null
     }
 
     override fun stopMode() {
-        host.clearPanelMode(this)
+        activeMode = PanelControlMode.NONE
+        moveRelativePose = null
     }
-
-    override val activeMode: PanelControlMode
-        get() = host.getPanelMode(this)
 
     override fun changeRatio(widthPx: Int, heightPx: Int) {
         host.swapPanelRatio(this, widthPx, heightPx)
