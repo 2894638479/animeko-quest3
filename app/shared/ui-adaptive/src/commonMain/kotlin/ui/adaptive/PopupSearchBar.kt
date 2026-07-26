@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
 import androidx.compose.ui.zIndex
 import me.him188.ani.app.ui.foundation.animation.AniAnimatedVisibility
 import me.him188.ani.app.ui.foundation.navigation.BackHandler
@@ -101,9 +100,10 @@ fun PopupSearchBar(
             Box(Modifier.onSizeChanged { size = it }) {
                 inputField()
             }
-            Popup(
-                offset = IntOffset(0, size.height),
-                onDismissRequest = { onExpandedChange(false) },
+            AniAnimatedVisibility(
+                visible = expanded,
+                enter = DockedEnterTransition,
+                exit = DockedExitTransition,
             ) {
                 Surface(
                     shape = RoundedCornerShape(cornerSizeDp),
@@ -113,11 +113,6 @@ fun PopupSearchBar(
                     shadowElevation = shadowElevation,
                     modifier = Modifier.zIndex(1f).width(LocalDensity.current.run { size.width.toDp() }),
                 ) {
-                    AniAnimatedVisibility(
-                        visible = expanded,
-                        enter = DockedEnterTransition,
-                        exit = DockedExitTransition,
-                    ) {
                         val screenHeight = getScreenHeight()
                         val maxHeight =
                             remember(screenHeight) {
@@ -136,7 +131,6 @@ fun PopupSearchBar(
                     }
                 }
             }
-        }
     }
 
     BackHandler(enabled = expanded) { onExpandedChange(false) }

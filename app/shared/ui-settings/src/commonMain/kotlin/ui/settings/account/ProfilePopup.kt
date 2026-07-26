@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import me.him188.ani.app.ui.foundation.VrAlertDialog
-import androidx.compose.material3.BasicAlertDialog
+import me.him188.ani.app.ui.foundation.VrPanelDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,8 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
 import me.him188.ani.app.ui.foundation.ifThen
@@ -89,60 +87,17 @@ fun ProfilePopup(
         )
     }
 
-    if (windowSizeClass.isWidthAtLeastMedium) {
-        val density = LocalDensity.current
-        Popup(
-            alignment = Alignment.TopEnd,
-            offset = with(density) {
-                IntOffset(0, 32.dp.roundToPx())
-            },
-            properties = PopupProperties(),
-            onDismissRequest = onDismissRequest,
+    VrPanelDialog(onDismissRequest = onDismissRequest) {
+        Surface(
+            modifier = Modifier
+                .widthIn(max = 360.dp)
+                .clickable(interactionSource = null, indication = null, onClick = {}),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = BottomSheetDefaults.ContainerColor,
+            contentColor = contentColorFor(BottomSheetDefaults.ContainerColor),
+            tonalElevation = 0.dp,
         ) {
-            // 模拟点击外面关闭 popup, 否则事件会被广播到下层
-            Box(
-                Modifier.fillMaxSize()
-                    .clickable(interactionSource = null, indication = null, onClick = onDismissRequest)
-                    .background(Color.Black.copy(alpha = 0.32f)),
-                contentAlignment = Alignment.TopEnd,
-            ) {
-
-                // 实际内容
-                Surface(
-                    modifier = Modifier
-                        .windowInsetsPadding(AniWindowInsets.safeDrawing)
-                        .padding(horizontal = 24.dp)
-                        .widthIn(max = 360.dp)
-                        .clickable(interactionSource = null, indication = null, onClick = {}), // 避免触发 onDismissRequest
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = BottomSheetDefaults.ContainerColor,
-                    contentColor = contentColorFor(BottomSheetDefaults.ContainerColor),
-                    tonalElevation = 0.dp,
-                ) {
-                    content()
-                }
-            }
-        }
-
-//                IconButton(
-//                    onDismiss,
-//                    Modifier.align(Alignment.TopEnd)
-//                        .padding(horizontal = 24.dp)
-//                        .padding(top = 24.dp),
-//                ) {
-//                    Icon(Icons.Default.Close, contentDescription = "关闭")
-//                }
-    } else {
-        BasicAlertDialog(onDismissRequest) {
-            Surface(
-                modifier = Modifier,
-                shape = MaterialTheme.shapes.extraLarge,
-                color = BottomSheetDefaults.ContainerColor,
-                contentColor = contentColorFor(BottomSheetDefaults.ContainerColor),
-                tonalElevation = 0.dp,
-            ) {
-                content()
-            }
+            content()
         }
     }
 
