@@ -148,6 +148,7 @@ dependencies {
     implementation(libs.meta.spatial.sdk.hotreload)
     implementation(libs.meta.spatial.sdk.datamodelinspector)
     implementation(libs.meta.spatial.sdk.uiset)
+    implementation(libs.meta.spatial.sdk.spatialaudio)
 }
 
 idea {

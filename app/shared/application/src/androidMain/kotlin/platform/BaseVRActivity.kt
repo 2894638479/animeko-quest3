@@ -79,6 +79,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     protected var composeContent: (@Composable () -> Unit)? = null
 
     private val controllerDragger = ControllerDragger(this)
+    lateinit var spatialAudio: SpatialAudioManager
 
     protected val isSceneReady: Boolean get() = ::mainPanelEntity.isInitialized
 
@@ -199,6 +200,10 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         scene.enablePassthrough(true); scene.setReferenceSpace(ReferenceSpace.LOCAL)
         spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT); scene.setPreferredDisplayRate(120f)
+
+        // Spatial audio — audio sounds like it comes from the main panel position
+        spatialAudio = SpatialAudioManager(scene, mainPanelEntity)
+        spatialAudio.registerSystem(systemManager, componentManager)
     }
 
     // ── Shared InputListener ─────────────────────────────────────────────────
