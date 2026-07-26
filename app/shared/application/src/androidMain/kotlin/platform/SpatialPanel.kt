@@ -68,8 +68,18 @@ class SpatialPanel internal constructor(
 
     override fun toggleBind() {
         if (entity.tryGetComponent<TransformParent>() != null) {
+            // Preserve world position: childWorld = parentWorld * childLocal
+            val local = entity.getComponent<Transform>().transform
+            val parentWorld = host.mainPanelEntity.getComponent<Transform>().transform
+            val world = parentWorld * local
             entity.removeComponent<TransformParent>()
+            entity.setComponent(Transform(world))
         } else if (entity != host.mainPanelEntity) {
+            // Bind: convert world to local relative to main panel
+            val world = entity.getComponent<Transform>().transform
+            val parentWorld = host.mainPanelEntity.getComponent<Transform>().transform
+            val local = parentWorld.inverse() * world
+            entity.setComponent(Transform(local))
             entity.setComponent(TransformParent(host.mainPanelEntity))
         }
     }
