@@ -289,8 +289,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         for ((entry, item) in panelEntries) {
             for ((entity, _) in item.panels) {
                 // Don't disable hittable on unbound panels — they can be grabbed independently
-                val panelId = entityToPanelId[entity]
-                if (!enableInteraction && panelId != null && !boundPanels.contains(panelId)) continue
+                if (!enableInteraction && entity.tryGetComponent<TransformParent>() == null) continue
                 val hittable = if (!enableInteraction) {
                     MeshCollision.NoCollision
                 } else when (entry.hittable) {
@@ -422,7 +421,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         var bestId: Int? = null
         var bestDist = Float.MAX_VALUE
         for ((id, active) in entityIdMap) {
-            if (boundPanels.contains(id)) continue
+            // Check actual component state, not tracking set
+            if (active.entity.tryGetComponent<TransformParent>() != null) continue
             val panelPos = try {
                 active.entity.getComponent<Transform>().transform.t
             } catch (_: Exception) { continue }
