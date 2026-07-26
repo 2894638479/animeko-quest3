@@ -139,17 +139,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         }
     }
 
-    class PanelEntryItem(val id: Int) {
-        val panels = ConcurrentHashMap<Entity, @Composable () -> Unit>()
-    }
+    /** PanelEntry → registration ID. */
+    private val regIds: Map<PanelEntry, Int> =
+        PanelEntry.all.withIndex().associate { (i, e) -> e to i + 1 }
 
-    val panelEntries: Map<PanelEntry, PanelEntryItem> = run {
-        var id = 1
-        PanelEntry.all.associateWith { PanelEntryItem(id++) }
-    }
-
-    override fun registerPanels() = panelEntries.map { (entry, item) ->
-        PanelRegistration(item.id) {
+    override fun registerPanels() = regIds.map { (entry, regId) ->
+        PanelRegistration(regId) {
             config {
                 width = entry.size.defaultWidth; height = entry.size.defaultHeight
                 layoutWidthInPx = entry.size.widthPx; layoutHeightInPx = entry.size.heightPx
@@ -160,7 +155,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                 enableTransparent = true; alphaMode = AlphaMode.TRANSLUCENT
                 themeResourceId = R.style.PanelAppThemeTransparent
             }
-            subView { item.panels[it]?.invoke() }
+            subView { panelByEntity[it]?.content?.invoke() }
         }
     }
 
@@ -191,12 +186,11 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (systemManager.tryFindSystem<AvatarSystem>() == null) systemManager.registerSystem(AvatarSystem())
 
         val entry = PanelEntry(PanelManager.PanelSize.WIDE, PanelPosition.MIDDLE)
-        val item = panelEntries[entry]!!
-        mainPanelEntity = Entity.create(Panel(item.id), Scale(Vector3(1f)))
+        val regId = regIds[entry]!!
+        mainPanelEntity = Entity.create(Panel(regId), Scale(Vector3(1f)))
         val mainPanel = SpatialPanel(mainPanelEntity, entry, this)
-        mainPanel.content = { composeContent?.invoke() }
+        mainPanel.content = { VrPanelControlBarHost(mainPanel, isMainPanel = true) { composeContent?.invoke() } }
         panelByEntity[mainPanelEntity] = mainPanel
-        item.panels[mainPanelEntity] = { VrPanelControlBarHost(mainPanel, isMainPanel = true) { composeContent?.invoke() } }
         recenterPanel()
 
         systemManager.findSystem<SceneObjectSystem>().getSceneObject(mainPanelEntity)?.thenAccept { o ->
@@ -226,17 +220,16 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private fun setHittable(enableInteraction: Boolean) {
         if (lastHittableEnabled == enableInteraction) return
         lastHittableEnabled = enableInteraction
-        for ((entry, item) in panelEntries) {
-            for ((entity, _) in item.panels) {
-                if (!enableInteraction && entity.tryGetComponent<TransformParent>() == null) continue
-                val h = if (!enableInteraction) MeshCollision.NoCollision
-                else when (entry.hittable) {
-                    PanelManager.PanelHittable.TRUE -> MeshCollision.LineTest
-                    PanelManager.PanelHittable.FALSE -> MeshCollision.NoCollision
-                }
-                try { entity.setComponent(Hittable(h)) } catch (_: Exception) {}
-            }
+        for (panel in panelByEntity.values) {
+            if (!enableInteraction && panel.isBound) continue
+            panel.setHittable(enableInteraction)
         }
+        // Also handle the main panel entity directly
+        try {
+            val h = if (enableInteraction) Hittable(MeshCollision.LineTest)
+                    else Hittable(MeshCollision.NoCollision)
+            mainPanelEntity.setComponent(h)
+        } catch (_: Exception) {}
     }
 
     // ── Per-frame state ──────────────────────────────────────────────────────
@@ -363,16 +356,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     override fun openPanel(entry: PanelEntry, content: @Composable (() -> Unit)): PanelHandle {
         if (!::mainPanelEntity.isInitialized) error("scene not ready")
-        val item = panelEntries[entry] ?: error("no registration for $entry")
+        val regId = regIds[entry] ?: error("no registration for $entry")
         val ms = try { mainPanelEntity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
         val rp = calculateRelativePose(entry, ms)
         val entity = Entity.create(
-            if (entry.hittable == PanelManager.PanelHittable.TRUE) Panel(item.id)
-            else Panel(item.id, MeshCollision.NoCollision),
+            if (entry.hittable == PanelManager.PanelHittable.TRUE) Panel(regId)
+            else Panel(regId, MeshCollision.NoCollision),
             Scale(Vector3(ms)), TransformParent(mainPanelEntity), Transform(rp))
         val panel = SpatialPanel(entity, entry, this)
-        panel.content = content
-        item.panels[entity] = { VrPanelControlBarHost(panel, isMainPanel = false) { content() } }
+        panel.content = { VrPanelControlBarHost(panel, isMainPanel = false) { content() } }
         panelByEntity[entity] = panel
         systemManager.findSystem<SceneObjectSystem>().getSceneObject(entity)?.thenAccept { o ->
             o.addInputListener(trackInputHand(false))
@@ -385,7 +377,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         panelByEntity.remove(entity) ?: return
         if (leftDragTarget == panel) leftDragTarget = null
         if (rightDragTarget == panel) rightDragTarget = null
-        for (item in panelEntries.values) { item.panels.remove(entity) }
         try { if (entity.tryGetComponent<TransformParent>() != null) entity.removeComponent<TransformParent>() }
             catch (_: Exception) {}
         try { entity.destroy() } catch (_: Exception) {}
@@ -398,14 +389,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val oldEntry = panel.entry
         val newSize = PanelManager.PanelSize.entries.find { it.widthPx == widthPx && it.heightPx == heightPx } ?: return
         val newEntry = PanelManager.PanelEntry(newSize, oldEntry.position, oldEntry.hittable)
-        val newItem = panelEntries[newEntry] ?: return
-        val oldItem = panelEntries[oldEntry]
-        val c = panel.content ?: (oldItem?.panels?.get(entity) ?: return)
-        oldItem?.panels?.remove(entity)
+        val newRegId = regIds[newEntry] ?: return
+        val c = panel.content ?: return
         try { entity.removeComponent<Panel>() } catch (_: Exception) {}
-        entity.setComponent(if (newEntry.hittable == PanelManager.PanelHittable.TRUE) Panel(newItem.id)
-                            else Panel(newItem.id, MeshCollision.NoCollision))
-        newItem.panels[entity] = { VrPanelControlBarHost(panel, isMainPanel = false) { c() } }
+        entity.setComponent(if (newEntry.hittable == PanelManager.PanelHittable.TRUE) Panel(newRegId)
+                            else Panel(newRegId, MeshCollision.NoCollision))
+        panel.content = { VrPanelControlBarHost(panel, isMainPanel = false) { c() } }
         panel.entry = newEntry
     }
 
