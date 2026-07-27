@@ -38,17 +38,28 @@ actual fun VideoPlayer(
 ) {
     val isPreviewing by rememberUpdatedState(me.him188.ani.app.ui.foundation.LocalIsPreviewing.current)
 
-    // Hook audio session for spatial audio on Meta Quest
+    // Hook audio session for spatial audio on Meta Quest.
+    // Re‑register on every data‑source switch so the native engine picks up
+    // the new Android audio session created after ExoPlayer.prepare().
     val spatialHost = LocalSpatialAudioHost.current
     LaunchedEffect(player, spatialHost) {
         if (spatialHost == null) return@LaunchedEffect
         val libass = player as? LibassExoPlayerMediampPlayer ?: return@LaunchedEffect
-        var sid = libass.audioSessionId
-        while (sid <= 0) {
-            kotlinx.coroutines.delay(500)
-            sid = libass.audioSessionId
+
+        suspend fun register() {
+            var sid = libass.audioSessionId
+            while (sid <= 0) {
+                kotlinx.coroutines.delay(500)
+                sid = libass.audioSessionId
+            }
+            spatialHost.onPlayerAudioSessionReady(sid)
         }
-        spatialHost.onPlayerAudioSessionReady(sid)
+
+        register()
+
+        player.mediaData.collect { data ->
+            if (data != null) register()
+        }
     }
 
     if (isPreviewing) {

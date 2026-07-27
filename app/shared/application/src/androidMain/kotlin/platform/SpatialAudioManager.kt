@@ -71,20 +71,15 @@ class SpatialAudioManager(
      * Call this when ExoPlayer is ready with its audio session.
      */
     fun setAudioSessionId(id: Int) {
-        if (id == audioSessionId || id <= 0) return
+        if (id <= 0) return
         audioSessionId = id
-
-        // Register the Android session ID → native ID mapping.
-        // AudioSessionManagerSystem.execute() looks up this mapping for each
-        // entity's AudioSessionId component to identify the native audio source.
         feature.registerAudioSessionId(id, id)
-
-        // Attach to panel entity so the ECS system knows to spatialize
-        // this entity's position using this audio session.
-        try {
-            panelEntity.setComponent(AudioSessionId(id, AudioType.STEREO))
-            applyStereoOffsets()
-        } catch (_: Exception) {}
+        // remove + re-set forces ECS to detect the component as changed,
+        // which triggers nativeUnregister + nativeRegisterObjectSessionId
+        // even when Android reuses the same session ID across data sources.
+        try { panelEntity.removeComponent<AudioSessionId>() } catch (_: Exception) {}
+        panelEntity.setComponent(AudioSessionId(id, AudioType.STEREO))
+        applyStereoOffsets()
     }
 
     /**
