@@ -37,6 +37,7 @@ import com.meta.spatial.isdk.IsdkDefaultCursorSystem
 import com.meta.spatial.isdk.IsdkSystem
 import com.meta.spatial.runtime.AlphaMode
 import com.meta.spatial.runtime.ButtonBits
+import com.meta.spatial.runtime.ControllerPose
 import com.meta.spatial.runtime.HitInfo
 import com.meta.spatial.runtime.InputListener
 import com.meta.spatial.runtime.LayerConfig
@@ -56,6 +57,7 @@ import com.meta.spatial.toolkit.Scale
 import com.meta.spatial.toolkit.SceneObjectSystem
 import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.TransformParent
+import com.meta.spatial.toolkit.getAbsoluteTransform
 import me.him188.ani.app.navigation.AniNavigator
 import me.him188.ani.app.ui.exprovider.ExternalContentProviderFactory
 import me.him188.ani.app.ui.exprovider.LocalExternalContentProvider
@@ -279,15 +281,18 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     // ── Controller drag system ────────────────────────────────────────────────
     //
     // Design:
-    // - Each unbound panel has its own ControllerDragger, created on first grab.
-    // - The main panel uses the activity‑level controllerDragger.
-    // - When squeeze is pressed, the controller‑to‑panel relative pose is captured
-    //   and maintained during the drag. On release, the panel stays where it is.
-    // - Bound panels are skipped by findOrKeepTarget — grabbing near a bound panel
-    //   falls through to the main panel dragger (same effect as dragging main panel).
+    // - Target selection uses controller ray‑casting (lineSegmentIntersect).
+    // - On first squeeze frame the ray finds which panel the controller points at.
+    //   The hit entity is looked up in panelByEntity and becomes the drag target.
+    //   During the drag the same target is kept until release.
+    // - Bound panels are excluded — pointing at a bound panel falls through to
+    //   the main panel dragger (same effect as dragging the main panel).
+    // - Each unbound panel gets its own ControllerDragger on first grab.
     // - Thumbstick during drag: left/right → adjusts scale, up/down → adjusts
     //   distance along the controller ray direction.
     // - Two hands on the same target: pinch‑to‑zoom via controller distance.
+
+    companion object { private const val RAY_MAX_DISTANCE = 50f }
 
     /** Read digital thumbstick axes from a controller. Returns (thumbX, thumbY). */
     private fun readThumbstick(ctrl: Controller?, isLeft: Boolean): Pair<Float, Float> {
@@ -308,22 +313,38 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         return tx to ty
     }
 
-    /** Resolve which dragger to use. Bound panels redirect to the main panel. */
+    /** Resolve which dragger to use. Main panel and bound panels use controllerDragger. */
     private fun draggerFor(target: SpatialPanel?): ControllerDragger =
-        if (target != null && target.isBound) controllerDragger
-        else target?.ensureDragger() ?: controllerDragger
+        when {
+            target == null || target.isBound || target.entity == mainPanelEntity -> controllerDragger
+            else -> target.ensureDragger()
+        }
+
+    /** Shoot a ray from the controller and return the hit panel, or null. */
+    @OptIn(SpatialSDKExperimentalAPI::class)
+    private fun raycastTarget(isLeft: Boolean): SpatialPanel? {
+        val cp = scene.getControllerPoseAtTime(isLeft, System.currentTimeMillis())
+        if ((cp.flags and ControllerPose.LocationValidBit) == 0) return null
+        val origin = cp.pose.t
+        val end = origin + cp.pose.forward() * RAY_MAX_DISTANCE
+        val hit = scene.lineSegmentIntersect(origin, end) ?: return null
+        val panel = panelByEntity[hit.entity] ?: return null
+        return if (panel.isBound) null else panel
+    }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun tickControllers(hs: HandTrackingDetector.HandState, ab: AvatarBody) {
-        setHittable(!hs.isDragging)
         val ls = hs.leftActive; val rs = hs.rightActive
 
-        // Find targets — bound panels are excluded by findOrKeepTarget
-        val lt = if (ls) findOrKeepTarget(hs.leftPose, leftDragTarget) else null
-        val rt = if (rs) findOrKeepTarget(hs.rightPose, rightDragTarget) else null
+        // Ray‑cast on first squeeze frame to find target; keep it during the drag.
+        // Must run BEFORE setHittable(false) so the ray can hit the panel mesh.
+        val lt = if (ls) (leftDragTarget ?: raycastTarget(isLeft = true)) else null
+        val rt = if (rs) (rightDragTarget ?: raycastTarget(isLeft = false)) else null
         leftDragTarget = lt; rightDragTarget = rt
 
-        // Read thumbstick values (used only when squeeze is active)
+        // Disable hittable during drag (after raycast)
+        setHittable(!hs.isDragging)
+
         val lc = ab.leftHand.tryGetComponent<Controller>()
         val rc = ab.rightHand.tryGetComponent<Controller>()
 
@@ -335,15 +356,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             return
         }
 
-        // Left hand dragging
         if (ls) {
             val (tx, ty) = readThumbstick(lc, isLeft = true)
             draggerFor(lt).drag(
                 scene.getControllerPoseAtTime(true, System.currentTimeMillis()),
                 null, tx, ty)
         }
-
-        // Right hand dragging — let it co-exist with left hand (different targets)
         if (rs) {
             val (tx, ty) = readThumbstick(rc, isLeft = false)
             draggerFor(rt).drag(
@@ -352,7 +370,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                 tx, ty)
         }
 
-        // Both released → reset all draggers to Idle
         if (!ls && !rs) {
             leftDragTarget = null; rightDragTarget = null
             controllerDragger.drag(null, null, 0f, 0f)
@@ -391,7 +408,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         var best: SpatialPanel? = null; var bestDist = Float.MAX_VALUE
         for (p in panelByEntity.values) {
             if (p.isBound) continue
-            val pp = try { p.entity.getComponent<Transform>().transform.t } catch (_: Exception) { continue }
+            val pp = try { getAbsoluteTransform(p.entity).t } catch (_: Exception) { continue }
             val d = pos.minus(pp).length()
             if (d < 0.5f && d < bestDist) { bestDist = d; best = p }
         }
