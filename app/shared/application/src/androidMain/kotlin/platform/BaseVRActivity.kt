@@ -213,8 +213,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     }
 
     /** Call when the media player is ready to pass its audio session ID for spatialization. */
-    override fun onPlayerAudioSessionReady(sessionId: Int) {
-        if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId)
+    override fun onPlayerAudioSessionReady(sessionId: Int, channelCount: Int) {
+        if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId, channelCount)
     }
 
     // ── Shared InputListener ─────────────────────────────────────────────────

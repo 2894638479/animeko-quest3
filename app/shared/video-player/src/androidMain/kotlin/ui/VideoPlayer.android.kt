@@ -52,7 +52,9 @@ actual fun VideoPlayer(
                 kotlinx.coroutines.delay(500)
                 sid = libass.audioSessionId
             }
-            spatialHost.onPlayerAudioSessionReady(sid)
+            // Channel count may be 0 before audio track is ready — default to 2 (stereo)
+            val channels = libass.audioChannelCount.coerceAtLeast(1)
+            spatialHost.onPlayerAudioSessionReady(sid, channels)
         }
 
         register()
