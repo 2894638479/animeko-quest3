@@ -20,12 +20,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView.ControllerVisibilityListener
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
-import me.him188.ani.app.platform.SpatialAudioHost
+import me.him188.ani.app.platform.LocalSpatialAudioHost
 import me.him188.ani.app.videoplayer.media.LibassExoPlayerMediampPlayer
 import org.openani.mediamp.MediampPlayer
 import org.openani.mediamp.exoplayer.ExoPlayerMediampPlayer
@@ -40,7 +39,7 @@ actual fun VideoPlayer(
     val isPreviewing by rememberUpdatedState(me.him188.ani.app.ui.foundation.LocalIsPreviewing.current)
 
     // Hook audio session for spatial audio on Meta Quest
-    val spatialHost = LocalContext.current as? SpatialAudioHost
+    val spatialHost = LocalSpatialAudioHost.current
     LaunchedEffect(player, spatialHost) {
         if (spatialHost == null) return@LaunchedEffect
         val libass = player as? LibassExoPlayerMediampPlayer ?: return@LaunchedEffect
