@@ -55,10 +55,17 @@ class MediaFetchSelectBundle(
  * PlayerSession 封装对 [MediampPlayer] 的控制. 主要是解析 Media 并播放: [loadMedia].
  */
 class PlayerSession(
-    val player: MediampPlayer,
+    var player: MediampPlayer,
     koin: Koin,
     private val mainDispatcher: CoroutineContext = Dispatchers.Main.immediate,
 ) {
+    /**
+     * Called before [loadMedia] sets new data. Replaces [player] with a fresh
+     * instance so the ExoPlayer gets a new Android audio session ID.
+     * Runs on [mainDispatcher] because ExoPlayer must be created on the main thread.
+     * Set by the ViewModel after construction.
+     */
+    var replacePlayer: (suspend () -> MediampPlayer)? = null
     val mediaResolver: MediaResolver by koin.inject()
     private val hlsPlaybackPreparer: HlsPlaybackPreparer by koin.inject()
     private val getVideoScaffoldConfigUseCase: GetVideoScaffoldConfigUseCase by koin.inject()
@@ -102,6 +109,9 @@ class PlayerSession(
             }.data
 
             logger.info { "Set media data to player: $preparedData" }
+            if (replacePlayer != null) {
+                player = replacePlayer!!()
+            }
             player.setMediaData(preparedData)
             hlsPlaybackProxySession = preparedHlsPlaybackProxySession
             preparedHlsPlaybackProxySession = null
