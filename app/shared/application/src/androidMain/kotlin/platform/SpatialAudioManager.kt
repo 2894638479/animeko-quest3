@@ -70,17 +70,15 @@ class SpatialAudioManager(
      * Set the Android audio session ID from the media player.
      * Call this when ExoPlayer is ready with its audio session.
      */
-    fun setAudioSessionId(id: Int) {
+    fun setAudioSessionId(id: Int, channelCount: Int = 2) {
         if (id <= 0) return
         if (id == audioSessionId) {
-            // Android reused session ID — component value won't change.
-            // Remove first so ECS cleans up the old native registration,
-            // then re-add to force a fresh nativeRegisterObjectSessionId.
             try { panelEntity.removeComponent<AudioSessionId>() } catch (_: Exception) {}
         }
         audioSessionId = id
+        val audioType = if (channelCount <= 1) AudioType.MONO else AudioType.STEREO
         feature.registerAudioSessionId(id, id)
-        panelEntity.setComponent(AudioSessionId(id, AudioType.STEREO))
+        panelEntity.setComponent(AudioSessionId(id, audioType))
         applyStereoOffsets()
     }
 

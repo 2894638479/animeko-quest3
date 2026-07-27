@@ -84,6 +84,9 @@ class LibassExoPlayerMediampPlayer private constructor(
 
     /** Android audio session ID for spatial audio (Meta Quest). */
     val audioSessionId: Int get() = exoPlayer.audioSessionId
+
+    /** Number of audio channels in the current track (1 = mono, 2 = stereo, etc.). */
+    val audioChannelCount: Int get() = exoPlayer.audioFormat?.channelCount ?: 2
     private val backgroundScope = CoroutineScope(
         parentCoroutineContext + SupervisorJob(parentCoroutineContext[Job.Key]),
     )
