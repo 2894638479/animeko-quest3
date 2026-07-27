@@ -74,7 +74,7 @@ import me.him188.ani.app.ui.main.AniSubContent
 import org.koin.android.ext.android.inject
 import java.util.concurrent.ConcurrentHashMap
 
-abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwner, ControllerDragger.Host {
+abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwner, ControllerDragger.Host, SpatialAudioHost {
     lateinit var mainPanelEntity: Entity
     protected var composeContent: (@Composable () -> Unit)? = null
 
@@ -207,7 +207,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     }
 
     /** Call when the media player is ready to pass its audio session ID for spatialization. */
-    fun onPlayerAudioSessionReady(sessionId: Int) {
+    override fun onPlayerAudioSessionReady(sessionId: Int) {
         if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId)
     }
 
