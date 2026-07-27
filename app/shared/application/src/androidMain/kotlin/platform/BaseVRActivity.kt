@@ -64,6 +64,7 @@ import me.him188.ani.app.ui.foundation.PanelControlMode
 import me.him188.ani.app.ui.foundation.PanelHandle
 import me.him188.ani.app.ui.foundation.PanelManager
 import me.him188.ani.app.ui.foundation.VrPanelControlBarHost
+import me.him188.ani.app.platform.LocalSpatialAudioHost
 import me.him188.ani.app.ui.foundation.PanelManager.PanelEntry
 import me.him188.ani.app.ui.foundation.PanelManager.PanelPosition
 import me.him188.ani.app.ui.foundation.layout.LocalPlatformWindow
@@ -99,6 +100,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             if (!::mainPanelEntity.isInitialized) return
             val clamped = value.coerceIn(0.1f..10f)
             mainPanelEntity.setComponent(Scale(Vector3(clamped)))
+            if (::spatialAudio.isInitialized) spatialAudio.updateScale(clamped)
             for (panel in panelByEntity.values) {
                 if (panel.isBound) {
                     panel.entity.setComponent(Scale(Vector3(clamped)))
@@ -133,6 +135,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                     LocalPanelManager provides this@BaseVRActivity,
                     LocalPlatformWindow provides rememberPlatformWindow(),
                     LocalExternalContentProvider provides externalComponentProviderUpdated,
+                    LocalSpatialAudioHost provides this@BaseVRActivity,
                 ) {
                     AniApp { AniSubContent(navigator) { content() } }
                 }
@@ -172,6 +175,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val vp = scene.getViewerPose()
         mainPanelEntity.setComponent(Transform(Pose(vp.t.plus(vp.forward().times(2f)), vp.q)))
         mainPanelEntity.setComponent(Scale(1f))
+        if (::spatialAudio.isInitialized) spatialAudio.updateScale(1f)
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
@@ -202,7 +206,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT); scene.setPreferredDisplayRate(120f)
 
         // Spatial audio — audio sounds like it comes from the main panel position
-        spatialAudio = SpatialAudioManager(scene, mainPanelEntity)
+        spatialAudio = SpatialAudioManager(scene, mainPanelEntity, entry.size.defaultWidth)
         spatialAudio.registerSystem(systemManager, componentManager)
     }
 
@@ -447,6 +451,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                 } catch (_: Exception) {}
                 else -> {}
             }
+        }
+    }
+
+    // ── Scale propagation ───────────────────────────────────────────────────
+
+    /** Called by [SpatialPanel] when its scale changes. Propagates to spatial audio if main panel. */
+    internal fun onMainPanelScaleChanged(scale: Float, entity: Entity) {
+        if (entity == mainPanelEntity && ::spatialAudio.isInitialized) {
+            spatialAudio.updateScale(scale)
         }
     }
 

@@ -38,7 +38,11 @@ class SpatialPanel internal constructor(
                 set(v) { entity.setComponent(Transform(v)) }
             override var scale: Float
                 get() = try { entity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
-                set(v) { entity.setComponent(Scale(Vector3(v.coerceIn(0.1f, 10f)))) }
+                set(v) {
+                    val clamped = v.coerceIn(0.1f, 10f)
+                    entity.setComponent(Scale(Vector3(clamped)))
+                    host.onMainPanelScaleChanged(clamped, this@SpatialPanel.entity)
+                }
         })
     }
 
@@ -58,7 +62,9 @@ class SpatialPanel internal constructor(
     }
 
     override fun setScale(scale: Float) {
-        entity.setComponent(Scale(Vector3(scale.coerceIn(0.1f, 10f))))
+        val clamped = scale.coerceIn(0.1f, 10f)
+        entity.setComponent(Scale(Vector3(clamped)))
+        host.onMainPanelScaleChanged(clamped, entity)
     }
 
     override fun setDistance(distance: Float) {
