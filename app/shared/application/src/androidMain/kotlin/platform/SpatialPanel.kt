@@ -6,6 +6,7 @@ package me.him188.ani.app.platform
 
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
+import com.meta.spatial.core.SpatialSDKExperimentalAPI
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.toolkit.Hittable
 import com.meta.spatial.toolkit.MeshCollision
@@ -31,8 +32,19 @@ class SpatialPanel internal constructor(
         internal set
 
     /** Dragger for when this panel is grabbed independently (unbound). */
-    internal val dragger: ControllerDragger by lazy {
-        ControllerDragger(object : ControllerDragger.Host {
+    internal var dragger: ControllerDragger? = null
+        private set
+
+    /** Ensure [dragger] is initialized and reset its state to Idle. */
+    @OptIn(SpatialSDKExperimentalAPI::class)
+    internal fun resetDragger() {
+        dragger?.drag(null, null, 0f, 0f)
+    }
+
+    internal fun ensureDragger(): ControllerDragger {
+        val d = dragger
+        if (d != null) return d
+        val newDragger = ControllerDragger(object : ControllerDragger.Host {
             override var pose: Pose
                 get() = entity.getComponent<Transform>().transform
                 set(v) { entity.setComponent(Transform(v)) }
@@ -44,6 +56,8 @@ class SpatialPanel internal constructor(
                     host.onMainPanelScaleChanged(clamped, this@SpatialPanel.entity)
                 }
         })
+        dragger = newDragger
+        return newDragger
     }
 
     /** For MOVE mode: relative offset from hand to panel. */

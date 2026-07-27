@@ -276,77 +276,113 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         }
     }
 
+    // ── Controller drag system ────────────────────────────────────────────────
+    //
+    // Design:
+    // - Each unbound panel has its own ControllerDragger, created on first grab.
+    // - The main panel uses the activity‑level controllerDragger.
+    // - When squeeze is pressed, the controller‑to‑panel relative pose is captured
+    //   and maintained during the drag. On release, the panel stays where it is.
+    // - Bound panels are skipped by findOrKeepTarget — grabbing near a bound panel
+    //   falls through to the main panel dragger (same effect as dragging main panel).
+    // - Thumbstick during drag: left/right → adjusts scale, up/down → adjusts
+    //   distance along the controller ray direction.
+    // - Two hands on the same target: pinch‑to‑zoom via controller distance.
+
+    /** Read digital thumbstick axes from a controller. Returns (thumbX, thumbY). */
+    private fun readThumbstick(ctrl: Controller?, isLeft: Boolean): Pair<Float, Float> {
+        if (ctrl == null) return 0f to 0f
+        var tx = 0f; var ty = 0f
+        val bs = ctrl.buttonState
+        if (isLeft) {
+            if (bs and ButtonBits.ButtonThumbLU != 0) ty += 1f
+            if (bs and ButtonBits.ButtonThumbLD != 0) ty -= 1f
+            if (bs and ButtonBits.ButtonThumbLL != 0) tx -= 1f
+            if (bs and ButtonBits.ButtonThumbLR != 0) tx += 1f
+        } else {
+            if (bs and ButtonBits.ButtonThumbRU != 0) ty += 1f
+            if (bs and ButtonBits.ButtonThumbRD != 0) ty -= 1f
+            if (bs and ButtonBits.ButtonThumbRL != 0) tx -= 1f
+            if (bs and ButtonBits.ButtonThumbRR != 0) tx += 1f
+        }
+        return tx to ty
+    }
+
+    /** Resolve which dragger to use. Bound panels redirect to the main panel. */
+    private fun draggerFor(target: SpatialPanel?): ControllerDragger =
+        if (target != null && target.isBound) controllerDragger
+        else target?.ensureDragger() ?: controllerDragger
+
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun tickControllers(hs: HandTrackingDetector.HandState, ab: AvatarBody) {
         setHittable(!hs.isDragging)
-        val lp = hs.leftPose; val rp = hs.rightPose
         val ls = hs.leftActive; val rs = hs.rightActive
 
-        val lt = if (ls) findOrKeepTarget(lp, leftDragTarget) else null
-        val rt = if (rs) findOrKeepTarget(rp, rightDragTarget) else null
+        // Find targets — bound panels are excluded by findOrKeepTarget
+        val lt = if (ls) findOrKeepTarget(hs.leftPose, leftDragTarget) else null
+        val rt = if (rs) findOrKeepTarget(hs.rightPose, rightDragTarget) else null
         leftDragTarget = lt; rightDragTarget = rt
 
-        if (lt != null && lt == rt) {
-            lt.dragger.drag(lp?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) },
-                            rp?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }, 0f, 0f)
-            return
-        }
-        if (ls) routeDrag(lt, lp, true)
-        if (rs) routeDrag(rt, rp, false)
-        if (!ls && !rs) { leftDragTarget = null; rightDragTarget = null }
-
+        // Read thumbstick values (used only when squeeze is active)
         val lc = ab.leftHand.tryGetComponent<Controller>()
         val rc = ab.rightHand.tryGetComponent<Controller>()
-        if (ls && !rs && lt == null && lc != null) thumbstick(lc, lp, true)
-        else if (rs && !ls && rt == null && rc != null) thumbstick(rc, rp, false)
+
+        // Two hands on the same target → pinch‑to‑zoom (no thumbstick)
+        if (lt != null && lt == rt && ls && rs) {
+            draggerFor(lt).drag(
+                scene.getControllerPoseAtTime(true, System.currentTimeMillis()),
+                scene.getControllerPoseAtTime(false, System.currentTimeMillis()), 0f, 0f)
+            return
+        }
+
+        // Left hand dragging
+        if (ls) {
+            val (tx, ty) = readThumbstick(lc, isLeft = true)
+            draggerFor(lt).drag(
+                scene.getControllerPoseAtTime(true, System.currentTimeMillis()),
+                null, tx, ty)
+        }
+
+        // Right hand dragging — let it co-exist with left hand (different targets)
+        if (rs) {
+            val (tx, ty) = readThumbstick(rc, isLeft = false)
+            draggerFor(rt).drag(
+                null,
+                scene.getControllerPoseAtTime(false, System.currentTimeMillis()),
+                tx, ty)
+        }
+
+        // Both released → reset all draggers to Idle
+        if (!ls && !rs) {
+            leftDragTarget = null; rightDragTarget = null
+            controllerDragger.drag(null, null, 0f, 0f)
+            for (p in panelByEntity.values) p.resetDragger()
+        }
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun tickHands(hs: HandTrackingDetector.HandState) {
         setHittable(!hs.isDragging)
-        val lp = hs.leftPose; val rp = hs.rightPose
         val la = hs.leftActive; val ra = hs.rightActive
 
-        val lt = if (la) findOrKeepTarget(lp, leftDragTarget) else null
-        val rt = if (ra) findOrKeepTarget(rp, rightDragTarget) else null
+        val lt = if (la) findOrKeepTarget(hs.leftPose, leftDragTarget) else null
+        val rt = if (ra) findOrKeepTarget(hs.rightPose, rightDragTarget) else null
         leftDragTarget = lt; rightDragTarget = rt
 
-        if (lt != null && lt == rt) {
-            lt.dragger.drag(lp?.let { scene.getControllerPoseAtTime(true, System.currentTimeMillis()) },
-                            rp?.let { scene.getControllerPoseAtTime(false, System.currentTimeMillis()) }, 0f, 0f)
+        // Two hands on same target → pinch‑to‑zoom
+        if (lt != null && lt == rt && la && ra) {
+            draggerFor(lt).drag(
+                scene.getControllerPoseAtTime(true, System.currentTimeMillis()),
+                scene.getControllerPoseAtTime(false, System.currentTimeMillis()), 0f, 0f)
             return
         }
-        if (la) routeDrag(lt, lp, true)
-        if (ra) routeDrag(rt, rp, false)
-        if (!la && !ra) { leftDragTarget = null; rightDragTarget = null }
-    }
-
-    @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun routeDrag(target: SpatialPanel?, handPose: Pose?, isLeft: Boolean) {
-        val cp = if (isLeft) scene.getControllerPoseAtTime(true, System.currentTimeMillis())
-                 else scene.getControllerPoseAtTime(false, System.currentTimeMillis())
-        if (target != null) target.dragger.drag(cp, null, 0f, 0f)
-        else controllerDragger.drag(cp, null, 0f, 0f)
-    }
-
-    @OptIn(SpatialSDKExperimentalAPI::class)
-    private fun thumbstick(ctrl: Controller, handPose: Pose?, isLeft: Boolean) {
-        var tx = 0f; var ty = 0f
-        if (isLeft) {
-            if (ctrl.buttonState and ButtonBits.ButtonThumbLU != 0) ty += 1f
-            if (ctrl.buttonState and ButtonBits.ButtonThumbLD != 0) ty -= 1f
-            if (ctrl.buttonState and ButtonBits.ButtonThumbLL != 0) tx -= 1f
-            if (ctrl.buttonState and ButtonBits.ButtonThumbLR != 0) tx += 1f
-        } else {
-            if (ctrl.buttonState and ButtonBits.ButtonThumbRU != 0) ty += 1f
-            if (ctrl.buttonState and ButtonBits.ButtonThumbRD != 0) ty -= 1f
-            if (ctrl.buttonState and ButtonBits.ButtonThumbRL != 0) tx -= 1f
-            if (ctrl.buttonState and ButtonBits.ButtonThumbRR != 0) tx += 1f
+        if (la) draggerFor(lt).drag(scene.getControllerPoseAtTime(true, System.currentTimeMillis()), null, 0f, 0f)
+        if (ra) draggerFor(rt).drag(null, scene.getControllerPoseAtTime(false, System.currentTimeMillis()), 0f, 0f)
+        if (!la && !ra) {
+            leftDragTarget = null; rightDragTarget = null
+            controllerDragger.drag(null, null, 0f, 0f)
+            for (p in panelByEntity.values) p.resetDragger()
         }
-        if (tx == 0f && ty == 0f) return
-        controllerDragger.drag(
-            if (isLeft) scene.getControllerPoseAtTime(true, System.currentTimeMillis()) else null,
-            null, tx, ty)
     }
 
     private fun findOrKeepTarget(handPose: Pose?, ref: SpatialPanel?): SpatialPanel? {
