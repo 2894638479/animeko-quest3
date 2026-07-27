@@ -337,13 +337,13 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val ls = hs.leftActive; val rs = hs.rightActive
 
         // Ray‑cast on first squeeze frame to find target; keep it during the drag.
-        // Must run BEFORE setHittable(false) so the ray can hit the panel mesh.
         val lt = if (ls) (leftDragTarget ?: raycastTarget(isLeft = true)) else null
         val rt = if (rs) (rightDragTarget ?: raycastTarget(isLeft = false)) else null
         leftDragTarget = lt; rightDragTarget = rt
 
-        // Disable hittable during drag (after raycast)
-        setHittable(!hs.isDragging)
+        // Only dragged panels lose hittable — others stay enabled so a second
+        // controller can still raycast them independently.
+        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt)
 
         val lc = ab.leftHand.tryGetComponent<Controller>()
         val rc = ab.rightHand.tryGetComponent<Controller>()
@@ -379,12 +379,14 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     private fun tickHands(hs: HandTrackingDetector.HandState) {
-        setHittable(!hs.isDragging)
         val la = hs.leftActive; val ra = hs.rightActive
 
         val lt = if (la) findOrKeepTarget(hs.leftPose, leftDragTarget) else null
         val rt = if (ra) findOrKeepTarget(hs.rightPose, rightDragTarget) else null
         leftDragTarget = lt; rightDragTarget = rt
+
+        // Only dragged panels lose hittable — others stay enabled for independent grabs
+        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt)
 
         // Two hands on same target → pinch‑to‑zoom
         if (lt != null && lt == rt && la && ra) {
