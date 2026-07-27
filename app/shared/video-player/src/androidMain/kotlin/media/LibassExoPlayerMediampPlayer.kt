@@ -81,6 +81,9 @@ class LibassExoPlayerMediampPlayer private constructor(
     )
 
     private val exoPlayer: ExoPlayer get() = exoMediampPlayer.impl
+
+    /** Android audio session ID for spatial audio (Meta Quest). */
+    val audioSessionId: Int get() = exoPlayer.audioSessionId
     private val backgroundScope = CoroutineScope(
         parentCoroutineContext + SupervisorJob(parentCoroutineContext[Job.Key]),
     )

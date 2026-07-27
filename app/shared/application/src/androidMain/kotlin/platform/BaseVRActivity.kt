@@ -206,6 +206,11 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         spatialAudio.registerSystem(systemManager, componentManager)
     }
 
+    /** Call when the media player is ready to pass its audio session ID for spatialization. */
+    fun onPlayerAudioSessionReady(sessionId: Int) {
+        if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId)
+    }
+
     // ── Shared InputListener ─────────────────────────────────────────────────
 
     private fun trackInputHand(suppressOnSqueeze: Boolean) = object : InputListener {
