@@ -1218,7 +1218,7 @@ internal fun PreviewEpisodePage() {
                 EpisodeViewModel(
                     424663,
                     1277147,
-                    context = context,
+                    appContext = context,
                 )
             },
         )

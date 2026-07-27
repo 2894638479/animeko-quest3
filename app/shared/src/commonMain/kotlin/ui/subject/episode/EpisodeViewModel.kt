@@ -241,7 +241,7 @@ class EpisodeViewModel(
     val subjectId: Int,
     initialEpisodeId: Int,
     initialIsFullscreen: Boolean = false,
-    context: Context,
+    private val appContext: Context,
     val getCurrentDate: () -> PackedDate = { PackedDate.now() },
     private val koin: Koin = GlobalKoin,
 ) : KoinComponent, AbstractViewModel(), HasBackgroundScope {
@@ -271,8 +271,10 @@ class EpisodeViewModel(
 
     private val tasker = SingleTaskExecutor(backgroundScope.coroutineContext)
 
-    val player: MediampPlayer =
-        playerStateFactory.create(context, backgroundScope.coroutineContext)
+    var player: MediampPlayer by mutableStateOf(
+        playerStateFactory.create(appContext, backgroundScope.coroutineContext),
+    )
+        private set
 
     @OptIn(UnsafeEpisodeSessionApi::class)
     private val fetchPlayState = EpisodeFetchSelectPlayState(
@@ -305,7 +307,7 @@ class EpisodeViewModel(
             SaveMediaPreferenceExtension,
             ObserveWebMediaSourcePreferenceExtension,
         ),
-        koin,
+        koin = koin,
         sharingStarted = SharingStarted.WhileSubscribed(5_000),
         analyticsContext = object : EpisodeFetchSelectPlayState.AnalyticsContext {
             override suspend fun isFullscreen(): Boolean? {
@@ -313,6 +315,19 @@ class EpisodeViewModel(
             }
         },
     )
+
+    init {
+        fetchPlayState.playerSession.replacePlayer = {
+            val old = player
+            val newPlayer = withContext(Dispatchers.Main) {
+                val np = playerStateFactory.create(appContext, backgroundScope.coroutineContext)
+                old.close()
+                np
+            }
+            player = newPlayer
+            newPlayer
+        }
+    }
 
     val mediaResolver: MediaResolver get() = fetchPlayState.playerSession.mediaResolver
 
@@ -887,7 +902,6 @@ class EpisodeViewModel(
     }
 
     suspend fun switchEpisode(episodeId: Int) {
-        // 在后台 dispatchers 中操作
         backgroundScope.launch {
             fetchPlayState.switchEpisode(episodeId)
         }.join()

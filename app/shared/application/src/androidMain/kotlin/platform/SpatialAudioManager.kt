@@ -72,12 +72,14 @@ class SpatialAudioManager(
      */
     fun setAudioSessionId(id: Int) {
         if (id <= 0) return
+        if (id == audioSessionId) {
+            // Android reused session ID — component value won't change.
+            // Remove first so ECS cleans up the old native registration,
+            // then re-add to force a fresh nativeRegisterObjectSessionId.
+            try { panelEntity.removeComponent<AudioSessionId>() } catch (_: Exception) {}
+        }
         audioSessionId = id
         feature.registerAudioSessionId(id, id)
-        // remove + re-set forces ECS to detect the component as changed,
-        // which triggers nativeUnregister + nativeRegisterObjectSessionId
-        // even when Android reuses the same session ID across data sources.
-        try { panelEntity.removeComponent<AudioSessionId>() } catch (_: Exception) {}
         panelEntity.setComponent(AudioSessionId(id, AudioType.STEREO))
         applyStereoOffsets()
     }
