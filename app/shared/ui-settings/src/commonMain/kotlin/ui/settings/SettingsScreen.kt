@@ -363,10 +363,14 @@ fun SettingsScreen(
                             SettingsTab.SETTINGS_BACKUP -> BackupSettings(vm.cacheDirectoryGroupState)
                             SettingsTab.VR -> {
                                 val vrHost = me.him188.ani.app.platform.LocalVRHost.current
-                                VRGroup(
-                                    onPassthroughChanged = { vrHost?.passthroughEnabled = it },
-                                    onSpatialAudioChanged = { vrHost?.spatialAudioEnabled = it },
-                                )
+                                if (vrHost != null) {
+                                    VRGroup(
+                                        currentMode = vrHost.backgroundMode,
+                                        spatialAudioEnabled = vrHost.spatialAudioEnabled,
+                                        onModeChanged = { vrHost.backgroundMode = it },
+                                        onSpatialAudioChanged = { vrHost.spatialAudioEnabled = it },
+                                    )
+                                }
                             }
                             SettingsTab.ABOUT -> {} // see above
                             SettingsTab.DEBUG -> {}

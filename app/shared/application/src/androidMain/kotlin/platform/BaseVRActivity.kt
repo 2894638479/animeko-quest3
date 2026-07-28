@@ -206,19 +206,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (systemManager.tryFindSystem<IsdkComponentCreationSystem>() == null) systemManager.registerSystem(IsdkComponentCreationSystem())
         if (systemManager.tryFindSystem<AvatarSystem>() == null) systemManager.registerSystem(AvatarSystem())
 
-        // Skybox — immersive background when passthrough is off.
-        // Drop an equirectangular JPG at res/drawable/skydome.jpg to use it.
-        Entity.create(
-            Mesh(android.net.Uri.parse("mesh://skybox")),
-            Material().apply {
-                baseColor = Color4(0.02f, 0.02f, 0.08f, 1f)
-                try {
-                    baseTextureAndroidResourceId = R.drawable.skydome
-                } catch (_: Exception) {} // image not provided → use solid color
-                unlit = true
-            },
-        )
-
         val entry = PanelEntry(PanelManager.PanelSize.WIDE, PanelPosition.MIDDLE)
         val regId = regIds[entry]!!
         mainPanelEntity = Entity.create(Panel(regId), Scale(Vector3(1f)))
@@ -231,8 +218,9 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             o.addInputListener(trackInputHand(true))
         }
 
-        scene.enablePassthrough(true); scene.setReferenceSpace(ReferenceSpace.LOCAL)
+        scene.setReferenceSpace(ReferenceSpace.LOCAL)
         spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT); scene.setPreferredDisplayRate(120f)
+        applyBackgroundMode(VRBackgroundMode.PASSTHROUGH)
 
         // Spatial audio — audio sounds like it comes from the main panel position
         spatialAudio = SpatialAudioManager(scene, mainPanelEntity, entry.size.defaultWidth)
@@ -247,6 +235,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     // ── VRHost ───────────────────────────────────────────────────────────────
 
     private var _passthroughEnabled: Boolean = true
+    private var _backgroundMode: VRBackgroundMode = VRBackgroundMode.PASSTHROUGH
+    private var _skyboxEntity: Entity? = null
+
+    override var backgroundMode: VRBackgroundMode
+        get() = _backgroundMode
+        set(value) { applyBackgroundMode(value) }
 
     override var passthroughEnabled: Boolean
         get() = _passthroughEnabled
@@ -258,6 +252,52 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     override var spatialAudioEnabled: Boolean
         get() = ::spatialAudio.isInitialized
         set(value) { /* spatial audio toggle — future enhancement */ }
+
+    private fun applyBackgroundMode(mode: VRBackgroundMode) {
+        _backgroundMode = mode
+        // Destroy old skybox
+        try { _skyboxEntity?.destroy() } catch (_: Exception) {}
+        _skyboxEntity = null
+
+        when (mode) {
+            VRBackgroundMode.PASSTHROUGH -> {
+                scene.enablePassthrough(true)
+                _passthroughEnabled = true
+            }
+            VRBackgroundMode.BLACK -> {
+                scene.enablePassthrough(false)
+                _passthroughEnabled = false
+            }
+            VRBackgroundMode.DARK_BLUE -> {
+                scene.enablePassthrough(false)
+                _passthroughEnabled = false
+                _skyboxEntity = Entity.create(
+                    Mesh(android.net.Uri.parse("mesh://skybox")),
+                    Material().apply {
+                        baseColor = Color4(0.02f, 0.02f, 0.08f, 1f)
+                        unlit = true
+                    },
+                )
+            }
+            else -> {
+                scene.enablePassthrough(false)
+                _passthroughEnabled = false
+                var resId = when (mode) {
+                    VRBackgroundMode.SKYBOX_1 -> R.drawable.skydome_1
+                    VRBackgroundMode.SKYBOX_2 -> R.drawable.skydome_2
+                    VRBackgroundMode.SKYBOX_3 -> R.drawable.skydome_3
+                    else -> 0
+                }
+                _skyboxEntity = Entity.create(
+                    Mesh(android.net.Uri.parse("mesh://skybox")),
+                    Material().apply {
+                        try { baseTextureAndroidResourceId = resId } catch (_: Exception) {}
+                        unlit = true
+                    },
+                )
+            }
+        }
+    }
 
     // ── Shared InputListener ─────────────────────────────────────────────────
 
