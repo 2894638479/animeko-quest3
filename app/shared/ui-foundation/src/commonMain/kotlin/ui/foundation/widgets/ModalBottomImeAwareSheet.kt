@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupPositionProvider
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import me.him188.ani.app.ui.foundation.LocalPanelManager
+import me.him188.ani.app.ui.foundation.VrSafeModalBottomSheet
 import me.him188.ani.app.ui.foundation.dialogs.PlatformPopupProperties
 
 @Composable
@@ -90,6 +92,18 @@ fun ModalBottomImeAwareSheet(
     scrimColor: Color = BottomSheetDefaults.ScrimColor,
     content: @Composable () -> Unit,
 ) {
+    // VR: delegate to VrSafeModalBottomSheet which renders in a spatial panel
+    // to avoid "Window type mismatch" crash from Dialog-based ModalBottomSheet.
+    val panelManager = LocalPanelManager.current
+    if (panelManager != null) {
+        VrSafeModalBottomSheet(
+            onDismissRequest = onDismiss,
+            modifier = modifier,
+            content = content,
+        )
+        return
+    }
+
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
