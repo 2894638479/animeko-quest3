@@ -226,6 +226,7 @@ private fun EpisodeScreenContent(
     BackHandler(enabled = imageViewer.viewing.value) { imageViewer.clear() }
 
     val playbackState by vm.player.playbackState.collectAsStateWithLifecycle()
+    val playbackAutomationSuppressed by vm.playbackAutomationSuppressed.collectAsStateWithLifecycle()
     if (playbackState.isPlaying) {
         ScreenOnEffect()
     }
@@ -234,7 +235,9 @@ private fun EpisodeScreenContent(
     var didSetPaused by rememberSaveable { mutableStateOf(false) }
 
     val pauseOnPlaying: () -> Unit = {
-        if (vm.player.playbackState.value.isPlaying) {
+        if (playbackAutomationSuppressed) {
+            didSetPaused = false
+        } else if (vm.player.playbackState.value.isPlaying) {
             didSetPaused = true
             vm.player.pause()
         } else {
@@ -242,13 +245,13 @@ private fun EpisodeScreenContent(
         }
     }
     val tryUnpause: () -> Unit = {
-        if (didSetPaused) {
+        if (didSetPaused && !playbackAutomationSuppressed) {
             didSetPaused = false
             vm.player.resume()
         }
     }
 
-    AutoPauseEffect(vm)
+    AutoPauseEffect(vm, enabled = !playbackAutomationSuppressed)
     DisplayModeEffect(vm.videoScaffoldConfig)
 
     VideoNotifEffect(vm)
@@ -941,7 +944,8 @@ private fun EpisodeVideo(
         hasNextEpisode = vm.episodeSelectorState.hasNextEpisode,
         onClickNextEpisode = { vm.episodeSelectorState.selectNext() },
         playerControllerState = playerControllerState,
-        onClickSkip85 = { vm.onClickSkip85(it) },
+        opEdSkipDuration = vm.videoScaffoldConfig.opEdSkipDuration,
+        onClickSkipOpEd = { vm.onClickSkipOpEd(it) },
         title = {
             val episode = page.episodePresentation
             val subject = page.subjectPresentation
@@ -1019,8 +1023,18 @@ private fun EpisodeVideo(
                 platformComponents.brightnessManager?.asLevelController() ?: NoOpLevelController
             }
         }.value,
-        playbackSpeedControllerState = remember {
-            vm.player.features[PlaybackSpeed]?.let { PlaybackSpeedControllerState(it, scope = scope) }
+        playbackSpeedControllerState = run {
+            val playbackSpeed = vm.player.features[PlaybackSpeed]
+            remember(playbackSpeed) {
+                playbackSpeed?.let {
+                    PlaybackSpeedControllerState(
+                        playbackSpeed = it,
+                        rangeProvider = { vm.playbackSpeedRange },
+                        onCommitSpeed = { speed -> vm.setPlaybackSpeed(speed) },
+                        scope = scope,
+                    )
+                }
+            }
         },
         videoAspectRatioControllerState = remember {
             vm.player.features[VideoAspectRatio]?.let { VideoAspectRatioControllerState(it, scope = scope) }
@@ -1150,9 +1164,9 @@ private fun EpisodeCommentColumn(
  * 切后台自动暂停
  */
 @Composable
-private fun AutoPauseEffect(viewModel: EpisodeViewModel) {
+private fun AutoPauseEffect(viewModel: EpisodeViewModel, enabled: Boolean) {
     var pausedVideo by rememberSaveable { mutableStateOf(true) } // live after configuration change
-    if (LocalIsPreviewing.current) return
+    if (LocalIsPreviewing.current || !enabled) return
 
     val autoPauseTasker = rememberUiMonoTasker()
     OnLifecycleEvent {

@@ -264,13 +264,19 @@
     <string name="settings_player_hide_selector_on_select">選擇資料源後自動關閉彈出視窗</string>
     <string name="settings_player_auto_fullscreen_on_landscape">旋轉螢幕時自動全螢幕</string>
     <string name="settings_player_auto_play_next">自動連播</string>
+    <string name="settings_player_audio_time_stretch">高品質音訊變速（WSOLA）</string>
+    <string name="settings_player_audio_time_stretch_description">變速時提供更好的音質；如遇爆音或音訊損壞可關閉</string>
     <string name="settings_player_auto_skip_op_ed">自動跳過 OP 和 ED</string>
     <string name="settings_player_auto_skip_op_ed_description">僅對 BT 資料源的部分資源有效</string>
+    <string name="settings_player_op_ed_skip_duration">OP/ED 跳過時長</string>
+    <string name="settings_player_op_ed_skip_duration_seconds">%1$d 秒</string>
     <string name="settings_player_auto_switch_media_on_error">播放失敗時自動切換資源</string>
     <string name="settings_player_experimental_hls_segment_filter">過濾貼片廣告（實驗性）</string>
     <string name="settings_player_experimental_hls_segment_filter_description">嘗試過濾部分線上來源插入的貼片廣告。僅對以獨立片段插入的廣告有效，識別錯誤時可能跳過正常內容。</string>
-    <string name="settings_player_long_press_fast_forward_speed">長按快進速度</string>
-    <string name="settings_player_long_press_fast_forward_speed_description">長按快進時的速度倍率</string>
+    <string name="settings_player_long_press_fast_forward_speed">長按播放速度</string>
+    <string name="settings_player_long_press_fast_forward_speed_description">長按時使用的播放倍率</string>
+    <string name="settings_player_playback_speed_range">倍速範圍</string>
+    <string name="settings_player_playback_speed_range_description">影響播放頁倍速滑桿和長按播放速度的可調範圍</string>
 
     <!-- Storage Settings -->
     <string name="settings_storage_title">儲存設定</string>
@@ -306,6 +312,16 @@
     <string name="settings_media_source_disable">停用</string>
     <string name="settings_media_source_enable">啟用</string>
     <string name="settings_media_source_delete_can_readd">刪除（可重新添加）</string>
+    <string name="settings_media_source_enter_selection_mode">進入選擇模式</string>
+    <string name="settings_media_source_exit_selection">退出選擇模式</string>
+    <string name="settings_media_source_selected_count">已選擇 %1$d 個資料源</string>
+    <string name="settings_media_source_select_all">選擇全部資料源</string>
+    <string name="settings_media_source_deselect_all">取消選擇全部資料源</string>
+    <string name="settings_media_source_enable_selected">啟用選中的資料源</string>
+    <string name="settings_media_source_disable_selected">停用選中的資料源</string>
+    <string name="settings_media_source_delete_selected">刪除選中的資料源</string>
+    <string name="settings_media_source_delete_selected_title">刪除選中的資料源？</string>
+    <string name="settings_media_source_delete_selected_confirmation">確定刪除選中的 %1$d 個資料源嗎？刪除後將遺失自訂設定，重新添加時需要再次設定。</string>
     <string name="settings_media_source_select_template">選擇模板</string>
 
     <!-- MediaSourceSubscriptionGroup -->
@@ -916,6 +932,7 @@
     <string name="subject_details_show_more">顯示更多</string>
     <string name="subject_details_view_all">查看全部</string>
     <string name="subject_details_episodes">選集</string>
+    <string name="subject_details_manage_cache">緩存管理</string>
     <string name="subject_details_rating">評分</string>
     <string name="subject_details_hot_reviews">熱門評價</string>
     <string name="subject_details_info">作品資訊</string>
@@ -993,6 +1010,9 @@
     <string name="media_selector_web_edit_query_prompt">都不對？</string>
     <string name="media_selector_web_edit_query_action">修改查詢</string>
     <string name="media_selector_web_waiting_captcha">正在等待驗證碼處理</string>
+    <string name="media_selector_web_rate_limited">限流中 · %1$d 秒後自動重試</string>
+    <string name="media_selector_web_captcha_unsupported">此源需要網頁驗證, 當前平台暫不支持, 請在桌面 / Android 端使用或更換數據源</string>
+    <string name="media_source_results_rate_limited">限流中</string>
     <string name="media_selector_summary_manual_select">手動選擇</string>
     <string name="media_selector_summary_change">更換</string>
     <string name="media_selector_summary_auto_selecting">正在自動選擇資料來源</string>
@@ -1230,7 +1250,7 @@
     <string name="subject_episode_danmaku_service_baha_short">巴</string>
     <string name="subject_episode_now_playing">正在播放</string>
     <string name="subject_episode_danmaku_settings_title">彈幕設定</string>
-    <string name="subject_episode_fast_forward_85_seconds">快轉 85 秒</string>
+    <string name="subject_episode_fast_forward_seconds">快轉 %1$d 秒</string>
     <string name="subject_episode_collapse_sidebar">摺疊側邊欄</string>
     <string name="subject_episode_expand_sidebar">展開側邊欄</string>
     <string name="subject_episode_preview_mode">預覽模式</string>
@@ -1290,6 +1310,80 @@
     <string name="person_details_career_writer">作家</string>
     <string name="person_details_career_illustrator">繪師</string>
     <string name="person_details_career_actor">演員</string>
+
+    <!-- 一起看 -->
+    <string name="watch_together_title">一起看</string>
+    <string name="settings_watch_together_social">社交觀看</string>
+    <string name="settings_watch_together_description">加入房間，與朋友同步播放進度</string>
+    <string name="watch_together_bubble">一起看</string>
+    <string name="watch_together_login_required">登入後才能使用一起看</string>
+    <string name="watch_together_login_description">房間使用你的 Ani 帳號識別成員並保障工作階段安全。</string>
+    <string name="watch_together_login">前往登入</string>
+    <string name="watch_together_room_name">房間名稱</string>
+    <string name="watch_together_password">密碼</string>
+    <string name="watch_together_show_password">顯示密碼</string>
+    <string name="watch_together_join_helper">若房間不存在，將自動建立新房間。</string>
+    <string name="watch_together_join">加入房間</string>
+    <string name="watch_together_joining">正在加入…</string>
+    <string name="watch_together_join_failed">無法加入房間：%1$s</string>
+    <string name="watch_together_error_wrong_password">房間密碼錯誤</string>
+    <string name="watch_together_error_room_full">房間人數已滿</string>
+    <string name="watch_together_error_room_closed">房間已經關閉</string>
+    <string name="watch_together_error_invalid_name">房間名稱須為 1 至 32 個字元</string>
+    <string name="watch_together_error_invalid_password">密碼須為 1 至 64 個字元</string>
+    <string name="watch_together_error_rate_limited">嘗試次數過多，請稍後再試</string>
+    <string name="watch_together_error_temporary">服務暫時無法使用，請稍後再試</string>
+    <string name="watch_together_connection_connected">已連線</string>
+    <string name="watch_together_connection_reconnecting">正在重新連線…</string>
+    <string name="watch_together_connection_degraded">已透過輪詢連線</string>
+    <string name="watch_together_members_count">%1$d 人</string>
+    <string name="watch_together_now_playing">房主播放狀態</string>
+    <string name="watch_together_host_idle">房主暫未播放集數</string>
+    <string name="watch_together_host">房主</string>
+    <string name="watch_together_you_are_host">你是房主</string>
+    <string name="watch_together_following">正在跟隨房主</string>
+    <string name="watch_together_free_watching">正在自由觀看</string>
+    <string name="watch_together_disconnected">已掉線</string>
+    <string name="watch_together_idle">閒置</string>
+    <string name="watch_together_watching">觀看中</string>
+    <string name="watch_together_follow_host">跟隨房主播放</string>
+    <string name="watch_together_leave">離開</string>
+    <string name="watch_together_disband">解散</string>
+    <string name="watch_together_disable">關閉</string>
+    <string name="watch_together_more_options">更多選項</string>
+    <string name="watch_together_disable_feature">關閉一起看功能</string>
+    <string name="watch_together_disable_feature_desc">將退出房間並隱藏懸浮球</string>
+    <string name="watch_together_collapse">收合</string>
+    <string name="watch_together_cancel">取消</string>
+    <string name="watch_together_minimize">最小化</string>
+    <string name="watch_together_confirm_disband">確定要為所有成員解散此房間嗎？</string>
+    <string name="watch_together_confirm_disable">確定要關閉「一起看」嗎？關閉後可在設定中重新開啟。</string>
+    <string name="watch_together_room_closed">房主已解散房間</string>
+    <string name="watch_together_session_replaced">此房間已在另一台裝置上開啟。</string>
+    <string name="watch_together_rejoined">原房間已過期，已為你重新建立。</string>
+    <string name="watch_together_rejoin_failed">無法恢復上次的一起看房間。</string>
+    <string name="watch_together_navigation_blocked">跟隨房主中，無法自行進入播放頁</string>
+    <string name="watch_together_stop_following">關閉跟隨</string>
+    <string name="watch_together_resynced">已與房主重新同步</string>
+    <string name="watch_together_join_subtitle">加入房間，和朋友同步觀看</string>
+    <string name="watch_together_members_label">成員（%1$d）</string>
+    <string name="watch_together_chip_following">跟隨中</string>
+    <string name="watch_together_chip_free">自由觀看</string>
+    <string name="watch_together_member_watching">觀看中 · 第 %1$s 話 %2$s</string>
+    <string name="watch_together_member_offline">已掉線 · %1$d 分鐘前</string>
+    <string name="watch_together_you">（我）</string>
+    <string name="watch_together_follow_host_desc">自動進入房主觀看的劇集並同步進度</string>
+    <string name="watch_together_host_desc">你的播放、暫停、跳轉會同步給跟隨中的成員</string>
+    <string name="watch_together_host_empty_self">你還未開始播放。進入任意集數後，跟隨中的成員會自動加入觀看。</string>
+    <string name="watch_together_episode_label">第 %1$s 話 · %2$s</string>
+    <string name="watch_together_state_playing">房主播放中</string>
+    <string name="watch_together_state_paused">已暫停</string>
+    <string name="watch_together_state_buffering">緩衝中</string>
+    <string name="watch_together_state_loading">正在載入</string>
+    <string name="watch_together_guidance_playing">正在跟隨房主播放《%1$s》第 %2$s 話</string>
+    <string name="watch_together_resynced_forward">已與房主重新同步（快進 %1$d 秒）</string>
+    <string name="watch_together_resynced_backward">已與房主重新同步（快退 %1$d 秒）</string>
+    <string name="watch_together_got_it">知道了</string>
 </resources>
 
 <!--@formatter:on-->

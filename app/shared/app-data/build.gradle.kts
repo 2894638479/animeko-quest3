@@ -32,6 +32,7 @@ kotlin {
         implementation(projects.app.shared.appPlatform)
         implementation(projects.app.shared.appLang)
         implementation(projects.utils.intellijAnnotations)
+        implementation(libs.compose.components.resources)
         api(projects.app.shared.videoPlayer.videoPlayerApi)
         api(projects.app.shared.videoPlayer.torrentSource)
         api(libs.mediamp.api)
@@ -87,8 +88,23 @@ kotlin {
     sourceSets.getByName("jvmTest").dependencies {
         implementation(libs.slf4j.simple)
     }
+    sourceSets.desktopMain {
+        dependencies {
+            implementation(libs.onnxruntime)
+            // 判断的是构建主机, 所以 Windows ARM64 包必须在 ARM64 机器上原生构建, 无法从 x64 交叉打包.
+            if (getOs() == Os.Windows && getArch() == Arch.AARCH64) {
+                // AndroidX sqlite-bundled-jvm 没有 Windows ARM64 native 库, 这里补上本机编译的 sqliteJni.dll.
+                // 详见 ci-helper/sqlite-woa64/build.gradle.kts 的头注释
+                runtimeOnly(projects.ciHelper.sqliteWoa64)
+            }
+        }
+    }
+    sourceSets.desktopTest {
+        resources.srcDir("src/androidDeviceTest/assets")
+    }
     sourceSets.androidMain.dependencies {
         implementation(libs.androidx.browser)
+        implementation(libs.onnxruntime.android)
         api(libs.androidx.lifecycle.runtime.ktx)
         api(libs.androidx.lifecycle.service)
         api(libs.androidx.lifecycle.process)
@@ -98,6 +114,11 @@ kotlin {
         implementation(libs.stately.common) // fixes koin bug
         implementation(libs.kotlinx.io.okio)
     }
+}
+
+compose.resources {
+    packageOfResClass = "me.him188.ani.app.data"
+    generateResClass = always
 }
 
 room {

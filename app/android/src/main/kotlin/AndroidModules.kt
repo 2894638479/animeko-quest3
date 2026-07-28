@@ -15,6 +15,7 @@ import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.runBlocking
@@ -45,8 +46,11 @@ import me.him188.ani.app.data.models.preference.PikPakConfig
 import me.him188.ani.torrent.pikpak.PikPakCredentials
 import me.him188.ani.torrent.pikpak.PikPakOfflineDownloadEngine
 import me.him188.ani.torrent.pikpak.PikPakSessionStoreAdapter
-import me.him188.ani.app.domain.mediasource.web.AndroidWebCaptchaCoordinator
-import me.him188.ani.app.domain.mediasource.web.WebCaptchaCoordinator
+import me.him188.ani.app.domain.mediasource.web.AndroidOnnxImageCaptchaRecognizer
+import me.him188.ani.app.domain.mediasource.web.captcha.AndroidCaptchaBrowserFactory
+import me.him188.ani.app.domain.mediasource.web.captcha.CaptchaBrowserFactory
+import me.him188.ani.app.domain.mediasource.web.captcha.ImageCaptchaRecognizer
+import me.him188.ani.app.domain.mediasource.web.captcha.WebSessionManager
 import me.him188.ani.app.domain.settings.ProxyProvider
 import me.him188.ani.app.domain.torrent.DefaultTorrentManager
 import me.him188.ani.app.domain.torrent.IRemoteAniTorrentEngine
@@ -97,7 +101,8 @@ fun getAndroidModules(
         AndroidPermissionManager()
     }
     single<BrowserNavigator> { AndroidBrowserNavigator() }
-    single<WebCaptchaCoordinator> { AndroidWebCaptchaCoordinator(androidContext()) }
+    single<CaptchaBrowserFactory> { AndroidCaptchaBrowserFactory(androidContext()) }
+    single<ImageCaptchaRecognizer> { AndroidOnnxImageCaptchaRecognizer() }
     single<HlsPlaybackPreparer> { PlatformHlsPlaybackPreparer(get()) }
 
     single<TorrentEngineAccess> { serviceConnectionManager }
@@ -173,7 +178,14 @@ fun getAndroidModules(
     }
 
     single<MediampPlayerFactory<*>> {
-        MediampPlayerFactoryLoader.register(LibassExoPlayerMediampPlayerFactory())
+        val videoScaffoldConfig = get<SettingsRepository>().videoScaffoldConfig
+        MediampPlayerFactoryLoader.register(
+            LibassExoPlayerMediampPlayerFactory {
+                // 音频处理链在 ExoPlayer 构造时确定, 无法在已创建的播放器上切换.
+                // 工厂接口是同步的, 因此每次创建播放器时在此读取 DataStore 中的当前值.
+                runBlocking { videoScaffoldConfig.flow.first().enableHighQualityAudioTimeStretch }
+            },
+        )
         MediampPlayerSurfaceProviderLoader.register(ExoPlayerMediampPlayerSurfaceProvider())
         MediampPlayerFactoryLoader.first()
     }
@@ -227,7 +239,7 @@ fun getAndroidModules(
                     AndroidWebMediaResolver(
                         get<MediaSourceManager>().webVideoMatcherLoader,
                         get<SettingsRepository>(),
-                        get<WebCaptchaCoordinator>(),
+                        get<WebSessionManager>(),
                     ),
                 ),
         )

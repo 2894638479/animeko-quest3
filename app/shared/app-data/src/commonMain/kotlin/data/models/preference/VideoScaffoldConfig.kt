@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024-2025 OpenAni and contributors.
+ * Copyright (C) 2024-2026 OpenAni and contributors.
  *
  * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
  * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
@@ -14,6 +14,8 @@ import androidx.compose.runtime.Stable
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import me.him188.ani.utils.platform.annotations.SerializationOnly
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 @Immutable
 @Serializable
@@ -72,9 +74,17 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
      */
     val autoSkipOpEd: Boolean = true,
     /**
+     * 跳过 OP 和 ED 的时长. UI 仅提供 80, 85 和 90 秒三个选项.
+     */
+    val opEdSkipDuration: Duration = 85.seconds,
+    /**
      * 在播放器错误时自动切换视频源
      */
     val autoSwitchMediaOnPlayerError: Boolean = true,
+    /**
+     * 在 Android 上使用高质量 WSOLA 处理非 1x 速度的音频.
+     */
+    val enableHighQualityAudioTimeStretch: Boolean = true,
     /**
      * 过滤 HLS 播放列表中的插播片段.
      *
@@ -96,6 +106,26 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
      */
     val fastForwardSpeed: Float = 2.5f, // 3 倍弹幕会跳, 所以慢点, see #1524
     /**
+     * 全局常驻播放倍速. 跨剧集、条目和应用重启保持.
+     *
+     * 始终位于 [minPlaybackSpeed]..[maxPlaybackSpeed] 范围内; 量化由 UI 层 (SteppedSlider) 保证.
+     *
+     * @since 5.8
+     */
+    val playbackSpeed: Float = 1f,
+    /**
+     * 用户可调倍速范围的下界.
+     *
+     * @since 5.8
+     */
+    val minPlaybackSpeed: Float = 0.5f,
+    /**
+     * 用户可调倍速范围的上界.
+     *
+     * @since 5.8
+     */
+    val maxPlaybackSpeed: Float = 2.5f,
+    /**
      * 播放器的音量.
      *
      * 在 Desktop 和 iOS 使用, Android 总是使用系统音量.
@@ -106,7 +136,67 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
     // WARNING: if you add new property here, review Companion properties.
     @Suppress("PropertyName") @Transient val _placeholder: Int = 0,
 ) {
+    /**
+     * 应用新的可调倍速范围，并将依赖该范围的值限制在其中。
+     */
+    fun withPlaybackSpeedRange(
+        range: ClosedFloatingPointRange<Float>,
+    ): VideoScaffoldConfig {
+        require(range.endInclusive - range.start >= MIN_PLAYBACK_SPEED_RANGE_WIDTH) {
+            "Playback speed range must span at least $MIN_PLAYBACK_SPEED_RANGE_WIDTH, but was $range"
+        }
+        return copy(
+            minPlaybackSpeed = range.start,
+            maxPlaybackSpeed = range.endInclusive,
+            playbackSpeed = playbackSpeed.coerceIn(range),
+            fastForwardSpeed = fastForwardSpeed.coerceIn(range),
+        )
+    }
+
     companion object {
+        /**
+         * 播放器统一支持的硬范围下界.
+         */
+        const val MIN_SUPPORTED_PLAYBACK_SPEED: Float = 0.25f
+
+        /**
+         * 播放器统一支持的硬范围上界.
+         */
+        const val MAX_SUPPORTED_PLAYBACK_SPEED: Float = 4.0f
+
+        /** 用户可调倍速范围的最小宽度，即一个档位。 */
+        const val MIN_PLAYBACK_SPEED_RANGE_WIDTH: Float = 0.25f
+
+        /**
+         * 将 RangeSlider 的候选值规范化为至少一个档位宽的合法范围。
+         */
+        fun normalizePlaybackSpeedRange(
+            range: ClosedFloatingPointRange<Float>,
+            previousRange: ClosedFloatingPointRange<Float>? = null,
+        ): ClosedFloatingPointRange<Float> {
+            val start = range.start.coerceIn(MIN_SUPPORTED_PLAYBACK_SPEED, MAX_SUPPORTED_PLAYBACK_SPEED)
+            val end = range.endInclusive.coerceIn(MIN_SUPPORTED_PLAYBACK_SPEED, MAX_SUPPORTED_PLAYBACK_SPEED)
+            if (end - start >= MIN_PLAYBACK_SPEED_RANGE_WIDTH) return start..end
+
+            // RangeSlider 允许两个 thumb 重合。此时依据前一帧的值判断被拖动的一端，
+            // 固定另一端，避免左 thumb 向右拖时把整个最小范围一起向右推。
+            if (previousRange != null) {
+                if (start > previousRange.start) {
+                    return (end - MIN_PLAYBACK_SPEED_RANGE_WIDTH).coerceAtLeast(MIN_SUPPORTED_PLAYBACK_SPEED)..end
+                }
+                if (end < previousRange.endInclusive) {
+                    return start..(start + MIN_PLAYBACK_SPEED_RANGE_WIDTH).coerceAtMost(MAX_SUPPORTED_PLAYBACK_SPEED)
+                }
+            }
+
+            val adjustedEnd = (start + MIN_PLAYBACK_SPEED_RANGE_WIDTH).coerceAtMost(MAX_SUPPORTED_PLAYBACK_SPEED)
+            return if (adjustedEnd - start >= MIN_PLAYBACK_SPEED_RANGE_WIDTH) {
+                start..adjustedEnd
+            } else {
+                (end - MIN_PLAYBACK_SPEED_RANGE_WIDTH).coerceAtLeast(MIN_SUPPORTED_PLAYBACK_SPEED)..end
+            }
+        }
+
         @OptIn(SerializationOnly::class)
         @Stable
         val Default = VideoScaffoldConfig()
@@ -122,6 +212,7 @@ data class VideoScaffoldConfig @SerializationOnly constructor(
             autoPlayNext = false,
             autoSkipOpEd = false,
             autoSwitchMediaOnPlayerError = false,
+            enableHighQualityAudioTimeStretch = false,
             enableExperimentalHlsSegmentFiltering = false,
         )
     }

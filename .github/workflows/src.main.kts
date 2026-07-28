@@ -522,6 +522,7 @@ run {
 
     releaseMatrixInstances = listOf(
         ghWin, // win installer
+        ghWinArm64, // win ARM64 portable
         selfMac15.copy(
             buildAllAndroidAbis = true,
             uploadApk = false,
@@ -584,6 +585,7 @@ object ArtifactNames {
         Arch.X64 -> "ani-windows-portable"
         Arch.AARCH64 -> "ani-windows-aarch64-portable"
     }
+
     fun macosDmg(arch: Arch) = "ani-macos-dmg-${arch}"
     fun macosPortable(arch: Arch) = "ani-macos-portable-${arch}"
     fun iosIpa() = "ani-ios-ipa"
@@ -656,16 +658,11 @@ fun getVerifyJobBody(
             step = "Check that Anitorrent can be loaded",
             disabledOn = listOf(Runner.GithubUbuntu2404, Runner.GithubWindows11Arm64),
         ),
-        // Windows ARM64 FFmpeg and VLC use new packaging paths. Startup only logs native load failures,
-        // so the packaged application must verify them explicitly.
+        // Windows ARM64 FFmpeg uses a new packaging path; verify it explicitly because
+        // startup only logs native load failures.
         VerifyTask(
             name = "mediamp-ffmpeg-smoke-test",
             step = "Check that MediaMP FFmpeg can run",
-            enabledOnlyOn = listOf(Runner.GithubWindows11Arm64),
-        ),
-        VerifyTask(
-            name = "mediamp-vlc-load-test",
-            step = "Check that MediaMP VLC can be loaded",
             enabledOnlyOn = listOf(Runner.GithubWindows11Arm64),
         ),
         VerifyTask(
@@ -680,10 +677,14 @@ fun getVerifyJobBody(
             `if` = expr { github.isAnimekoRepository and !github.isPullRequest },
             disabledOn = listOf(Runner.GithubWindows11Arm64),
         ),
+        // Windows ARM64 relies on the SQLite natives built by :ci-helper:sqlite-woa64 (AndroidX does
+        // not ship Windows ARM64 natives). On Linux this additionally asserts that the process holds exactly one
+        // libsqliteJni image — the invariant behind #3188 and #3213, both of which crashed the
+        // shipped AppImage after the driver had loaded successfully.
         VerifyTask(
             name = "sqlite-bundled-load-test",
             step = "Check that bundled SQLite can be loaded",
-            enabledOnlyOn = listOf(Runner.GithubWindows11Arm64),
+            enabledOnlyOn = listOf(Runner.GithubWindows11Arm64, Runner.GithubUbuntu2404),
         ),
     ).filter { task ->
         // Filter task that should execute on this runner.
@@ -1022,6 +1023,7 @@ workflow(
             deleteLocalProperties()
             writeLocalProperties()
             updateJvmArgsInGradleProperties()
+            setupAndroidSdkForWindowsArm64()
             installJbr21()
             chmod777()
             setupGradle()
@@ -1374,9 +1376,9 @@ class WithMatrix(
         when (matrix.runner.os) {
             OS.MACOS -> {
                 val jbrLocationExpr = if (matrix.arch == Arch.AARCH64) {
-                    downloadJbrUnix("jbrsdk_jcef-21.0.8-osx-aarch64-b1038.68.tar.gz")
+                    downloadJbrUnix("jbrsdk_jcef-21.0.11-osx-aarch64-b1163.116.tar.gz")
                 } else {
-                    downloadJbrUnix("jbrsdk_jcef-21.0.6-osx-x64-b895.91.tar.gz")
+                    downloadJbrUnix("jbrsdk_jcef-21.0.11-osx-x64-b1163.116.tar.gz")
                 }
 
                 uses(
@@ -1393,9 +1395,9 @@ class WithMatrix(
             OS.WINDOWS -> {
                 val jbrLocationExpr = if (matrix.arch == Arch.AARCH64) {
                     // WoA-only: Windows ARM64 needs a JBR/JCEF build matching the process architecture.
-                    downloadJbrUsingPython("jbrsdk_jcef-21.0.10-windows-aarch64-b1163.110.tar.gz")
+                    downloadJbrUsingPython("jbrsdk_jcef-21.0.11-windows-aarch64-b1163.116.tar.gz")
                 } else {
-                    downloadJbrUsingPython("jbrsdk_jcef-21.0.5-windows-x64-b750.29.tar.gz")
+                    downloadJbrUsingPython("jbrsdk_jcef-21.0.11-windows-x64-b1163.116.tar.gz")
                 }
                 uses(
                     name = "Setup JBR 21 for Windows",
@@ -1409,7 +1411,7 @@ class WithMatrix(
             }
 
             OS.UBUNTU -> {
-                val jbrLocationExpr = downloadJbrUsingPython("jbrsdk_jcef-21.0.5-linux-x64-b750.29.tar.gz")
+                val jbrLocationExpr = downloadJbrUsingPython("jbrsdk_jcef-21.0.11-linux-x64-b1163.116.tar.gz")
                 uses(
                     name = "Setup JBR 21 for Ubuntu",
                     action = SetupJava_Untyped(
@@ -1801,40 +1803,7 @@ class WithMatrix(
     class PackageDesktopAndUploadOutputs {
     }
 
-    fun JobBuilder<*>.patchBundledSqliteForWindowsArm64() {
-        if (matrix.isWindowsAArch64) {
-            // AndroidX does not yet publish the bundled SQLite native library for Windows ARM64.
-            run(
-                name = "Patch AndroidX SQLite bundled runtime for Windows ARM64",
-                shell = Shell.PowerShell,
-                command = shell(
-                    """
-                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ci-helper/sqlite-woa64/patch-sqlite-bundled-windows-arm64.ps1 app/desktop/build/compose/binaries/main-release/app
-                    """.trimIndent(),
-                ),
-            )
-        }
-    }
-
-    fun JobBuilder<*>.prepareVlcForWindowsArm64() {
-        if (matrix.isWindowsAArch64) {
-            // The vendored VLC 3.0.20 resources are x64-only;
-            // inject VideoLAN's ARM64 runtime before packaging.
-            run(
-                name = "Prepare VLC runtime for Windows ARM64",
-                shell = Shell.PowerShell,
-                command = shell(
-                    """
-                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ci-helper/vlc-woa64/prepare-vlc-windows-arm64.ps1 app/desktop/appResources/windows-arm64/lib
-                    """.trimIndent(),
-                ),
-            )
-        }
-    }
-
     fun JobBuilder<*>.packageDesktopAndUpload(): PackageDesktopAndUploadOutputs {
-        prepareVlcForWindowsArm64()
-
         if (matrix.isWindows) {
             // Windows does not support installers
             runGradle(
@@ -1866,7 +1835,6 @@ class WithMatrix(
             )
         }
 
-        patchBundledSqliteForWindowsArm64()
         uploadComposeLogs()
 
         return PackageDesktopAndUploadOutputs().also {

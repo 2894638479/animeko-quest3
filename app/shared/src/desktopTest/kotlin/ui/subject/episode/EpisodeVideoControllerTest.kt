@@ -99,6 +99,7 @@ import me.him188.ani.app.videoplayer.ui.progress.TAG_PROGRESS_SLIDER_PREVIEW_FRA
 import me.him188.ani.app.videoplayer.ui.progress.TAG_PROGRESS_SLIDER_PREVIEW_POPUP
 import me.him188.ani.app.videoplayer.ui.progress.TAG_SELECT_EPISODE_ICON_BUTTON
 import me.him188.ani.app.videoplayer.ui.progress.TAG_SPEED_SWITCHER_DROPDOWN_MENU
+import me.him188.ani.app.videoplayer.ui.progress.TAG_SPEED_SWITCHER_SLIDER
 import me.him188.ani.app.videoplayer.ui.progress.TAG_SPEED_SWITCHER_TEXT_BUTTON
 import me.him188.ani.app.videoplayer.ui.top.PlayerTopBar
 import me.him188.ani.danmaku.ui.DanmakuConfig
@@ -111,6 +112,9 @@ import org.openani.mediamp.features.PlaybackSpeed
 import org.openani.mediamp.test.TestMediampPlayer
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 private const val TAG_DETACHED_PROGRESS_SLIDER = "detachedProgressSlider"
@@ -207,7 +211,9 @@ class EpisodeVideoControllerTest {
         onExitFullscreen: () -> Unit = {},
         onToggleDanmaku: () -> Unit = {},
         audioController: LevelController = NoOpLevelController,
-        playbackSpeedControllerState: PlaybackSpeedControllerState? = null,
+        playbackSpeed: PlaybackSpeed = NoOpPlaybackSpeedController,
+        onCommitPlaybackSpeed: (Float) -> Unit = {},
+        opEdSkipDuration: Duration = 85.seconds,
         onPlayerStateCreated: (TestMediampPlayer) -> Unit = {},
         onPlatformWindow: (PlatformWindow) -> Unit = {},
         platformWindowOverride: PlatformWindow? = null,
@@ -232,6 +238,7 @@ class EpisodeVideoControllerTest {
                 hasNextEpisode = true,
                 onClickNextEpisode = {},
                 playerControllerState = playerControllerState,
+                opEdSkipDuration = opEdSkipDuration,
                 title = { PlayerTopBar() },
                 danmakuHost = {},
                 danmakuEnabled = false,
@@ -273,8 +280,12 @@ class EpisodeVideoControllerTest {
                 framePreview = framePreview,
                 audioController = audioController,
                 brightnessController = NoOpLevelController,
-                playbackSpeedControllerState = playbackSpeedControllerState ?: remember {
-                    PlaybackSpeedControllerState(NoOpPlaybackSpeedController, scope = scope)
+                playbackSpeedControllerState = remember(playbackSpeed) {
+                    PlaybackSpeedControllerState(
+                        playbackSpeed = playbackSpeed,
+                        onCommitSpeed = onCommitPlaybackSpeed,
+                        scope = scope,
+                    )
                 },
                 videoAspectRatioControllerState = remember {
                     VideoAspectRatioControllerState(NoOpVideoAspectRatio, scope)
@@ -380,6 +391,33 @@ class EpisodeVideoControllerTest {
         }
     }
 
+    @Test
+    fun `forward opening button follows configured duration`() = runAniComposeUiTest {
+        lateinit var playerState: TestMediampPlayer
+        var opEdSkipDuration by mutableStateOf(85.seconds)
+        val visibleControllerState = PlayerControllerState(NORMAL_VISIBLE)
+        setContent {
+            Player(
+                GestureFamily.MOUSE,
+                playerControllerState = visibleControllerState,
+                opEdSkipDuration = opEdSkipDuration,
+                onPlayerStateCreated = { playerState = it },
+            )
+        }
+
+        for (durationSeconds in listOf(80, 85, 90)) {
+            runOnIdle {
+                opEdSkipDuration = durationSeconds.seconds
+                playerState.currentPositionMillis.value = 5_000L
+            }
+
+            onNodeWithContentDescription("Fast forward $durationSeconds seconds").performClick()
+
+            runOnIdle {
+                assertEquals((durationSeconds + 5) * 1_000L, playerState.currentPositionMillis.value)
+            }
+        }
+    }
 
     /**
      * @see GestureFamily.clickToToggleController
@@ -501,6 +539,7 @@ class EpisodeVideoControllerTest {
     fun `touch - keyboard shortcuts - playback fullscreen danmaku seek volume and speed`() = runAniComposeUiTest {
         lateinit var playerState: TestMediampPlayer
         lateinit var playbackSpeed: TestPlaybackSpeed
+        val committedPlaybackSpeeds = mutableListOf<Float>()
         val audioController = TestLevelController(0.5f, levelStep = 0.04f)
         var fullscreenCount = 0
         var exitFullscreenCount = 0
@@ -515,9 +554,8 @@ class EpisodeVideoControllerTest {
                     onExitFullscreen = { exitFullscreenCount++ },
                     onToggleDanmaku = { toggleDanmakuCount++ },
                     audioController = audioController,
-                    playbackSpeedControllerState = remember {
-                        PlaybackSpeedControllerState(playbackSpeed, scope = scope)
-                    },
+                    playbackSpeed = playbackSpeed,
+                    onCommitPlaybackSpeed = { committedPlaybackSpeeds.add(it) },
                     onPlayerStateCreated = { playerState = it },
                 )
             }
@@ -601,11 +639,19 @@ class EpisodeVideoControllerTest {
         }
 
         videoGestureHost.performKeyInput {
+            pressKey(Key.A)
+        }
+        waitForIdle()
+        runOnIdle {
+            assertEquals(0.75f, playbackSpeed.value)
+        }
+
+        videoGestureHost.performKeyInput {
             pressKey(Key.D)
         }
         waitForIdle()
         runOnIdle {
-            assertEquals(1.25f, playbackSpeed.value)
+            assertEquals(1f, playbackSpeed.value)
         }
 
         videoGestureHost.performKeyInput {
@@ -614,6 +660,7 @@ class EpisodeVideoControllerTest {
         waitForIdle()
         runOnIdle {
             assertEquals(1f, playbackSpeed.value)
+            assertEquals(listOf(0.75f, 1f, 1f), committedPlaybackSpeeds)
         }
     }
 
@@ -1197,6 +1244,67 @@ class EpisodeVideoControllerTest {
         }
     }
 
+    @Test
+    fun `touch - swipeToSeek cancellation updates the hint and preview`() = runAniComposeUiTest {
+        setContent {
+            Player(GestureFamily.TOUCH)
+        }
+        waitForIdle()
+        val cancelHint = onNodeWithText("Release to cancel")
+
+        videoGestureHost.performTouchInput {
+            val start = Offset(width * 0.2f, height * 0.8f)
+            down(start)
+            moveTo(Offset(width * 0.8f, start.y))
+        }
+        runOnIdle {
+            assertTrue(progressSliderState.isPreviewing)
+            cancelHint.assertDoesNotExist()
+        }
+
+        videoGestureHost.performTouchInput {
+            moveTo(Offset(width * 0.8f, height * 0.1f))
+        }
+        runOnIdle {
+            cancelHint.assertExists()
+            assertFalse(progressSliderState.isPreviewing)
+        }
+
+        videoGestureHost.performTouchInput {
+            moveTo(Offset(width * 0.8f, height * 0.75f))
+        }
+        runOnIdle {
+            cancelHint.assertDoesNotExist()
+            assertTrue(progressSliderState.isPreviewing)
+        }
+
+        videoGestureHost.performTouchInput {
+            moveTo(Offset(width * 0.8f, height * 0.1f))
+        }
+        runOnIdle {
+            cancelHint.assertExists()
+            assertFalse(progressSliderState.isPreviewing)
+        }
+
+        mainClock.autoAdvance = false
+        videoGestureHost.performTouchInput {
+            up()
+        }
+
+        mainClock.advanceTimeBy(100L)
+        runOnIdle {
+            cancelHint.assertExists()
+        }
+
+        mainClock.advanceTimeBy(500L)
+        runOnIdle {
+            cancelHint.assertDoesNotExist()
+            assertFalse(progressSliderState.isPreviewing)
+            assertEquals(0L, currentPositionMillis)
+        }
+        mainClock.autoAdvance = true
+    }
+
     /**
      * @see GestureFamily.swipeToSeek
      */
@@ -1564,6 +1672,49 @@ class EpisodeVideoControllerTest {
             waitForSideSheetOpen = { waitUntil(timeoutMillis = WAIT_TIMEOUT) { onNodeWithTag(TAG_EPISODE_SELECTOR_SHEET).exists() } },
             waitForSideSheetClose = { waitUntil(timeoutMillis = WAIT_TIMEOUT) { onNodeWithTag(TAG_EPISODE_SELECTOR_SHEET).doesNotExist() } },
         )
+    }
+
+    @Test
+    fun `touch - speed switcher slider - drag updates speed and commits on release`() = runAniComposeUiTest {
+        lateinit var playbackSpeed: TestPlaybackSpeed
+        val committed = mutableListOf<Float>()
+        setContent {
+            val scope = rememberCoroutineScope()
+            playbackSpeed = remember { TestPlaybackSpeed(1f) }
+            Player(
+                GestureFamily.TOUCH,
+                playbackSpeed = playbackSpeed,
+                onCommitPlaybackSpeed = { committed.add(it) },
+            )
+        }
+        onRoot().performClick()
+        runOnIdle {
+            waitUntil(timeoutMillis = WAIT_TIMEOUT) { onNodeWithTag(TAG_SPEED_SWITCHER_TEXT_BUTTON).exists() }
+        }
+        onNodeWithTag(TAG_SPEED_SWITCHER_TEXT_BUTTON).performClick()
+        runOnIdle {
+            waitUntil(timeoutMillis = WAIT_TIMEOUT) { onNodeWithTag(TAG_SPEED_SWITCHER_SLIDER).exists() }
+        }
+
+        // 向右拖动 Slider: 拖动期间实时预览, 松手提交最终值
+        onNodeWithTag(TAG_SPEED_SWITCHER_SLIDER).performTouchInput {
+            down(center)
+            moveBy(Offset(width * 0.2f, 0f))
+        }
+        runOnIdle {
+            val value = playbackSpeed.value
+            assertTrue(value > 1f, "expected speed to increase from 1.0, but was $value")
+            assertTrue(committed.isEmpty(), "speed must not be committed until the drag finishes")
+        }
+        mediaProgressIndicatorText.assertTextEquals("00:00 / 01:40 (-00:57)")
+
+        onNodeWithTag(TAG_SPEED_SWITCHER_SLIDER).performTouchInput {
+            up()
+        }
+        runOnIdle {
+            val value = playbackSpeed.value
+            assertEquals(listOf(value), committed)
+        }
     }
 
     @Test

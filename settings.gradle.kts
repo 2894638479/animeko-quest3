@@ -109,6 +109,7 @@ includeProject(":app:shared:ui-onboarding")
 includeProject(":app:shared:ui-mediaselect")
 includeProject(":app:shared:ui-episode")
 includeProject(":app:shared:ui-exprovider")
+includeProject(":app:shared:ui-watchtogether")
 includeProject(":app:shared:video-player:video-player-api", "app/shared/video-player/api")
 includeProject(":app:shared:video-player:torrent-source")
 includeProject(":app:shared:video-player")
@@ -159,6 +160,7 @@ includeProject(
 
 // ci
 includeProject(":ci-helper", "ci-helper") // 
+includeProject(":ci-helper:sqlite-woa64", "ci-helper/sqlite-woa64") // Windows ARM64 SQLite natives, see its build.gradle.kts
 includeProject(":tools:datasource-test-mcp", "tools/datasource-test-mcp")
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
