@@ -114,7 +114,19 @@ private class ModalBottomImeAwareSheetWindow(
     private val composeView: View,
     saveId: UUID
 ) :
-    AbstractComposeView(composeView.context),
+    AbstractComposeView(
+        if (Build.VERSION.SDK_INT >= 31) {
+            // On API 31+, use createWindowContext to get a properly-typed window context.
+            // This fixes "Window type mismatch" on Meta Quest VR (window type 2037).
+            composeView.context.createWindowContext(
+                composeView.context.display!!,
+                WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                null,
+            )
+        } else {
+            composeView.context
+        }
+    ),
     ViewTreeObserver.OnGlobalLayoutListener,
     ViewRootForInspector {
 
@@ -131,8 +143,14 @@ private class ModalBottomImeAwareSheetWindow(
         clipChildren = false
     }
 
+    @Suppress("DEPRECATION")
     private val windowManager =
-        composeView.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        if (Build.VERSION.SDK_INT >= 31) {
+            context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        } else {
+            @Suppress("DEPRECATION")
+            composeView.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        }
 
     private val displayWidth: Int
         get() = context.resources.displayMetrics.widthPixels
@@ -154,8 +172,14 @@ private class ModalBottomImeAwareSheetWindow(
             title = composeView.context.resources.getString(
                 androidx.compose.ui.R.string.default_popup_window_title,
             )
-            // Get the Window token from the parent view
-            token = composeView.applicationWindowToken
+            // Get the Window token:
+            // When using createWindowContext (API 31+), the WindowManager manages its own token.
+            // On older APIs, use the parent ComposeView's application window token.
+            token = if (Build.VERSION.SDK_INT >= 31) {
+                null // createWindowContext handles token automatically
+            } else {
+                composeView.applicationWindowToken
+            }
 
             // Flags specific to modal bottom sheet.
             flags = flags and (
