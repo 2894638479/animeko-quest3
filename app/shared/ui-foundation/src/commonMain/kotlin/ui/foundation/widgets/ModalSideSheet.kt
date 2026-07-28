@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -81,6 +82,15 @@ fun ModalSideSheet(
 
     val panelManager = LocalPanelManager.current ?: return
     var panel by remember { mutableStateOf<PanelHandle?>(null) }
+
+    // Close panel when composition is disposed (e.g., navigating away)
+    DisposableEffect(Unit) {
+        onDispose {
+            panel?.close()
+            panel = null
+        }
+    }
+
     LaunchedEffect(state.dismissed) {
         if (state.dismissed) {
             panel?.close()
