@@ -10,6 +10,7 @@
 package me.him188.ani.android.navigation
 
 import android.content.Intent
+import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
 import me.him188.ani.app.navigation.BrowserNavigator
@@ -43,6 +44,7 @@ class AndroidBrowserNavigator : BrowserNavigator {
 
     private fun launchChromeTab(context: Context, url: String) {
         val intent = CustomTabsIntent.Builder().build()
+        intent.intent.addFlags(FLAG_ACTIVITY_NEW_TASK)
         intent.launchUrl(context, url.toUri())
     }
 
@@ -59,7 +61,10 @@ class AndroidBrowserNavigator : BrowserNavigator {
     override fun intentOpenVideo(context: Context, url: String): OpenBrowserResult {
         try {
             val browserIntent = Intent(Intent.ACTION_VIEW)
-                .apply { setDataAndType(url.toUri(), "video/*") }
+                .apply {
+                    setDataAndType(url.toUri(), "video/*")
+                    addFlags(FLAG_ACTIVITY_NEW_TASK)
+                }
             context.startActivity(Intent.createChooser(browserIntent, "选择播放器"))
             return OpenBrowserResult.Success
         } catch (ex: Exception) {
@@ -71,6 +76,7 @@ class AndroidBrowserNavigator : BrowserNavigator {
     private fun view(url: String, context: Context) {
         val browserIntent = Intent(Intent.ACTION_VIEW).apply {
             setData(url.toUri())
+            addFlags(FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(browserIntent)
     }
@@ -78,7 +84,10 @@ class AndroidBrowserNavigator : BrowserNavigator {
     override fun openJoinGroup(context: Context): OpenBrowserResult {
         try {
             val browserIntent = Intent(Intent.ACTION_VIEW)
-                .apply { setData(QQ_GROUP.toUri()) }
+                .apply {
+                    setData(QQ_GROUP.toUri())
+                    addFlags(FLAG_ACTIVITY_NEW_TASK)
+                }
             context.startActivity(browserIntent)
             return OpenBrowserResult.Success
         } catch (ex: Exception) {

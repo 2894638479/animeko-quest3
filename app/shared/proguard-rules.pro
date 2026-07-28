@@ -39,11 +39,24 @@
 #-keepattributes *Annotation* # logback-android 推荐添加, 但测试可以不用添加这个
 -dontwarn javax.mail.**
 
+# Meta Spatial SDK — native JNI references must survive R8 shrinking
+-keep class com.meta.spatial.** { *; }
+
 # Meta/Horizon OS missing classes
 -dontwarn horizonos.app.container.TaskContainer
 -dontwarn horizonos.app.container.TaskContainerManager$TaskContainerCallback
 -dontwarn horizonos.app.container.TaskContainerManager
 -dontwarn vros.os.VrosBuild
+
+# Meta Spatial SDK internal references (Facebook/Oculus private APIs not available)
+-dontwarn com.facebook.annotations.**
+-dontwarn com.facebook.endtoend.**
+-dontwarn com.facebook.kotlin.compilerplugins.**
+-dontwarn com.facebook.proguard.annotations.**
+-dontwarn com.facebook.redex.annotations.**
+-dontwarn com.oculus.magic.**
+-dontwarn com.oculus.os.**
+-dontwarn vendor.meta.parfait.qpl.**
 
 # anitorrent
 -keep class org.openani.anitorrent.binding.** { *; }
