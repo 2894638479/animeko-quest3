@@ -8,7 +8,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import me.him188.ani.app.platform.VRBackgroundMode
 import me.him188.ani.app.ui.settings.framework.components.DropdownItem
-import me.him188.ani.app.ui.settings.framework.components.Group
 import me.him188.ani.app.ui.settings.framework.components.SettingsScope
 import me.him188.ani.app.ui.settings.framework.components.SwitchItem
 
