@@ -24,9 +24,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import me.him188.ani.app.ui.foundation.VrSafeModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
@@ -505,10 +504,9 @@ internal fun PersonCommentsSheet(
     val openLinkFailedPrefix = stringResource(Lang.foundation_richtext_open_failed_prefix)
     val imageViewer = rememberImageViewerHandler()
 
-    ModalBottomSheet(
-        onDismissRequest,
+    VrSafeModalBottomSheet(
+        onDismissRequest = onDismissRequest,
         modifier = modifier,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(Modifier.fillMaxWidth()) {
             Text(

@@ -36,10 +36,10 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.BottomSheetDefaults
+
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import me.him188.ani.app.ui.foundation.VrSafeModalBottomSheet
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
@@ -755,10 +755,9 @@ private fun EpisodeScreenContentPhone(
             tryUnpause()
         }
         val scope = rememberCoroutineScope()
-        ModalBottomSheet(
+        VrSafeModalBottomSheet(
             onDismissRequest = dismiss,
             modifier = Modifier.desktopTitleBarPadding().statusBarsPadding(),
-            contentWindowInsets = { BottomSheetDefaults.windowInsets.union(windowInsets) },
         ) {
             DetachedDanmakuEditorLayout(
                 danmakuEditorState,

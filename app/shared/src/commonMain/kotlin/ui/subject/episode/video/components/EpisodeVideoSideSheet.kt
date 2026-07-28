@@ -17,9 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import me.him188.ani.app.ui.foundation.VrSafeModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -134,9 +133,8 @@ object EpisodeVideoSideSheets {
 
         // 竖屏：主设置 & 正则过滤二级导航
         var currentPage by rememberSaveable { mutableStateOf(DanmakuSettingsPage.MAIN) }
-        ModalBottomSheet(
+        VrSafeModalBottomSheet(
             onDismissRequest = onDismissRequest,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
             modifier = Modifier
                 .desktopTitleBarPadding()
                 .statusBarsPadding(),
