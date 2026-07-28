@@ -171,17 +171,23 @@ class LibassExoPlayerMediampPlayer private constructor(
         closed = true
         pendingMediaSource = null
         currentMediaData = null
-        backgroundScope.cancel()
-        if (Looper.myLooper() == Looper.getMainLooper()) {
+        // Close exoMediampPlayer first — this sets AbstractMediampPlayer.closed = true,
+        // blocking any subsequent close() calls from backgroundScope completion handlers.
+        // Then cancel backgroundScope, whose completion handlers fire on Default dispatcher
+        // but their close() is guarded by AbstractMediampPlayer.closed.
+        val closeExoPlayer = {
             exoPlayer.removeListener(assHandler)
             assHandler.release()
             exoMediampPlayer.close()
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            closeExoPlayer()
+            backgroundScope.cancel()
         } else {
             kotlinx.coroutines.runBlocking(Dispatchers.Main) {
-                exoPlayer.removeListener(assHandler)
-                assHandler.release()
-                exoMediampPlayer.close()
+                closeExoPlayer()
             }
+            backgroundScope.cancel()
         }
     }
 
