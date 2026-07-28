@@ -10,6 +10,11 @@
 package me.him188.ani.app.ui.foundation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import me.him188.ani.app.ui.foundation.widgets.ModalBottomImeAwareSheet
 
 /**
@@ -35,12 +40,20 @@ fun VrSafeModalBottomSheet(
     val panelManager = LocalPanelManager.current
 
     if (panelManager != null) {
-        // VR environment: render in a spatial panel
-        VrPanelDialog(
-            onDismissRequest = onDismissRequest,
-            position = PanelManager.PanelPosition.BOTTOM,
-        ) {
-            content()
+        // VR: render in a 16:9 spatial panel at bottom position
+        var panel by remember { mutableStateOf<PanelHandle?>(null) }
+        DisposableEffect(Unit) {
+            panel = panelManager.openPanel(
+                PanelManager.PanelEntry(
+                    PanelManager.PanelSize.WIDE,
+                    PanelManager.PanelPosition.BOTTOM,
+                    PanelManager.PanelHittable.TRUE,
+                ),
+            ) { content() }
+            onDispose {
+                panel?.close()
+                onDismissRequest()
+            }
         }
     } else {
         // Non-VR: use ModalBottomImeAwareSheet (avoids Dialog entirely on Android)
