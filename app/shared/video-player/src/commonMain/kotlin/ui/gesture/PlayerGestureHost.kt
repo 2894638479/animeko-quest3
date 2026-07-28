@@ -55,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -84,6 +85,7 @@ import me.him188.ani.app.ui.foundation.ifThen
 import me.him188.ani.app.ui.foundation.layout.isSystemInFullscreen
 import me.him188.ani.app.ui.lang.*
 import me.him188.ani.app.utils.fixToString
+import me.him188.ani.app.utils.formatSpeedValue
 import me.him188.ani.app.videoplayer.ui.ControllerVisibility
 import me.him188.ani.app.videoplayer.ui.PlaybackSpeedControllerState
 import me.him188.ani.app.videoplayer.ui.PlayerControllerState
@@ -91,6 +93,7 @@ import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.BRIG
 import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.FAST_BACKWARD
 import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.FAST_FORWARD
 import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.PAUSED_ONCE
+import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.PLAYBACK_SPEED
 import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.RESUMED_ONCE
 import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.SEEKING
 import me.him188.ani.app.videoplayer.ui.gesture.GestureIndicatorState.State.VOLUME
@@ -122,6 +125,7 @@ class GestureIndicatorState {
         SEEKING,
         FAST_FORWARD,
         FAST_BACKWARD,
+        PLAYBACK_SPEED,
     }
 
     internal var visible: Boolean by mutableStateOf(false)
@@ -129,6 +133,7 @@ class GestureIndicatorState {
     internal var progressValue: Float by mutableFloatStateOf(0f)
     internal var deltaSeconds: Int by mutableIntStateOf(0)
     internal var seekCancelled: Boolean by mutableStateOf(false)
+    internal var playbackSpeed: Float by mutableFloatStateOf(1f)
     private var counter: Int = 0
 
     private inline fun startShow(
@@ -196,6 +201,13 @@ class GestureIndicatorState {
     }
 
     @UiThread
+    suspend fun showPlaybackSpeed(speed: Float) {
+        show(PLAYBACK_SPEED, setup = { playbackSpeed = speed }) {
+            delay(SHORT)
+        }
+    }
+
+    @UiThread
     suspend fun showSeeking(
         deltaSeconds: Int,
     ) {
@@ -248,6 +260,27 @@ class GestureIndicatorState {
     }
 }
 
+@Immutable
+internal data class GestureIndicatorPresentation(
+    val state: GestureIndicatorState.State,
+    val deltaSeconds: Int,
+    val seekCancelled: Boolean,
+)
+
+internal fun gestureIndicatorPresentation(
+    state: GestureIndicatorState,
+    activeSwipeSeekerState: SwipeSeekerState?,
+): GestureIndicatorPresentation? {
+    if (!state.visible && activeSwipeSeekerState == null) return null
+    val presentationState = if (activeSwipeSeekerState != null) SEEKING
+    else state.state ?: return null
+    return GestureIndicatorPresentation(
+        state = presentationState,
+        deltaSeconds = activeSwipeSeekerState?.deltaSeconds ?: state.deltaSeconds,
+        seekCancelled = activeSwipeSeekerState?.isCancelled ?: state.seekCancelled,
+    )
+}
+
 /**
  * 展示当前快进/快退秒数的指示器.
  *
@@ -261,16 +294,24 @@ fun GestureIndicator(
     val shape = MaterialTheme.shapes.small
     val colors = MaterialTheme.colorScheme
     val activeSwipeSeekerState = swipeSeekerState?.takeIf { it.isSeeking }
-    var lastDelta by remember(state) {
-        mutableIntStateOf(state.deltaSeconds)
+    val presentation = gestureIndicatorPresentation(state, activeSwipeSeekerState)
+    // 淡出期间 presentation 为 null。滑动 seek 的指示器只由 swipeSeekerState 驱动,
+    // GestureIndicatorState.state 全程为 null；不保留最后一帧的话，松手后会淡出一个空 Surface。
+    // 在组合结束后才写入, 避免组合被丢弃时留下脏值; 淡出期间读到的是上一帧提交的快照。
+    val retainedPresentation = remember { mutableStateOf<GestureIndicatorPresentation?>(null) }
+    if (presentation != null) {
+        SideEffect { retainedPresentation.value = presentation }
     }
+    // presentation 非 null 时不读 retainedPresentation, 因此快进过程中不会因保留帧写入而多一次重组。
+    val currentPresentation = presentation ?: retainedPresentation.value
 
     AniAnimatedVisibility(
-        visible = state.visible || activeSwipeSeekerState != null,
+        visible = presentation != null,
         enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)),
         exit = fadeOut(tween(durationMillis = 500)),
         label = "SeekPositionIndicator",
     ) {
+        currentPresentation ?: return@AniAnimatedVisibility
         Surface(
             Modifier.alpha(0.8f),
             color = colors.surface,
@@ -289,7 +330,7 @@ fun GestureIndicator(
                 ) {
                     // Used by volume and brightness
                     val progressIndicator: @Composable () -> Unit = remember(state, colors) {
-                        // This remember is needed because Compose does not remember lambdas 
+                        // This remember is needed because Compose does not remember lambdas
                         // and can cause performance problem in this fast-changing composable.
                         {
                             LinearProgressIndicator(
@@ -302,7 +343,7 @@ fun GestureIndicator(
                         }
                     }
 
-                    when (if (activeSwipeSeekerState != null) SEEKING else state.state) {
+                    when (currentPresentation.state) {
                         RESUMED_ONCE -> {
                             Icon(
                                 Icons.Rounded.PlayArrow, null,
@@ -315,31 +356,20 @@ fun GestureIndicator(
                         }
 
                         SEEKING -> {
-                            val deltaDuration = activeSwipeSeekerState?.deltaSeconds ?: state.deltaSeconds
-                            val seekCancelled = activeSwipeSeekerState?.isCancelled ?: state.seekCancelled
-                            // 记忆变为 0 之前的 delta, 这样在快进/快退结束后, 会显示上一次的 delta, 而不是显示 0
-                            val duration = if (deltaDuration == 0) {
-                                lastDelta
-                            } else {
-                                deltaDuration.also {
-                                    lastDelta = deltaDuration
-                                }
-                            }
-
                             Icon(
                                 when {
-                                    seekCancelled -> Icons.Rounded.Close
-                                    duration > 0 -> Icons.Rounded.FastForward
+                                    currentPresentation.seekCancelled -> Icons.Rounded.Close
+                                    currentPresentation.deltaSeconds > 0 -> Icons.Rounded.FastForward
                                     else -> Icons.Rounded.FastRewind
                                 },
                                 contentDescription = null,
                                 modifier = Modifier.size(iconSize),
                             )
                             Text(
-                                text = if (seekCancelled) {
+                                text = if (currentPresentation.seekCancelled) {
                                     stringResource(Lang.video_player_release_to_cancel)
                                 } else {
-                                    renderTime(duration.absoluteValue)
+                                    renderTime(currentPresentation.deltaSeconds.absoluteValue)
                                 },
                                 maxLines = 1,
                             )
@@ -374,7 +404,10 @@ fun GestureIndicator(
                             Icon(Icons.Rounded.FastRewind, null, Modifier.size(iconSize))
                         }
 
-                        null -> {}
+                        PLAYBACK_SPEED -> {
+                            Icon(Icons.Rounded.FastForward, null, Modifier.size(iconSize))
+                            Text("${state.playbackSpeed.formatSpeedValue()}x", maxLines = 1)
+                        }
                     }
                 }
             }
@@ -441,7 +474,7 @@ val VIDEO_GESTURE_TOUCH_SHOW_CONTROLLER_DURATION = 3.seconds
 
 /**
  * 将屏幕横滑 seek 的状态迁移映射到控制器显隐和进度预览。
- * [SwipeSeekerState] 负责识别手势，本类只响应开始、取消区域变化和结束事件。
+ * [SwipeSeekerState] 负责识别手势，本类只响应开始、取消状态变化和结束事件。
  */
 private class SwipeSeekInteraction(
     private val controllerState: PlayerControllerState,
@@ -558,7 +591,13 @@ fun PlayerGestureHost(
             .playerKeyboardShortcuts(
                 seekerState = seekerState,
                 fastSkipState = fastSkipState,
-                playbackSpeedControllerState = playbackSpeedControllerState,
+                currentPlaybackSpeed = playbackSpeedControllerState?.currentSpeed,
+                playbackSpeedRange = playbackSpeedControllerState?.speedRange
+                    ?: PlaybackSpeedControllerState.DEFAULT_SPEED_RANGE,
+                onPlaybackSpeedChanged = {
+                    playbackSpeedControllerState?.commitSpeed(it)
+                    indicatorTasker.launch { indicatorState.showPlaybackSpeed(it) }
+                },
                 volumeEnabled = !useMediaAudioController || audioLevelController != null,
                 onVolumeUp = { fineAdjustment ->
                     if (useMediaAudioController) {

@@ -52,6 +52,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.him188.ani.app.data.models.preference.DarkMode
 import me.him188.ani.app.data.models.preference.UISettings
+import me.him188.ani.app.data.persistent.database.BundledSqliteInterpositionGuard
 import me.him188.ani.app.data.repository.SavedWindowState
 import me.him188.ani.app.data.repository.WindowStateRepository
 import me.him188.ani.app.data.repository.user.SettingsRepository
@@ -237,6 +238,11 @@ object AniDesktop {
         )
         startupTimeMonitor.mark(StepName.WindowAndContext)
 
+        // Covers constraint 2 in BundledSqliteInterpositionGuard: nothing about JCEF startup routes
+        // through the guard, so this explicit call is the only thing keeping the bundled sqlite
+        // ahead of the system libsqlite3 that CEF pulls in through NSS.
+        BundledSqliteInterpositionGuard.install(cacheDir)
+
         SingleInstanceChecker.instance.ensureSingleInstance()
         startupTimeMonitor.mark(StepName.SingletonChecker)
 
@@ -372,11 +378,10 @@ object AniDesktop {
                 } catch (e: Throwable) {
                     logger.error(e) { "Failed to load libmpv component of mediamp." }
                 }
-                logger.info { "libmpv is loaded." }
+                logger.info { "mediampv is loaded." }
             } else {
                 VlcMediampPlayer.prepareLibraries()
             }
-
         }
 
         // Initialize CEF application.
