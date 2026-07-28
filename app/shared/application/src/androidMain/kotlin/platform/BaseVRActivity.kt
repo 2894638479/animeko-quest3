@@ -67,6 +67,7 @@ import me.him188.ani.app.ui.foundation.PanelHandle
 import me.him188.ani.app.ui.foundation.PanelManager
 import me.him188.ani.app.ui.foundation.VrPanelControlBarHost
 import me.him188.ani.app.platform.LocalSpatialAudioHost
+import me.him188.ani.app.platform.LocalVRHost
 import me.him188.ani.app.ui.foundation.PanelManager.PanelEntry
 import me.him188.ani.app.ui.foundation.PanelManager.PanelPosition
 import me.him188.ani.app.ui.foundation.layout.LocalPlatformWindow
@@ -77,7 +78,7 @@ import me.him188.ani.app.ui.main.AniSubContent
 import org.koin.android.ext.android.inject
 import java.util.concurrent.ConcurrentHashMap
 
-abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwner, ControllerDragger.Host, SpatialAudioHost {
+abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwner, ControllerDragger.Host, SpatialAudioHost, VRHost {
     lateinit var mainPanelEntity: Entity
     protected var composeContent: (@Composable () -> Unit)? = null
 
@@ -138,6 +139,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                     LocalPlatformWindow provides rememberPlatformWindow(),
                     LocalExternalContentProvider provides externalComponentProviderUpdated,
                     LocalSpatialAudioHost provides this@BaseVRActivity,
+                    LocalVRHost provides this@BaseVRActivity,
                 ) {
                     AniApp { AniSubContent(navigator) { content() } }
                 }
@@ -225,6 +227,21 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     override fun onPlayerAudioSessionReady(sessionId: Int, channelCount: Int) {
         if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId, channelCount)
     }
+
+    // ── VRHost ───────────────────────────────────────────────────────────────
+
+    private var _passthroughEnabled: Boolean = true
+
+    override var passthroughEnabled: Boolean
+        get() = _passthroughEnabled
+        set(value) {
+            _passthroughEnabled = value
+            scene.enablePassthrough(value)
+        }
+
+    override var spatialAudioEnabled: Boolean
+        get() = ::spatialAudio.isInitialized
+        set(value) { /* spatial audio toggle — future enhancement */ }
 
     // ── Shared InputListener ─────────────────────────────────────────────────
 

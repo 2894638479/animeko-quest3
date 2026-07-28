@@ -195,6 +195,7 @@ enum class SettingsTab {
     ABOUT,
     LOG,
     DEBUG,
+    VR,
     ;
 
     companion object {

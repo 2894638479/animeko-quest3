@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.outlined.Update
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -147,6 +148,7 @@ import me.him188.ani.app.ui.settings.tabs.about.DevelopersTab
 import me.him188.ani.app.ui.settings.tabs.app.AppearanceGroup
 import me.him188.ani.app.ui.settings.tabs.app.PlayerGroup
 import me.him188.ani.app.ui.settings.tabs.app.SoftwareUpdateGroup
+import me.him188.ani.app.ui.settings.tabs.app.VRGroup
 import me.him188.ani.app.ui.settings.tabs.log.LogTab
 import me.him188.ani.app.ui.settings.tabs.media.BackupSettings
 import me.him188.ani.app.ui.settings.tabs.media.CacheDirectoryGroup
@@ -258,6 +260,7 @@ fun SettingsScreen(
             Title(stringResource(Lang.settings_category_others))
             Item(SettingsTab.UPDATE)
             Item(SettingsTab.LOG)
+            Item(SettingsTab.VR)
             Item(SettingsTab.ABOUT)
             if (vm.isInDebugMode) {
                 Item(SettingsTab.DEBUG)
@@ -358,6 +361,13 @@ fun SettingsScreen(
 //                            SettingsTab.CACHE -> AutoCacheGroup(vm.mediaCacheSettingsState)
                             SettingsTab.STORAGE -> CacheDirectoryGroup(vm.cacheDirectoryGroupState)
                             SettingsTab.SETTINGS_BACKUP -> BackupSettings(vm.cacheDirectoryGroupState)
+                            SettingsTab.VR -> {
+                                val vrHost = me.him188.ani.app.platform.LocalVRHost.current
+                                VRGroup(
+                                    onPassthroughChanged = { vrHost?.passthroughEnabled = it },
+                                    onSpatialAudioChanged = { vrHost?.spatialAudioEnabled = it },
+                                )
+                            }
                             SettingsTab.ABOUT -> {} // see above
                             SettingsTab.DEBUG -> {}
                             SettingsTab.LOG -> {}
@@ -831,6 +841,7 @@ private fun getIcon(tab: SettingsTab): ImageVector {
         SettingsTab.ABOUT -> Icons.Outlined.Info
         SettingsTab.LOG -> Icons.Outlined.Feedback
         SettingsTab.DEBUG -> Icons.Outlined.Science
+        SettingsTab.VR -> Icons.Outlined.Videocam
     }
 }
 
@@ -854,6 +865,7 @@ private fun getName(tab: SettingsTab): String {
         SettingsTab.UPDATE -> stringResource(Lang.settings_tab_update)
         SettingsTab.ABOUT -> stringResource(Lang.settings_tab_about)
         SettingsTab.DEBUG -> stringResource(Lang.settings_tab_debug)
+        SettingsTab.VR -> "VR 设置"
     }
 }
 
