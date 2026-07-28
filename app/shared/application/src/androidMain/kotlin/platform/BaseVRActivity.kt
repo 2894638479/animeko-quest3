@@ -463,7 +463,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         try { entity.removeComponent<Panel>() } catch (_: Exception) {}
         entity.setComponent(if (newEntry.hittable == PanelManager.PanelHittable.TRUE) Panel(newRegId)
                             else Panel(newRegId, MeshCollision.NoCollision))
-        panel.content = { VrPanelControlBarHost(panel, isMainPanel = false) { c() } }
+        panel.content = c // already wrapped by VrPanelControlBarHost at creation time
         panel.entry = newEntry
     }
 
@@ -499,7 +499,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         for (p in active) {
             when (p.activeMode) {
                 PanelControlMode.RESIZE -> p.setScale((p.scale + dx).coerceIn(0.1f, 10f))
-                PanelControlMode.DISTANCE -> p.setDistance(dz)
+                PanelControlMode.DISTANCE -> p.setDistance(dz * 3f)
                 PanelControlMode.MOVE -> try {
                     if (p.moveRelativePose == null) p.moveRelativePose = ap.inverse() * p.entity.getComponent<Transform>().transform
                     p.entity.setComponent(Transform(ap * (p.moveRelativePose ?: continue)))
