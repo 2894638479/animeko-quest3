@@ -5,7 +5,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 // Skybox images from PolyHaven (CC0):
 // spruit_sunrise.jpg     https://polyhaven.com/a/spruit_sunrise
 // small_cathedral_02.jpg https://polyhaven.com/a/small_cathedral_02
-// wasteland_clouds_puresky.jpg https://polyhaven.com/a/wasteland_clouds_puresky
+// fireplace.jpg          https://polyhaven.com/a/fireplace
 // reinforced_concrete_01.jpg https://polyhaven.com/a/reinforced_concrete_01
 enum class VRBackgroundMode(val label: String, val resId: Int) {
     PASSTHROUGH("彩透", 0),
