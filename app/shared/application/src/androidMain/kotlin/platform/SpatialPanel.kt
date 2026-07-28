@@ -8,6 +8,7 @@ import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.SpatialSDKExperimentalAPI
 import com.meta.spatial.core.Vector3
+import kotlin.math.abs
 import com.meta.spatial.toolkit.Hittable
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.Panel
@@ -30,6 +31,13 @@ class SpatialPanel internal constructor(
 
     override var activeMode: PanelControlMode = PanelControlMode.NONE
         internal set
+
+    /**
+     * The panel's current intended edge position relative to the main panel.
+     * [entry.position] is the initial value; this field tracks changes after
+     * drags and re-binds. `null` when unbound.
+     */
+    var currentPosition: PanelManager.PanelPosition? = entry.position
 
     /** Dragger for when this panel is grabbed independently (unbound). */
     internal var dragger: ControllerDragger? = null
@@ -88,19 +96,42 @@ class SpatialPanel internal constructor(
 
     override fun toggleBind() {
         if (entity.tryGetComponent<TransformParent>() != null) {
-            // Preserve world position: childWorld = parentWorld * childLocal
+            // Unbind: preserve world position, clear tracked position
             val local = entity.getComponent<Transform>().transform
             val parentWorld = host.mainPanelEntity.getComponent<Transform>().transform
             val world = parentWorld * local
             entity.removeComponent<TransformParent>()
             entity.setComponent(Transform(world))
+            currentPosition = null
         } else if (entity != host.mainPanelEntity) {
-            // Bind: convert world to local relative to main panel
+            // Bind: convert world to local, snap to nearest edge
             val world = entity.getComponent<Transform>().transform
             val parentWorld = host.mainPanelEntity.getComponent<Transform>().transform
-            val local = parentWorld.inverse() * world
-            entity.setComponent(Transform(local))
+            val localPos = (parentWorld.inverse() * world).t
+            val nearestPos = findNearestPanelPosition(localPos)
+            currentPosition = nearestPos
+            val newEntry = PanelManager.PanelEntry(entry.size, nearestPos, entry.hittable)
+            entry = newEntry
+            val subScale = try { entity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
+            val mainScale = try { host.mainPanelEntity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
+            val snappedPose = host.calculateRelativePose(newEntry, subScale, mainScale)
+            entity.setComponent(Transform(snappedPose))
             entity.setComponent(TransformParent(host.mainPanelEntity))
+        }
+    }
+
+    /**
+     * Find the closest [PanelManager.PanelPosition] for a point in the main
+     * panel's local coordinate space. Compares X and Y distances from the
+     * main panel center to decide which edge is nearest.
+     */
+    private fun findNearestPanelPosition(localPos: Vector3): PanelManager.PanelPosition {
+        val ax = abs(localPos.x)
+        val ay = abs(localPos.y)
+        return if (ax > ay) {
+            if (localPos.x < 0) PanelManager.PanelPosition.LEFT else PanelManager.PanelPosition.RIGHT
+        } else {
+            if (localPos.y > 0) PanelManager.PanelPosition.TOP else PanelManager.PanelPosition.BOTTOM
         }
     }
 

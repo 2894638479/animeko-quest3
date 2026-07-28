@@ -528,7 +528,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     // ── Pose helper ─────────────────────────────────────────────────────────
 
-    private fun calculateRelativePose(entry: PanelEntry, subScale: Float, mainScale: Float = subScale): Pose {
+    internal fun calculateRelativePose(entry: PanelEntry, subScale: Float, mainScale: Float = subScale): Pose {
         val mainEntry = if (::mainPanelEntity.isInitialized)
             panelByEntity[mainPanelEntity]?.entry else null
         val mainSize = mainEntry?.size ?: PanelManager.PanelSize.WIDE
