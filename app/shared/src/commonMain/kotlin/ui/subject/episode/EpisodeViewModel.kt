@@ -15,6 +15,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.paging.cachedIn
 import androidx.paging.map
 import kotlinx.coroutines.CoroutineName
@@ -579,9 +580,11 @@ class EpisodeViewModel(
     )
 
 
+    private val playerFlow = snapshotFlow { player }
+
     @OptIn(UnsafeEpisodeSessionApi::class)
     private val episodeDanmakuLoader = EpisodeDanmakuLoader(
-        player = player,
+        playerFlow = playerFlow,
         // TODO: 2025/1/6 this is not very good. May see old data. 
         selectedMedia = fetchPlayState.mediaSelectorFlow.transformLatest {
             if (it == null) {

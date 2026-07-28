@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import me.him188.ani.app.data.repository.danmaku.SearchDanmakuRequest
 import me.him188.ani.app.domain.danmaku.DanmakuFetcher
@@ -63,7 +64,7 @@ import kotlin.time.Duration.Companion.seconds
  * It reads [bundleFlow] to launch danmaku loading, and provides a [danmakuEventFlow] that is connected to the player.
  */
 class EpisodeDanmakuLoader(
-    player: MediampPlayer,
+    playerFlow: Flow<MediampPlayer>,
     private val selectedMedia: Flow<Media?>,
     private val bundleFlow: Flow<SubjectEpisodeInfoBundle>,
     private val danmakuRepository: DanmakuRepository,
@@ -73,20 +74,15 @@ class EpisodeDanmakuLoader(
 ) {
     private val flowScope = backgroundScope
 
-//    val playerExtension = object : PlayerExtension("EpisodeDanmakuLoader") {
-//        override fun onStart(backgroundTaskScope: ExtensionBackgroundTaskScope) {
-//            backgroundTaskScope.launch("DanmakuLoader") {
-//                danmakuLoader.collectionFlow.first()
-//            }
-//        }
-//    }
+    private val mediaDataFlow = playerFlow.flatMapLatest { it.mediaData }
+    private val mediaPropertiesFlow = playerFlow.flatMapLatest { it.mediaProperties }
 
     private val danmakuLoader = DanmakuLoaderImpl(
         combine(
             bundleFlow,
-            player.mediaData,
+            mediaDataFlow,
             selectedMedia,
-            player.mediaProperties.filter { it != null }.map { it?.duration ?: 0.milliseconds },
+            mediaPropertiesFlow.filter { it != null }.map { it?.duration ?: 0.milliseconds },
         ) { info, mediaData, selectedMedia, duration ->
             if (mediaData == null) {
                 null
@@ -123,12 +119,14 @@ class EpisodeDanmakuLoader(
     val configFlow = config.asStateFlow()
 
 
-    private val danmakuSessionFlow: Flow<DanmakuSession> = config.mapLatest { configMap ->
-        createDanmakuCollection(danmakuLoader.fetchResultFlow, configMap).at(
-            progress = player.currentPositionMillis.map { it.milliseconds },
-            playbackSpeed = { player.features[PlaybackSpeed]?.value ?: 1f },
-            danmakuRegexFilterList = getDanmakuRegexFilterListFlowUseCase(),
-        )
+    private val danmakuSessionFlow: Flow<DanmakuSession> = playerFlow.flatMapLatest { p ->
+        config.mapLatest { configMap ->
+            createDanmakuCollection(danmakuLoader.fetchResultFlow, configMap).at(
+                progress = p.currentPositionMillis.map { it.milliseconds },
+                playbackSpeed = { p.features[PlaybackSpeed]?.value ?: 1f },
+                danmakuRegexFilterList = getDanmakuRegexFilterListFlowUseCase(),
+            )
+        }
     }.shareIn(flowScope, started = sharingStarted, replay = 1)
 
     val danmakuLoadingStateFlow: StateFlow<DanmakuLoadingState> = danmakuLoader.danmakuLoadingStateFlow
