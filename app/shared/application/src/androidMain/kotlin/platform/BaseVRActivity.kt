@@ -343,7 +343,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         // Only dragged panels lose hittable — others stay enabled so a second
         // controller can still raycast them independently.
-        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt)
+        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt && p.activeMode == PanelControlMode.NONE)
 
         val lc = ab.leftHand.tryGetComponent<Controller>()
         val rc = ab.rightHand.tryGetComponent<Controller>()
@@ -386,7 +386,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         leftDragTarget = lt; rightDragTarget = rt
 
         // Only dragged panels lose hittable — others stay enabled for independent grabs
-        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt)
+        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt && p.activeMode == PanelControlMode.NONE)
 
         // Two hands on same target → pinch‑to‑zoom
         if (lt != null && lt == rt && la && ra) {
