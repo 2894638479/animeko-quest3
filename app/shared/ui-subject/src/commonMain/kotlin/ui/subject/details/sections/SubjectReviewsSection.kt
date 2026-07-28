@@ -44,6 +44,9 @@ import me.him188.ani.app.ui.comment.UIRichText
 import me.him188.ani.app.ui.foundation.avatar.AvatarImage
 import me.him188.ani.app.ui.foundation.layout.desktopTitleBarPadding
 import me.him188.ani.app.ui.foundation.layout.rememberConnectedScrollState
+import me.him188.ani.app.ui.foundation.LocalPanelManager
+import me.him188.ani.app.ui.foundation.PanelManager
+import me.him188.ani.app.ui.foundation.VrPanelDialog
 import me.him188.ani.app.ui.foundation.widgets.ModalBottomImeAwareSheet
 import me.him188.ani.app.ui.foundation.widgets.rememberModalBottomImeAwareSheetState
 import me.him188.ani.app.ui.lang.Lang
@@ -229,12 +232,8 @@ fun SubjectCommentsSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val sheetState = rememberModalBottomImeAwareSheetState()
-    ModalBottomImeAwareSheet(
-        onDismiss = onDismissRequest,
-        modifier = modifier.desktopTitleBarPadding().statusBarsPadding(),
-        state = sheetState,
-    ) {
+    val panelManager = LocalPanelManager.current
+    val content: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -260,6 +259,23 @@ fun SubjectCommentsSheet(
                 connectedScrollState = rememberConnectedScrollState(),
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
+        }
+    }
+    if (panelManager != null) {
+        VrPanelDialog(
+            onDismissRequest = onDismissRequest,
+            position = PanelManager.PanelPosition.BOTTOM,
+        ) {
+            content()
+        }
+    } else {
+        val sheetState = rememberModalBottomImeAwareSheetState()
+        ModalBottomImeAwareSheet(
+            onDismiss = onDismissRequest,
+            modifier = modifier.desktopTitleBarPadding().statusBarsPadding(),
+            state = sheetState,
+        ) {
+            content()
         }
     }
 }
