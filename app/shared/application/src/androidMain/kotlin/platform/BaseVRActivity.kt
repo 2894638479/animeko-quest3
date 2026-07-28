@@ -286,6 +286,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                     VRBackgroundMode.SKYBOX_1 -> R.drawable.skydome_1
                     VRBackgroundMode.SKYBOX_2 -> R.drawable.skydome_2
                     VRBackgroundMode.SKYBOX_3 -> R.drawable.skydome_3
+                    VRBackgroundMode.SKYBOX_4 -> R.drawable.skydome_4
                     else -> 0
                 }
                 _skyboxEntity = Entity.create(
