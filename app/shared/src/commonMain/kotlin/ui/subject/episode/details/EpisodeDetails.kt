@@ -47,7 +47,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import me.him188.ani.app.ui.foundation.VrSafeModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Scaffold
@@ -58,7 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
-import androidx.compose.material3.rememberModalBottomSheetState
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -232,15 +232,9 @@ fun EpisodeDetails(
         val subjectDetailsState by state.subjectDetailsStateLoader.state
             .collectAsStateWithLifecycle(SubjectDetailsUIState.Placeholder(state.subjectId))
         if (showSubjectDetails) {
-            ModalBottomSheet(
-                { showSubjectDetails = false },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = currentWindowAdaptiveInfo1().isWidthAtLeastMedium),
+            VrSafeModalBottomSheet(
+                onDismissRequest = { showSubjectDetails = false },
                 modifier = Modifier.desktopTitleBarPadding().statusBarsPadding(),
-                contentWindowInsets = {
-                    BottomSheetDefaults.windowInsets
-                        .add(WindowInsets.desktopTitleBar())
-                        .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
-                },
             ) {
                 SubjectDetailsScreen(
                     subjectDetailsState,
@@ -417,17 +411,9 @@ fun EpisodeDetails(
                         }
                     }
                 } else {
-                    val sheetState =
-                        rememberModalBottomSheetState(skipPartiallyExpanded = windowAdaptiveInfo.isWidthAtLeastMedium)
-                    ModalBottomSheet(
-                        { showMediaSelector = false },
-                        sheetState = sheetState,
+                    VrSafeModalBottomSheet(
+                        onDismissRequest = { showMediaSelector = false },
                         modifier = Modifier.desktopTitleBarPadding().statusBarsPadding(),
-                        contentWindowInsets = {
-                            BottomSheetDefaults.windowInsets
-                                .add(WindowInsets.desktopTitleBar())
-                                .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
-                        },
                     ) {
                         MediaSelectorView(
                             mediaSelectorState,
@@ -446,7 +432,7 @@ fun EpisodeDetails(
                                 mediaSelectorState.select(it)
                                 showMediaSelector = false
                             },
-                            scrollable = sheetState.targetValue == SheetValue.Expanded,
+                            scrollable = true,
                         )
                     }
                 }
@@ -611,15 +597,9 @@ fun EpisodeDetails(
     )
 
     if (showDanmakuInfoSheet) {
-        ModalBottomSheet(
-            { showDanmakuInfoSheet = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+        VrSafeModalBottomSheet(
+            onDismissRequest = { showDanmakuInfoSheet = false },
             modifier = Modifier.desktopTitleBarPadding().statusBarsPadding(),
-            contentWindowInsets = {
-                BottomSheetDefaults.windowInsets
-                    .add(WindowInsets.desktopTitleBar())
-                    .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
-            },
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),

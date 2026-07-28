@@ -38,12 +38,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import me.him188.ani.app.ui.foundation.VrSafeModalBottomSheet
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -185,15 +184,13 @@ fun SettingsScope.EpisodeCacheListGroup(
             }.shareIn(scope, SharingStarted.WhileSubscribed(), replay = 1)
         }.collectAsStateWithLifecycle(MediaSourceResultListPresentation.Empty)
         if (!hideMediaSelector) {
-            ModalBottomSheet(
+            VrSafeModalBottomSheet(
                 onDismissRequest = {
                     hideMediaSelector = true
                     // 不要取消任务, 用户可能是点错了, 之后重新点击可以复用查询结果
-//                state.cancelMediaSelector(task) 
+//                state.cancelMediaSelector(task)
                 },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 modifier = Modifier.desktopTitleBarPadding().statusBarsPadding(),
-                contentWindowInsets = { BottomSheetDefaults.windowInsets.add(WindowInsets.desktopTitleBar()) },
             ) {
                 val selectorPresentation =
                     rememberMediaSelectorState(mediaSourceInfoProvider, filteredResults) { task.mediaSelector }
