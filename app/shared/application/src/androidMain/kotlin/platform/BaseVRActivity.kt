@@ -220,7 +220,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
         scene.setReferenceSpace(ReferenceSpace.LOCAL)
         spatial.setPerformanceLevel(PerformanceLevel.BOOST_HINT); scene.setPreferredDisplayRate(120f)
-        applyBackgroundMode(VRBackgroundMode.PASSTHROUGH)
+        // Restore saved VR settings
+        val savedMode = vrPrefs.getString("background_mode", null)
+            ?.let { name -> VRBackgroundMode.entries.find { it.name == name } }
+            ?: VRBackgroundMode.PASSTHROUGH
+        _passthroughEnabled = vrPrefs.getBoolean("passthrough", true)
+        applyBackgroundMode(savedMode)
 
         // Spatial audio — audio sounds like it comes from the main panel position
         spatialAudio = SpatialAudioManager(scene, mainPanelEntity, entry.size.defaultWidth)
@@ -234,24 +239,31 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     // ── VRHost ───────────────────────────────────────────────────────────────
 
+    private val vrPrefs by lazy { getSharedPreferences("ani_vr_settings", MODE_PRIVATE) }
     private var _passthroughEnabled: Boolean = true
     private var _backgroundMode: VRBackgroundMode = VRBackgroundMode.PASSTHROUGH
     private var _skyboxEntity: Entity? = null
 
     override var backgroundMode: VRBackgroundMode
         get() = _backgroundMode
-        set(value) { applyBackgroundMode(value) }
+        set(value) {
+            vrPrefs.edit().putString("background_mode", value.name).apply()
+            applyBackgroundMode(value)
+        }
 
     override var passthroughEnabled: Boolean
         get() = _passthroughEnabled
         set(value) {
             _passthroughEnabled = value
+            vrPrefs.edit().putBoolean("passthrough", value).apply()
             scene.enablePassthrough(value)
         }
 
     override var spatialAudioEnabled: Boolean
         get() = ::spatialAudio.isInitialized
-        set(value) { /* spatial audio toggle — future enhancement */ }
+        set(value) {
+            vrPrefs.edit().putBoolean("spatial_audio", value).apply()
+        }
 
     private fun applyBackgroundMode(mode: VRBackgroundMode) {
         _backgroundMode = mode
