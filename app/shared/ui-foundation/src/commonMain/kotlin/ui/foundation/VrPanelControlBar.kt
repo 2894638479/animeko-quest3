@@ -13,11 +13,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -43,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 /**
@@ -66,12 +69,16 @@ fun VrPanelControlBar(
 ) {
     var showRatioPicker by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(true) }
+    val hoverInteraction = remember { MutableInteractionSource() }
+    val isHovered by hoverInteraction.collectIsHoveredAsState()
 
     Surface(
         shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-        tonalElevation = 4.dp,
-        modifier = modifier,
+        tonalElevation = if (isHovered) 4.dp else 0.dp,
+        modifier = modifier
+            .hoverable(hoverInteraction)
+            .graphicsLayer { alpha = if (isHovered) 0.99f else 0f },
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // Minimize/expand handle — always visible
@@ -80,12 +87,12 @@ fun VrPanelControlBar(
                     expanded = !expanded
                     if (!expanded) onToggleVisibility()
                 },
-                modifier = Modifier.size(28.dp).padding(top = 2.dp),
+                modifier = Modifier.size(44.dp).padding(top = 4.dp),
             ) {
                 Icon(
                     Icons.Rounded.UnfoldLess,
                     contentDescription = if (expanded) "Minimize" else "Expand",
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(24.dp),
                 )
             }
 
@@ -96,34 +103,34 @@ fun VrPanelControlBar(
                 exit = shrinkVertically(),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (!isBound) {
-                        IconButton(onClick = onResize, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Rounded.ZoomIn, "Resize", modifier = Modifier.size(20.dp))
+                        IconButton(onClick = onResize, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.ZoomIn, "Resize", modifier = Modifier.size(28.dp))
                         }
-                        IconButton(onClick = onDistance, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Rounded.FitScreen, "Distance", modifier = Modifier.size(20.dp))
+                        IconButton(onClick = onDistance, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.FitScreen, "Distance", modifier = Modifier.size(28.dp))
                         }
                         IconButton(
                             onClick = { showRatioPicker = !showRatioPicker },
-                            modifier = Modifier.size(36.dp),
+                            modifier = Modifier.size(48.dp),
                         ) {
-                            Icon(Icons.Rounded.AspectRatio, "Ratio", modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.AspectRatio, "Ratio", modifier = Modifier.size(28.dp))
                         }
-                        IconButton(onClick = onMove, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Rounded.OpenWith, "Move", modifier = Modifier.size(20.dp))
+                        IconButton(onClick = onMove, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.OpenWith, "Move", modifier = Modifier.size(28.dp))
                         }
                     }
                     // Main panel: no bind button. Bound panel: show unbind (Link). Unbound: show bind (LinkOff).
                     if (!isMainPanel) {
-                        IconButton(onClick = onToggleBind, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = onToggleBind, modifier = Modifier.size(48.dp)) {
                             Icon(
                                 if (isBound) Icons.Rounded.Link else Icons.Rounded.LinkOff,
                                 if (isBound) "Unbind" else "Bind",
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(28.dp),
                             )
                         }
                     }
@@ -135,7 +142,7 @@ fun VrPanelControlBar(
                 Row(
                     modifier = Modifier
                         .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     for ((label, w, h) in COMMON_RATIOS) {
