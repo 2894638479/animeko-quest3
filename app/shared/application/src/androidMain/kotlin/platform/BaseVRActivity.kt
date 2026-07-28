@@ -178,6 +178,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         mainPanelEntity.setComponent(Transform(Pose(vp.t.plus(vp.forward().times(2f)), vp.q)))
         mainPanelEntity.setComponent(Scale(1f))
         if (::spatialAudio.isInitialized) spatialAudio.updateScale(1f)
+        // Bind all sub-panels and refresh their positions
+        for (panel in panelByEntity.values) {
+            if (panel.entity == mainPanelEntity) continue
+            if (!panel.isBound) panel.toggleBind()
+            if (panel.isBound) {
+                panel.entity.setComponent(Scale(Vector3(1f)))
+                panel.entity.setComponent(Transform(calculateRelativePose(panel.entry, 1f, 1f)))
+            }
+        }
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
@@ -465,6 +474,19 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                             else Panel(newRegId, MeshCollision.NoCollision))
         panel.content = c // already wrapped by VrPanelControlBarHost at creation time
         panel.entry = newEntry
+        // When the main panel's size changes, bound sub-panels need repositioning
+        if (panel.entity == mainPanelEntity) refreshBoundPanelPositions()
+    }
+
+    /** Recalculate positions of all bound sub-panels after main panel resize. */
+    private fun refreshBoundPanelPositions() {
+        val ms = try { mainPanelEntity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
+        for (p in panelByEntity.values) {
+            if (p.isBound) {
+                val ss = try { p.entity.getComponent<Scale>().scale.x } catch (_: Exception) { ms }
+                p.entity.setComponent(Transform(calculateRelativePose(p.entry, ss, ms)))
+            }
+        }
     }
 
     // ── processPanelModes ────────────────────────────────────────────────────
