@@ -15,26 +15,19 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddComment
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -49,9 +42,10 @@ import me.him188.ani.app.ui.comment.CommentState
 import me.him188.ani.app.ui.comment.UIComment
 import me.him188.ani.app.ui.comment.UIRichText
 import me.him188.ani.app.ui.foundation.avatar.AvatarImage
-import me.him188.ani.app.ui.foundation.layout.desktopTitleBar
 import me.him188.ani.app.ui.foundation.layout.desktopTitleBarPadding
 import me.him188.ani.app.ui.foundation.layout.rememberConnectedScrollState
+import me.him188.ani.app.ui.foundation.widgets.ModalBottomImeAwareSheet
+import me.him188.ani.app.ui.foundation.widgets.rememberModalBottomImeAwareSheetState
 import me.him188.ani.app.ui.lang.Lang
 import me.him188.ani.app.ui.lang.subject_details_hot_reviews
 import me.him188.ani.app.ui.lang.subject_details_reviews_count
@@ -235,15 +229,11 @@ fun SubjectCommentsSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ModalBottomSheet(
-        onDismissRequest,
+    val sheetState = rememberModalBottomImeAwareSheetState()
+    ModalBottomImeAwareSheet(
+        onDismiss = onDismissRequest,
         modifier = modifier.desktopTitleBarPadding().statusBarsPadding(),
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        contentWindowInsets = {
-            BottomSheetDefaults.windowInsets
-                .add(WindowInsets.desktopTitleBar())
-                .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
-        },
+        state = sheetState,
     ) {
         Column(Modifier.fillMaxWidth()) {
             Row(

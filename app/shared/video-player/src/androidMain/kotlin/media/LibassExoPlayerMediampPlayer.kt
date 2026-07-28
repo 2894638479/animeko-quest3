@@ -11,6 +11,7 @@ package me.him188.ani.app.videoplayer.media
 
 import android.content.Context
 import android.net.Uri
+import android.os.Looper
 import androidx.annotation.OptIn as AndroidxOptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -169,9 +170,17 @@ class LibassExoPlayerMediampPlayer private constructor(
         pendingMediaSource = null
         currentMediaData = null
         backgroundScope.cancel()
-        exoPlayer.removeListener(assHandler)
-        assHandler.release()
-        exoMediampPlayer.close()
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            exoPlayer.removeListener(assHandler)
+            assHandler.release()
+            exoMediampPlayer.close()
+        } else {
+            kotlinx.coroutines.runBlocking(Dispatchers.Main) {
+                exoPlayer.removeListener(assHandler)
+                assHandler.release()
+                exoMediampPlayer.close()
+            }
+        }
     }
 
     private fun createMediaSource(
