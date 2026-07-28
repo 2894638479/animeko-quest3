@@ -528,20 +528,23 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     // ── Pose helper ─────────────────────────────────────────────────────────
 
-    private fun calculateRelativePose(entry: PanelEntry, scale: Float): Pose {
-        val mw = PanelManager.PanelSize.WIDE.defaultWidth * scale
-        val mh = PanelManager.PanelSize.WIDE.defaultHeight * scale
-        val sw = entry.size.defaultWidth * scale; val sh = entry.size.defaultHeight * scale
-        val mg = 0.08f * scale
+    private fun calculateRelativePose(entry: PanelEntry, subScale: Float, mainScale: Float = subScale): Pose {
+        val mainEntry = if (::mainPanelEntity.isInitialized)
+            panelByEntity[mainPanelEntity]?.entry else null
+        val mainSize = mainEntry?.size ?: PanelManager.PanelSize.WIDE
+        val mw = mainSize.defaultWidth * mainScale
+        val mh = mainSize.defaultHeight * mainScale
+        val sw = entry.size.defaultWidth * subScale; val sh = entry.size.defaultHeight * subScale
+        val mg = 0.08f * mainScale
         val hp: Vector3; val op: Vector3; var ry = 0f; var rx = 0f
         when (entry.position) {
             PanelPosition.LEFT -> { hp = Vector3(-(mw/2+mg),0f,0f); op = Vector3(-sw/2,0f,0f); ry = -25f }
             PanelPosition.RIGHT -> { hp = Vector3(mw/2+mg,0f,0f); op = Vector3(sw/2,0f,0f); ry = 25f }
             PanelPosition.TOP -> { hp = Vector3(0f,mh/2+mg,0f); op = Vector3(0f,sh/2,0f); rx = -15f }
             PanelPosition.BOTTOM -> { hp = Vector3(0f,-(mh/2+mg),0f); op = Vector3(0f,-sh/2,0f); rx = 15f }
-            PanelPosition.MIDDLE -> return Pose(Vector3(0f,0f,-0.2f*scale), Quaternion.fromEuler(0f,0f,0f))
+            PanelPosition.MIDDLE -> return Pose(Vector3(0f,0f,-0.2f*subScale), Quaternion.fromEuler(0f,0f,0f))
         }
         val q = Quaternion.fromEuler(rx, ry, 0f)
-        return Pose(hp.plus(q.times(op)).plus(Vector3(0f,0f,0.02f*scale)), q)
+        return Pose(hp.plus(q.times(op)).plus(Vector3(0f,0f,0.02f*subScale)), q)
     }
 }
