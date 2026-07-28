@@ -24,6 +24,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.meta.spatial.core.Color4
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.PerformanceLevel
 import com.meta.spatial.core.Pose
@@ -50,6 +51,8 @@ import com.meta.spatial.toolkit.AvatarBody
 import com.meta.spatial.toolkit.AvatarSystem
 import com.meta.spatial.toolkit.Controller
 import com.meta.spatial.toolkit.Hittable
+import com.meta.spatial.toolkit.Material
+import com.meta.spatial.toolkit.Mesh
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.Panel
 import com.meta.spatial.toolkit.PanelRegistration
@@ -202,6 +205,19 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (systemManager.tryFindSystem<IsdkDefaultCursorSystem>() == null) systemManager.registerSystem(IsdkDefaultCursorSystem(this, isdk))
         if (systemManager.tryFindSystem<IsdkComponentCreationSystem>() == null) systemManager.registerSystem(IsdkComponentCreationSystem())
         if (systemManager.tryFindSystem<AvatarSystem>() == null) systemManager.registerSystem(AvatarSystem())
+
+        // Skybox — immersive background when passthrough is off.
+        // Drop an equirectangular JPG at res/drawable/skydome.jpg to use it.
+        Entity.create(
+            Mesh(android.net.Uri.parse("mesh://skybox")),
+            Material().apply {
+                baseColor = Color4(0.02f, 0.02f, 0.08f, 1f)
+                try {
+                    baseTextureAndroidResourceId = R.drawable.skydome
+                } catch (_: Exception) {} // image not provided → use solid color
+                unlit = true
+            },
+        )
 
         val entry = PanelEntry(PanelManager.PanelSize.WIDE, PanelPosition.MIDDLE)
         val regId = regIds[entry]!!
