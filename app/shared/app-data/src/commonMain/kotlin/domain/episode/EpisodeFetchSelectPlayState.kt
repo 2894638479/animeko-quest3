@@ -345,6 +345,7 @@ val EpisodeFetchSelectPlayState.mediaSelectorFlow: Flow<MediaSelector?>
 val EpisodeFetchSelectPlayState.episodeIdFlow get() = episodeSessionFlow.map { it.episodeId }
 
 val EpisodeFetchSelectPlayState.player get() = playerSession.player
+val EpisodeFetchSelectPlayState.playerFlow get() = playerSession.playerFlow
 
 /**
  * Gets the episodeId at the current moment.

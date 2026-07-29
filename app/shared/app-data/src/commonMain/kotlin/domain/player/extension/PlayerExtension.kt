@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterIsInstance
 import me.him188.ani.app.domain.episode.EpisodeFetchSelectPlayState
 import me.him188.ani.app.domain.episode.EpisodeSession
@@ -68,6 +69,8 @@ interface PlayerExtensionContext {
     val subjectId: Int
 
     val player: MediampPlayer
+    /** Emits the current player whenever it is replaced (e.g., for spatial audio). */
+    val playerFlow: StateFlow<MediampPlayer>
     val videoLoadingStateFlow: Flow<VideoLoadingState>
 
     val sessionFlow: Flow<EpisodeSession>

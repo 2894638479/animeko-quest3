@@ -15,6 +15,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -28,6 +30,7 @@ import me.him188.ani.app.domain.watchtogether.PlaybackAutomationGate
 import me.him188.ani.utils.logging.info
 import me.him188.ani.utils.logging.logger
 import org.koin.core.Koin
+import org.openani.mediamp.MediampPlayer
 import org.openani.mediamp.PlaybackState
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -85,9 +88,10 @@ class RememberPlayProgressExtension(
         }
 
         backgroundTaskScope.launch("PlaybackStateListener") {
-            val player = context.player
             var haveResumedOnce = false
-            player.playbackState.collectLatest { playbackState ->
+            context.playerFlow.flatMapLatest { p: MediampPlayer ->
+                p.playbackState.map { state: PlaybackState -> p to state }
+            }.collectLatest { (player: MediampPlayer, playbackState: PlaybackState) ->
                 when (playbackState) {
                     PlaybackState.READY -> {
                         haveResumedOnce = false
