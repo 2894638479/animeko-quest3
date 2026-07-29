@@ -12,11 +12,13 @@ package me.him188.ani.app.domain.player
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import me.him188.ani.app.domain.episode.EpisodeFetchSelectPlayState
 import me.him188.ani.app.domain.episode.EpisodeSession
 import me.him188.ani.app.domain.episode.UnsafeEpisodeSessionApi
 import me.him188.ani.app.domain.episode.getCurrentEpisodeId
 import me.him188.ani.app.domain.episode.player
+import me.him188.ani.app.domain.episode.playerFlow
 import me.him188.ani.app.domain.player.extension.EpisodePlayerExtensionFactory
 import me.him188.ani.app.domain.player.extension.PlayerExtension
 import me.him188.ani.app.domain.player.extension.PlayerExtensionContext
@@ -36,6 +38,8 @@ class PlayerExtensionManager(
 
         override val player: MediampPlayer
             get() = state.player
+        override val playerFlow: StateFlow<MediampPlayer>
+            get() = state.playerFlow
         override val videoLoadingStateFlow: Flow<VideoLoadingState>
             get() = state.playerSession.videoLoadingState
         override val sessionFlow: Flow<EpisodeSession>
