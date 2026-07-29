@@ -1,157 +1,62 @@
 <div align="center">
 
-![Animeko](https://socialify.git.ci/open-ani/animeko/image?description=1&descriptionEditable=%E9%9B%86%E6%89%BE%E7%95%AA%E3%80%81%E8%BF%BD%E7%95%AA%E3%80%81%E7%9C%8B%E7%95%AA%E7%9A%84%E4%B8%80%E7%AB%99%E5%BC%8F%E5%BC%B9%E5%B9%95%E8%BF%BD%E7%95%AA%E5%B9%B3%E5%8F%B0&font=Jost&logo=https%3A%2F%2Fraw.githubusercontent.com%2Fopen-ani%2Fanimeko%2Frefs%2Fheads%2Fmain%2F.github%2Fassets%2Flogo.png&name=1&owner=1&pattern=Plus&theme=Light)
+# Animeko for Meta Quest 3
 
-| 正式版                                                                                                                                                                          | 测试版                                                                                                                                                                                     | 讨论群                                                                                                                                                                                                                                                                                                                                                                                                           |
-|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [![Stable](https://img.shields.io/github/release/open-ani/ani.svg?maxAge=3600&label=Stable&labelColor=06599d&color=043b69)](https://github.com/open-ani/ani/releases/latest) | [![Beta](https://img.shields.io/github/v/release/open-ani/ani.svg?maxAge=3600&label=Beta&labelColor=2c2c47&color=1c1c39&include_prereleases)](https://github.com/open-ani/ani/releases) | [![Group](https://img.shields.io/badge/Telegram-2CA5E0?style=flat-squeare&logo=telegram&logoColor=white)](https://t.me/openani) |
+Animeko 的 Meta Quest 3 VR 适配版 —— 在虚拟空间中沉浸式追番。
+
+基于 [open-ani/animeko](https://github.com/open-ani/animeko) v6.0.0-beta02。
 
 </div>
 
-[dmhy]: http://www.dmhy.org/
+## 与原版的区别
 
-[Bangumi]: http://bangumi.tv
+本分支是 Animeko 的 Meta Quest 3 专版，在原版基础上增加了：
 
-[ddplay]: https://www.dandanplay.com/
+### VR 特性
 
-[Compose Multiplatform]: https://www.jetbrains.com/compose-multiplatform/
+- **空间面板**：播放器、番剧详情、弹幕列表等均在独立的 3D 空间面板中渲染
+- **手柄交互**：握手柄侧键拖拽面板，摇杆缩放，两只手柄独立控制不同面板
+- **空间音频**：声音从虚拟面板位置发出，随面板位置实时变化（基于 Meta Spatial SDK）
+- **彩透/背景模式**：支持彩透、纯黑、深蓝、360° 全景图等多种 VR 背景
+- **VR 设置页**：彩透开关、空间音频开关、背景模式选择
 
-[acg.rip]: https://acg.rip
+### 技术栈
 
-[Mikan]: https://mikanani.me/
+- 基于 [open-ani/animeko](https://github.com/open-ani/animeko) main 分支，定期合并上游更新
+- [Meta Spatial SDK v0.11.1](https://developers.meta.com/horizon/develop/spatial-sdk) — ECS-based 空间面板管理
+- [Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/) — 跨平台 UI
+- [Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.html) — 共享业务逻辑
 
-[Ikaros]: https://ikaros.run/
+## 构建
 
-[Kotlin Multiplatform]: https://kotlinlang.org/docs/multiplatform.html
+```bash
+# 配置签名（local.properties）
+signing_release_storeFile=your.keystore
+signing_release_storePassword=xxx
+signing_release_keyAlias=xxx
+signing_release_keyPassword=xxx
 
-[ExoPlayer]: https://developer.android.com/media/media3/exoplayer
+# 可选：配置弹弹play API（local.properties）
+ani.dandanplay.app.id=xxx
+ani.dandanplay.app.secret=xxx
 
-[VLC]: https://www.videolan.org/vlc/
+# 编译 debug 包
+./gradlew :app:android:assembleDefaultDebug
 
-[libtorrent]: https://libtorrent.org/
-
-Animeko 支持云同步观看记录 ([Bangumi][Bangumi])、多视频数据源、缓存、弹幕、以及更多功能，提供尽可能简单且舒适的追番体验。
-
-> Animeko 曾用名 Ani，现在也简称 Ani。
-
-[立即下载](https://animeko.org/)
-
-https://github.com/user-attachments/assets/e63636c9-30b7-411c-aa6b-e5b78b900726
-
-## 主要功能
-
-### 浏览来自 [Bangumi][Bangumi] 的番剧信息以及社区评价
-
-| <img src=".readme/images/features/subject-details.png" alt="" width="200"/> | <img src=".readme/images/features/subject-rating.png" alt="" width="200"/> | 
-|:---------------------------------------------------------------------------:|:--------------------------------------------------------------------------:|
-
-### 丰富的检索方式：新番时间表、标签搜索
-
-> 由 Bangumi 和 Animeko 服务端共同提供的精确新番时间表
-
-| <img src=".readme/images/features/anime-schedule.png" alt="" width="200"/> | <img src=".readme/images/features/search-by-tag.png" alt="" width="200"/> | 
-|:--------------------------------------------------------------------------:|:-------------------------------------------------------------------------:|
-
-### 云同步追番进度
-
-- 省心的追番进度管理，看完视频自动更新进度
-- 打开 APP 立即继续观看，无需回想上次看到了哪
-
-| <img src=".readme/images/features/subject-collection.png" alt="" width="200"/> | <img src=".readme/images/features/home.png" alt="" width="200"/> | 
-|:------------------------------------------------------------------------------:|:----------------------------------------------------------------:|
-
-### 聚合数据源
-
-- [聚合视频数据源](https://github.com/creamycake-anime/ani-subs)，全自动选择
-  > 还支持 BitTorrent、Jellyfin、Emby、以及自定义源
-- 聚合全网弹幕源（[弹弹play][ddplay]），以及 Animeko 自己的[弹幕服务](https://danmaku-cn.myani.org/swagger/index.html)
-
-| <img src=".readme/images/features/mediaselector-simple.png" alt="" width="200"/> | <img src=".readme/images/features/mediaselector-detailed.png" alt="" width="200"/> |
-|:--------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------:|
-
-| <img src=".readme/images/features/episode.png" alt="" width="200"/> | <img src=".readme/images/features/episode-scrolled.png" alt="" width="200"/> |
-|:-------------------------------------------------------------------:|:----------------------------------------------------------------------------:|
-
-### 离线缓存
-
-- 所有数据源都能缓存
-
-| <img src=".readme/images/features/cache-episode.png" alt="" width="200"/> | <img src=".readme/images/features/cache-list.png" alt="" width="200"/> |
-|:-------------------------------------------------------------------------:|:----------------------------------------------------------------------:|
-
-### 精美界面
-
-| <img src=".readme/images/features/player-fullscreen.png" alt="" width="600"/> |
-|:-----------------------------------------------------------------------------:|
-
-- 适配平板和大屏设备
-
-| <img src=".readme/images/features/pc-home.png" alt="" width="600"/> |
-|:-------------------------------------------------------------------:|
-
-| <img src=".readme/images/features/pc-search.png" alt="" width="600"/> |
-|:---------------------------------------------------------------------:|
-
-| <img src=".readme/images/features/pc-search-detail.png" alt="" width="600"/> |
-|:----------------------------------------------------------------------------:|
-
-### 更多个性设置
-
-| <img src=".readme/images/features/danmaku-settings.png" alt="" width="600"/> |
-|:----------------------------------------------------------------------------:|
-
-| <img src=".readme/images/features/theme-settings.png" alt="" width="200"/> | <img src=".readme/images/features/media-preferences.png" alt="" width="200"/> |
-|:--------------------------------------------------------------------------:|:-----------------------------------------------------------------------------:|
+# 编译 release 包
+./gradlew :app:android:assembleDefaultRelease
+```
 
 ## 下载
 
-Animeko 支持所有主流平台：Android、iOS、Windows、macOS、Linux。
+仅支持 Meta Quest 3 设备。暂无发布渠道。
 
-- 稳定版本: 功能稳定  
-  [下载稳定版本](https://animeko.org/downloads/)
+## 上游项目
 
-通常建议使用稳定版本. 如果你愿意参与测试并拥有一定的对 bug 的处理能力, 也欢迎使用测试版本更快体验新功能.
-具体版本类型可查看下方.
+原项目功能和下载请见 [open-ani/animeko](https://github.com/open-ani/animeko)。
 
-- 测试版本: 体验最新功能  
-  [下载测试版本](https://animeko.org/downloads/)
+## 许可
 
-## 技术总览
+本项目与原项目相同，使用 [GNU AGPL v3](LICENSE.txt) 许可证。
 
-如果你是开发者，我们总是欢迎你提交 PR 参与开发！
-以下几点可以给你一个技术上的大概了解。
-
-- [Kotlin 多平台][Kotlin Multiplatform]架构；
-- 使用新一代响应式 UI 框架 [Compose Multiplatform][Compose Multiplatform] 构建
-  UI；
-- 内置专为 Animeko 打造的“基于 [libtorrent][libtorrent] 的 BitTorrent 引擎，优化边下边播的体验；
-- 高性能弹幕引擎，公益弹幕服务器 + 网络弹幕源；
-- 适配多平台的[视频播放器](https://github.com/open-ani/mediamp)，Android 底层为 [ExoPlayer][ExoPlayer]，PC 底层为 [VLC][VLC]；
-- 多类型数据源适配，内置 [动漫花园][dmhy]、[Mikan]，拥有强大的自定义数据源编辑器和自动数据源选择器。
-
-### 参与开发
-
-欢迎你提交 PR 参与开发，
-有关项目技术细节请参考 [CONTRIBUTING](docs/contributing/README.md)。
-
-## FAQ
-
-### 资源来源是什么?
-
-全部视频数据都来自网络, Animeko 本身不存储任何视频数据。
-Animeko 支持两大数据源类型：BT 和在线。BT 源即为公共 BitTorrent P2P 网络，
-每个在 BT
-网络上的人都可分享自己拥有的资源供他人下载。在线源即为其他视频资源网站分享的内容，目前使用 [creamycake ani-subs](https://github.com/creamycake-anime/ani-subs)。Animeko
-本身并不提供任何视频资源。
-
-本着互助精神，使用 BT 源时 Animeko 会自动做种 (分享数据)。
-BT 指纹为 `-AL4123-`，其中 `4123` 为版本号 `4.12.3`；UA 为类似 `ani_libtorrent/4.12.3`。
-
-### 弹幕来源是什么?
-
-Animeko 拥有自己的公益弹幕服务器，在 Animeko 应用内发送的弹幕将会发送到弹幕服务器上。每条弹幕都会以
-Bangumi
-用户名绑定以防滥用（并考虑未来增加举报和屏蔽功能）。
-
-Animeko 还会从[弹弹play][ddplay]获取关联弹幕，弹弹play还会从其他弹幕平台例如哔哩哔哩港澳台和巴哈姆特获取弹幕。
-番剧每集可拥有几十到几千条不等的弹幕量。
+全景图资源来自 [Poly Haven](https://polyhaven.com/)（CC0）。
