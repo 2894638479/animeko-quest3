@@ -109,16 +109,10 @@ class PlayerSession(
             }.data
 
             logger.info { "Set media data to player: $preparedData" }
-            val previousPosition = if (replacePlayer != null) {
-                player.currentPositionMillis.first()
-            } else null
             if (replacePlayer != null) {
                 player = replacePlayer!!()
             }
             player.setMediaData(preparedData)
-            if (previousPosition != null && previousPosition > 1000) {
-                player.seekTo(previousPosition)
-            }
             hlsPlaybackProxySession = preparedHlsPlaybackProxySession
             preparedHlsPlaybackProxySession = null
 
