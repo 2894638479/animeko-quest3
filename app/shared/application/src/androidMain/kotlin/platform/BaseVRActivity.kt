@@ -225,6 +225,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             ?.let { name -> VRBackgroundMode.entries.find { it.name == name } }
             ?: VRBackgroundMode.PASSTHROUGH
         _passthroughEnabled = vrPrefs.getBoolean("passthrough", true)
+        _spatialAudioEnabled = vrPrefs.getBoolean("spatial_audio", true)
         applyBackgroundMode(savedMode)
 
         // Spatial audio — audio sounds like it comes from the main panel position
@@ -234,6 +235,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     /** Call when the media player is ready to pass its audio session ID for spatialization. */
     override fun onPlayerAudioSessionReady(sessionId: Int, channelCount: Int) {
+        if (!_spatialAudioEnabled) return
         if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId, channelCount)
     }
 
@@ -259,9 +261,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             scene.enablePassthrough(value)
         }
 
+    private var _spatialAudioEnabled: Boolean = true
+
     override var spatialAudioEnabled: Boolean
-        get() = ::spatialAudio.isInitialized
+        get() = _spatialAudioEnabled && ::spatialAudio.isInitialized
         set(value) {
+            _spatialAudioEnabled = value
             vrPrefs.edit().putBoolean("spatial_audio", value).apply()
         }
 
