@@ -626,10 +626,16 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     // ── Scale propagation ───────────────────────────────────────────────────
 
-    /** Called by [SpatialPanel] when its scale changes. Propagates to spatial audio if main panel. */
+    /** Called by [SpatialPanel] when its scale changes. Propagates to bound panels and spatial audio. */
     internal fun onMainPanelScaleChanged(scale: Float, entity: Entity) {
-        if (entity == mainPanelEntity && ::spatialAudio.isInitialized) {
-            spatialAudio.updateScale(scale)
+        if (entity == mainPanelEntity) {
+            if (::spatialAudio.isInitialized) spatialAudio.updateScale(scale)
+            for (panel in panelByEntity.values) {
+                if (panel.isBound) {
+                    panel.entity.setComponent(Scale(Vector3(scale)))
+                    panel.entity.setComponent(Transform(calculateRelativePose(panel.entry, scale)))
+                }
+            }
         }
     }
 
