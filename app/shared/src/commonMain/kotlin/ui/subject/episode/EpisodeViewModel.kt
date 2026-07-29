@@ -90,7 +90,9 @@ import me.him188.ani.app.domain.media.resolver.MediaResolver
 import me.him188.ani.app.domain.mediasource.GetPreferredWebMediaSourceUseCase
 import me.him188.ani.app.domain.mediasource.instance.GetMediaSourceInstancesUseCase
 import me.him188.ani.app.domain.mediasource.web.captcha.WebSessionManager
-import me.him188.ani.app.domain.player.CacheProgressProvider
+import me.him188.ani.app.domain.media.player.MediaCacheProgressInfo
+import me.him188.ani.app.domain.media.player.TorrentMediaCacheProgressProvider
+import me.him188.ani.app.domain.media.player.data.TorrentMediaData
 import me.him188.ani.app.domain.player.extension.AnalyticsExtension
 import me.him188.ani.app.domain.player.extension.AutoSelectExtension
 import me.him188.ani.app.domain.player.extension.CacheOnBtPlayExtension
@@ -283,6 +285,14 @@ class EpisodeViewModel(
     )
         private set
 
+    // Reactive flows that track the current player — used wherever the concrete
+    // player instance may be replaced (e.g. spatial audio refresh via replacePlayer).
+    private val playerFlow = snapshotFlow { player }
+    private val currentMediaProperties = playerFlow.flatMapLatest { it.mediaProperties }
+    private val currentMediaData = playerFlow.flatMapLatest { it.mediaData }
+    private val currentChapters = playerFlow.flatMapLatest { it.chapters ?: flowOf(emptyList()) }
+    private val currentPositionMillis = playerFlow.flatMapLatest { it.currentPositionMillis }
+
     @OptIn(UnsafeEpisodeSessionApi::class)
     private val fetchPlayState = EpisodeFetchSelectPlayState(
         subjectId, initialEpisodeId, player, backgroundScope,
@@ -377,9 +387,17 @@ class EpisodeViewModel(
         getSourceInfoFlow = { mediaSourceManager.infoFlowByMediaSourceId(it) },
     )
 
-    val cacheProgressInfoFlow = CacheProgressProvider(
-        player, backgroundScope,
-    ).cacheProgressInfoFlow
+    val cacheProgressInfoFlow = currentMediaData
+        .flatMapLatest { data ->
+            when (data) {
+                is TorrentMediaData -> TorrentMediaCacheProgressProvider(data.pieces).flow
+                else -> flowOf(MediaCacheProgressInfo.Empty)
+            }
+        }.shareIn(
+            backgroundScope,
+            SharingStarted.WhileSubscribed(),
+            replay = 1,
+        )
 
     /**
      * "视频统计" bottom sheet 显示内容
@@ -389,7 +407,7 @@ class EpisodeViewModel(
         fetchPlayState.mediaSelectorFlow
             .filterNotNull(), // // TODO: 2025/1/3 check filterNotNull
         fetchPlayState.playerSession.videoLoadingState,
-        player,
+        currentMediaData,
         mediaSourceInfoProvider,
         mediaSourceLoading = fetchPlayState.episodeSessionFlow.flatMapLatest { it.mediaSourceLoadingFlow },
         backgroundScope,
@@ -580,8 +598,6 @@ class EpisodeViewModel(
     )
 
 
-    private val playerFlow = snapshotFlow { player }
-
     @OptIn(UnsafeEpisodeSessionApi::class)
     private val episodeDanmakuLoader = EpisodeDanmakuLoader(
         playerFlow = playerFlow,
@@ -717,7 +733,7 @@ class EpisodeViewModel(
         fetchPlayState.episodeSessionFlow.flatMapLatest { session ->
             autoSkipRepository.rulesFlow(session.episodeId)
         },
-        player.mediaProperties.mapNotNull { it?.durationMillis?.milliseconds },
+        currentMediaProperties.mapNotNull { it?.durationMillis?.milliseconds },
         settingsRepository.videoScaffoldConfig.flow
             .map { it.opEdSkipDuration }
             .distinctUntilChanged(),
@@ -755,7 +771,7 @@ class EpisodeViewModel(
 
     private val combinedChaptersFlow: Flow<List<Chapter>> =
         combine(
-            (player.chapters ?: flowOf(emptyList())),
+            currentChapters,
             flow {
                 emit(emptyList()) // 先给个空列表, 避免刚开始时因为等待网络而没有进度
                 emitAll(autoSkipChaptersFlow)
@@ -772,7 +788,7 @@ class EpisodeViewModel(
                 player.seekTo(it)
             }
         },
-        videoLength = player.mediaProperties.mapNotNull { it?.durationMillis?.milliseconds }
+        videoLength = currentMediaProperties.mapNotNull { it?.durationMillis?.milliseconds }
             .produceState(0.milliseconds),
     )
 
@@ -866,7 +882,7 @@ class EpisodeViewModel(
             initialMediaSelectorViewKindFlow(),
             matchingDanmakuPresenter,
             matchingDanmakuPresenter.flatMapLatest { it?.uiState ?: flowOfNull() },
-            combine(selectedMediaFlow, player.mediaData) { selectedMedia, mediaData ->
+            combine(selectedMediaFlow, currentMediaData) { selectedMedia, mediaData ->
                 MediaShareData.from(selectedMedia, mediaData)
             },
         ) { authState, subjectEpisodeBundle, subjectLoadError, fetchSelect, danmakuStatistics, danmakuEnabled, danmakuConfig, mediaSelectorState, mediaSourceResultsPresentation, mediaSelectorSummary, initialMediaSelectorViewKind, matchingDanmakuPresenter, matchingDanmaku, shareData ->
@@ -1043,7 +1059,7 @@ class EpisodeViewModel(
                     // 设置启用
                     @OptIn(UnsafeEpisodeSessionApi::class)
                     combine(
-                        player.currentPositionMillis.sampleWithInitial(1000),
+                        currentPositionMillis.sampleWithInitial(1000),
                         episodeIdFlow,
                         episodeCollectionsFlow,
                     ) { pos, id, collections ->
