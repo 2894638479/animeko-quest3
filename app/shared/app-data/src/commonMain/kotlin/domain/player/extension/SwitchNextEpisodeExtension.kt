@@ -12,6 +12,7 @@ package me.him188.ani.app.domain.player.extension
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import me.him188.ani.app.domain.episode.EpisodeFetchSelectPlayState
 import me.him188.ani.app.domain.episode.EpisodeSession
@@ -61,9 +62,10 @@ class SwitchNextEpisodeExtension(
     }
 
     private suspend fun impl(session: EpisodeSession): Nothing {
-        val player = context.player
         var previous: PlaybackState? = null
-        player.playbackState.collect { current ->
+        context.playerFlow.flatMapLatest { p: MediampPlayer ->
+            p.playbackState.map { state: PlaybackState -> p to state }
+        }.collect { (player: MediampPlayer, current: PlaybackState) ->
             if (previous == PlaybackState.PLAYING && current == PlaybackState.FINISHED) {
                 val closeToEnd = player.mediaProperties.value.let { prop ->
                     prop != null && prop.durationMillis > 0L && prop.durationMillis - player.currentPositionMillis.value < 5000
@@ -78,6 +80,7 @@ class SwitchNextEpisodeExtension(
             }
             previous = current
         }
+        error("unreachable")
     }
 
     class Factory(
