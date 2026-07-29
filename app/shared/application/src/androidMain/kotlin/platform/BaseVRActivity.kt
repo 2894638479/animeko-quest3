@@ -15,7 +15,9 @@ import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModelStoreOwner
@@ -225,6 +227,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             ?.let { name -> VRBackgroundMode.entries.find { it.name == name } }
             ?: VRBackgroundMode.PASSTHROUGH
         _passthroughEnabled = vrPrefs.getBoolean("passthrough", true)
+        _spatialAudioEnabled = vrPrefs.getBoolean("spatial_audio", true)
         applyBackgroundMode(savedMode)
 
         // Spatial audio — audio sounds like it comes from the main panel position
@@ -234,6 +237,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     /** Call when the media player is ready to pass its audio session ID for spatialization. */
     override fun onPlayerAudioSessionReady(sessionId: Int, channelCount: Int) {
+        if (!_spatialAudioEnabled) return
         if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId, channelCount)
     }
 
@@ -259,9 +263,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             scene.enablePassthrough(value)
         }
 
+    private var _spatialAudioEnabled by mutableStateOf(false)
+
     override var spatialAudioEnabled: Boolean
-        get() = ::spatialAudio.isInitialized
+        get() = _spatialAudioEnabled
         set(value) {
+            _spatialAudioEnabled = value
             vrPrefs.edit().putBoolean("spatial_audio", value).apply()
         }
 
