@@ -233,13 +233,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         spatialAudio.registerSystem(systemManager, componentManager)
     }
 
-    private var _lastSessionId: Int = 0
-    private var _lastChannelCount: Int = 2
-
     /** Call when the media player is ready to pass its audio session ID for spatialization. */
     override fun onPlayerAudioSessionReady(sessionId: Int, channelCount: Int) {
-        _lastSessionId = sessionId
-        _lastChannelCount = channelCount
         if (!_spatialAudioEnabled) return
         if (::spatialAudio.isInitialized) spatialAudio.setAudioSessionId(sessionId, channelCount)
     }
@@ -273,9 +268,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         set(value) {
             _spatialAudioEnabled = value
             vrPrefs.edit().putBoolean("spatial_audio", value).apply()
-            if (value && _lastSessionId > 0 && ::spatialAudio.isInitialized) {
-                spatialAudio.setAudioSessionId(_lastSessionId, _lastChannelCount)
-            }
         }
 
     private fun applyBackgroundMode(mode: VRBackgroundMode) {
