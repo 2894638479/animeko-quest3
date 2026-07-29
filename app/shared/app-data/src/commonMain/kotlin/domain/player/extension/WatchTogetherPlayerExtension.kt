@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import me.him188.ani.app.data.models.episode.displayName
@@ -32,6 +33,7 @@ import me.him188.ani.client.models.AniWatchTogetherPlayback
 import me.him188.ani.client.models.AniWatchTogetherWatchingInfo
 import me.him188.ani.utils.coroutines.sampleWithInitial
 import org.koin.core.Koin
+import org.openani.mediamp.MediampPlayer
 import org.openani.mediamp.PlaybackState
 import org.openani.mediamp.features.PlaybackSpeed
 import org.openani.mediamp.isPlaying
@@ -78,35 +80,37 @@ class WatchTogetherPlayerExtension(
             )
 
             mediaLoaded.await()
-            combine(
-                episodeSession.infoBundleFlow.filterNotNull(),
-                // Drives the fix cadence only; the emitted value reads the live position below so
-                // state-edge fixes (e.g. resume right after a reload) never carry a stale sample.
-                context.player.currentPositionMillis.sampleWithInitial(REPORT_SAMPLE_INTERVAL_MILLIS),
-                context.player.playbackState,
-                context.player.mediaProperties,
-            ) { info, _, playbackState, mediaProperties ->
-                // Stable-state gate: no fixes while (re)loading media (CREATED/READY/ERROR, e.g.
-                // switching sources mid-episode), or the transient 0 position would be broadcast
-                // and followers would be yanked to it. The last stable fix stays current instead.
-                if (playbackState !in STABLE_REPORT_STATES) return@combine null
-                if (!holdSettled.isCompleted && playbackState == PlaybackState.PLAYING) return@combine null
-                val durationMillis = mediaProperties?.durationMillis ?: 0L
-                AniWatchTogetherWatchingInfo(
-                    subjectId = info.subjectId,
-                    episodeId = info.episodeId,
-                    subjectName = info.subjectInfo.displayName,
-                    episodeSort = info.episodeInfo.sort.toString(),
-                    episodeName = info.episodeInfo.displayName,
-                    positionMillis = context.player.currentPositionMillis.value.coerceAtLeast(0L),
-                    positionAtMillis = manager.serverNowMillis(),
-                    durationMillis = durationMillis,
-                    paused = playbackState != PlaybackState.PLAYING,
-                    buffering = playbackState == PlaybackState.PAUSED_BUFFERING,
-                    // Loading ends only once the player learns the total duration.
-                    loading = durationMillis <= 0L,
-                    playbackRate = context.player.features[PlaybackSpeed]?.value ?: 1f,
-                )
+            context.playerFlow.flatMapLatest { p: MediampPlayer ->
+                combine(
+                    episodeSession.infoBundleFlow.filterNotNull(),
+                    // Drives the fix cadence only; the emitted value reads the live position below so
+                    // state-edge fixes (e.g. resume right after a reload) never carry a stale sample.
+                    p.currentPositionMillis.sampleWithInitial(REPORT_SAMPLE_INTERVAL_MILLIS),
+                    p.playbackState,
+                    p.mediaProperties,
+                ) { info, _, playbackState, mediaProperties ->
+                    // Stable-state gate: no fixes while (re)loading media (CREATED/READY/ERROR, e.g.
+                    // switching sources mid-episode), or the transient 0 position would be broadcast
+                    // and followers would be yanked to it. The last stable fix stays current instead.
+                    if (playbackState !in STABLE_REPORT_STATES) return@combine null
+                    if (!holdSettled.isCompleted && playbackState == PlaybackState.PLAYING) return@combine null
+                    val durationMillis = mediaProperties?.durationMillis ?: 0L
+                    AniWatchTogetherWatchingInfo(
+                        subjectId = info.subjectId,
+                        episodeId = info.episodeId,
+                        subjectName = info.subjectInfo.displayName,
+                        episodeSort = info.episodeInfo.sort.toString(),
+                        episodeName = info.episodeInfo.displayName,
+                        positionMillis = p.currentPositionMillis.value.coerceAtLeast(0L),
+                        positionAtMillis = manager.serverNowMillis(),
+                        durationMillis = durationMillis,
+                        paused = playbackState != PlaybackState.PLAYING,
+                        buffering = playbackState == PlaybackState.PAUSED_BUFFERING,
+                        // Loading ends only once the player learns the total duration.
+                        loading = durationMillis <= 0L,
+                        playbackRate = p.features[PlaybackSpeed]?.value ?: 1f,
+                    )
+                }
             }.filterNotNull().collect { bridge.updateLocalWatching(owner, it) }
         }
 
@@ -115,15 +119,16 @@ class WatchTogetherPlayerExtension(
             // the host to press play, so the host can start once the whole room has loaded.
             // Mid-episode source reloads don't re-trigger (mediaLoaded completes once per episode).
             mediaLoaded.await()
-            val firstStable = context.player.playbackState
+            val player = context.playerFlow.first()
+            val firstStable = player.playbackState
                 .filter { it == PlaybackState.PLAYING || it == PlaybackState.PAUSED }
                 .first()
             if (firstStable == PlaybackState.PLAYING && isRoomSyncActive()) {
-                withContext(Dispatchers.Main.immediate) { context.player.pause() }
+                withContext(Dispatchers.Main.immediate) { player.pause() }
                 // Wait for the pause to take effect so the reporter's PLAYING suppression covers
                 // the whole transient; bounded in case the player ignores the pause.
                 withTimeoutOrNull(HOLD_SETTLE_TIMEOUT_MILLIS) {
-                    context.player.playbackState.filter { it != PlaybackState.PLAYING }.first()
+                    player.playbackState.filter { it != PlaybackState.PLAYING }.first()
                 }
             }
             holdSettled.complete(Unit)
@@ -134,7 +139,7 @@ class WatchTogetherPlayerExtension(
             // Serialized after the hold decision so the initial sync and the hold don't fight
             // over the play/pause state.
             holdSettled.await()
-            context.player.playbackState
+            context.playerFlow.first().playbackState
                 .filter { it == PlaybackState.PLAYING || it == PlaybackState.PAUSED }
                 .first()
             bridge.targetPlayback.value?.let { applyPlayback(episodeSession, it, forceSeek = true) }

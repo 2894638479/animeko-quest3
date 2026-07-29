@@ -11,10 +11,13 @@ package me.him188.ani.app.domain.player.extension
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import me.him188.ani.app.domain.episode.EpisodeSession
 import me.him188.ani.utils.analytics.Analytics
 import me.him188.ani.utils.analytics.AnalyticsEvent.Companion.EpisodePlaying
 import org.koin.core.Koin
+import org.openani.mediamp.MediampPlayer
 import org.openani.mediamp.PlaybackState
 
 /**
@@ -31,7 +34,9 @@ class AnalyticsExtension(
             hasPlayedOnce.collectLatest { played ->
                 if (played) return@collectLatest
 
-                context.player.playbackState.collectLatest { state ->
+                context.playerFlow.flatMapLatest { p: MediampPlayer ->
+                    p.playbackState.map { state: PlaybackState -> state }
+                }.collectLatest { state ->
                     if (state == PlaybackState.PLAYING) {
                         Analytics.recordEvent(
                             EpisodePlaying,
