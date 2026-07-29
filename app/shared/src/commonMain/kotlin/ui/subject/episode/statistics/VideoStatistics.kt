@@ -77,12 +77,12 @@ import me.him188.ani.app.ui.mediafetch.MediaSourceInfoProvider
 import me.him188.ani.datasources.api.Media
 import me.him188.ani.datasources.api.source.MediaSourceInfo
 import org.jetbrains.compose.resources.stringResource
-import org.openani.mediamp.MediampPlayer
+import org.openani.mediamp.source.MediaData
 
 class VideoStatisticsCollector(
     mediaSelector: Flow<MediaSelector>,
     videoLoadingStateFlow: Flow<VideoLoadingState>,
-    playerState: MediampPlayer,
+    private val mediaDataFlow: Flow<MediaData?>,
     private val mediaSourceInfoProvider: MediaSourceInfoProvider,
     mediaSourceLoading: Flow<Boolean>,
     backgroundScope: CoroutineScope,
@@ -95,7 +95,7 @@ class VideoStatisticsCollector(
                 mediaSourceInfoProvider.getSourceInfoFlow(it?.mediaSourceId ?: return@flatMapLatest emptyFlow())
             },
             selectedMediaFlow
-                .combine(playerState.mediaData.map { it?.filenameOrNull }) { selectedMedia, filename ->
+                .combine(mediaDataFlow.map { it?.filenameOrNull }) { selectedMedia, filename ->
                     filename ?: selectedMedia?.originalTitle
                 },
             mediaSourceLoading,
