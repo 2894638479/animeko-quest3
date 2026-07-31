@@ -131,13 +131,21 @@ class StereoDepthRenderer(
 
         uploadDepthPlaceholder()
 
-        // Expose the SurfaceTexture to ExoPlayer (must be on GL thread)
+        // Expose the SurfaceTexture to ExoPlayer (must be on GL thread).
+        // Track whether any video frame has actually arrived so we can avoid
+        // running expensive depth inference (and stalling media loading) while
+        // the source is still resolving.
         val st = android.graphics.SurfaceTexture(videoTexId)
+        st.setOnFrameAvailableListener {
+            hasVideoFrame = true
+        }
         surfaceTexture = st
         onSurfaceTextureReady(st)
 
         logger.info { "StereoDepthRenderer surface created" }
     }
+
+    private var hasVideoFrame = false
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         viewportWidth = width
@@ -220,6 +228,9 @@ class StereoDepthRenderer(
 
     /** Copies the current frame to a small bitmap and triggers async depth inference. */
     private fun maybeSampleFrame() {
+        // No video frames yet (media source still loading) — skip inference to
+        // keep CPU free for the player. Depth texture stays at the placeholder.
+        if (!hasVideoFrame) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastDepthSample < refreshMillis) return
         lastDepthSample = now
