@@ -14,6 +14,7 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
+import android.opengl.Matrix
 import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -148,6 +149,12 @@ class StereoDepthRenderer(
         val st = surfaceTexture ?: return
         st.updateTexImage()
         st.getTransformMatrix(texMatrix)
+        // SurfaceTexture's transform matrix is undefined (all zeros) before the
+        // first frame arrives; a zero matrix would sample the texture corner and
+        // render black. Fall back to identity until real frames come in.
+        if (texMatrix.all { it == 0f }) {
+            Matrix.setIdentityM(texMatrix, 0)
+        }
 
         maybeSampleFrame()
 
