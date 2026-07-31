@@ -75,7 +75,6 @@ actual fun VideoPlayer(
         if (LocalPanelManager.current != null && stereo3d) {
             // VR + 3D: render the video as a side-by-side stereo pair (depth-based DIBR).
             // The main panel must be in SBS (2:1) layout with StereoMode.LeftRight.
-            val logger = rememberUpdatedState(me.him188.ani.utils.logging.logger("StereoVideoPlayer"))
             StereoVideoSurface(
                 scope = androidx.compose.runtime.rememberCoroutineScope(),
                 modifier = modifier,
@@ -84,9 +83,9 @@ actual fun VideoPlayer(
                     // SurfaceTexture arrives on the GL thread.
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         val surf = android.view.Surface(st)
-                        logger.value.info { "setVideoSurface valid=${surf.isValid} on main thread" }
+                        android.util.Log.i("StereoVideoPlayer", "setVideoSurface valid=${surf.isValid} on main thread")
                         exoPlayer.impl.setVideoSurface(surf)
-                        logger.value.info { "setVideoSurface returned" }
+                        android.util.Log.i("StereoVideoPlayer", "setVideoSurface returned")
                     }
                 },
             )
