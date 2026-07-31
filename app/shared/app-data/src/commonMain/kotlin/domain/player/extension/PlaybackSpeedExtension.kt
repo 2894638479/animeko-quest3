@@ -9,8 +9,10 @@
 
 package me.him188.ani.app.domain.player.extension
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import me.him188.ani.app.data.repository.user.SettingsRepository
 import me.him188.ani.app.domain.episode.EpisodeSession
 import org.koin.core.Koin
@@ -33,7 +35,12 @@ class PlaybackSpeedExtension(
             settingsRepository.videoScaffoldConfig.flow
                 .map { it.playbackSpeed }
                 .distinctUntilChanged()
-                .collect { context.player.features[PlaybackSpeed]?.set(it) }
+                .collect { speed ->
+                    // ExoPlayer requires playback parameter changes on the main thread.
+                    withContext(Dispatchers.Main) {
+                        context.player.features[PlaybackSpeed]?.set(speed)
+                    }
+                }
         }
     }
 
