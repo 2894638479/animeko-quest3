@@ -136,7 +136,13 @@ class StereoDepthRenderer(
         // running expensive depth inference (and stalling media loading) while
         // the source is still resolving.
         val st = android.graphics.SurfaceTexture(videoTexId)
+        // Give MediaCodec a sane default buffer size in case it doesn't
+        // configure the surface itself.
+        st.setDefaultBufferSize(1920, 1080)
         st.setOnFrameAvailableListener {
+            if (!hasVideoFrame) {
+                logger.info { "First video frame arrived on SurfaceTexture" }
+            }
             hasVideoFrame = true
         }
         surfaceTexture = st
@@ -182,7 +188,10 @@ class StereoDepthRenderer(
         // Debug: log frame count periodically
         frameCount++
         if (frameCount % 120 == 0) {
-            logger.info { "Stereo renderer frames=$frameCount viewport=${viewportWidth}x$viewportHeight" }
+            logger.info {
+                "Stereo renderer frames=$frameCount viewport=${viewportWidth}x$viewportHeight " +
+                        "hasVideoFrame=$hasVideoFrame"
+            }
         }
     }
 
