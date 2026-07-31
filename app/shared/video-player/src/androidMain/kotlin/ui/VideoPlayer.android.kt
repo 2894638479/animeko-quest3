@@ -25,7 +25,9 @@ import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView.ControllerVisibilityListener
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
 import me.him188.ani.app.platform.LocalSpatialAudioHost
+import me.him188.ani.app.ui.foundation.LocalPanelManager
 import me.him188.ani.app.videoplayer.media.LibassExoPlayerMediampPlayer
+import me.him188.ani.app.videoplayer.media.stereo.StereoVideoSurface
 import org.openani.mediamp.MediampPlayer
 import org.openani.mediamp.exoplayer.ExoPlayerMediampPlayer
 import org.openani.mediamp.exoplayer.compose.ExoPlayerMediampPlayerSurface
@@ -69,6 +71,19 @@ actual fun VideoPlayer(
     } else {
         val libassPlayer = player as? LibassExoPlayerMediampPlayer
         val exoPlayer = libassPlayer?.exoMediampPlayer ?: player as ExoPlayerMediampPlayer
+        val stereo3d = me.him188.ani.app.platform.LocalVRHost.current?.stereo3dEnabled == true
+        if (LocalPanelManager.current != null && stereo3d) {
+            // VR + 3D: render the video as a side-by-side stereo pair (depth-based DIBR).
+            // The main panel must be in SBS (2:1) layout with StereoMode.LeftRight.
+            StereoVideoSurface(
+                scope = androidx.compose.runtime.rememberCoroutineScope(),
+                modifier = modifier,
+                onSurfaceTextureReady = { st ->
+                    exoPlayer.impl.setVideoSurface(android.view.Surface(st))
+                },
+            )
+            return
+        }
         ExoPlayerMediampPlayerSurface(exoPlayer, modifier) {
             (videoSurfaceView as? SurfaceView)?.let { registerAndroidVideoSurface(player, it) }
             controllerAutoShow = false

@@ -23,6 +23,12 @@ interface VRHost {
     var backgroundMode: VRBackgroundMode
     var passthroughEnabled: Boolean
     var spatialAudioEnabled: Boolean
+
+    /**
+     * 3D video conversion: video frames are rendered as a side-by-side stereo
+     * pair (depth-based DIBR) and the main panel switches to a 2:1 SBS layout.
+     */
+    var stereo3dEnabled: Boolean
 }
 
 val LocalVRHost = staticCompositionLocalOf<VRHost?> { null }
