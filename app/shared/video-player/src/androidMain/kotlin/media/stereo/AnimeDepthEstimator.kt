@@ -59,9 +59,7 @@ class AnimeDepthEstimator(private val context: Context) {
             longArrayOf(1, 3, INPUT_SIZE.toLong(), INPUT_SIZE.toLong()),
         ).use { tensor ->
             session.run(mapOf(inputName to tensor)).use { result ->
-                @Suppress("UNCHECKED_CAST")
-                val raw = (result[outputName].get().value as Array<Array<Array<Float>>>)
-                val depth = raw[0][0]
+                val depth = extractDepth(result[outputName].get().value)
                 // min-max normalize to 0..1 (inverse depth: closer = larger)
                 var min = Float.MAX_VALUE
                 var max = Float.MIN_VALUE
@@ -74,6 +72,41 @@ class AnimeDepthEstimator(private val context: Context) {
                     ((depth[i] - min) / range).coerceIn(0f, 1f)
                 }
             }
+        }
+    }
+
+    /** Extracts a flat depth array from an ONNX output of shape (1,1,H,W) or (1,H,W). */
+    private fun extractDepth(value: Any): FloatArray {
+        @Suppress("UNCHECKED_CAST")
+        return when (value) {
+            // 4D: [1][1][H][W] (primitive float[][][][])
+            is Array<*> -> (value[0] as Array<*>)[0]?.let { inner ->
+                when (inner) {
+                    is FloatArray -> inner // [1][1][H*W] flattened
+                    is Array<*> -> {
+                        // [1][1][H][W]
+                        val rows = inner.filterIsInstance<FloatArray>()
+                        if (rows.isEmpty()) {
+                            @Suppress("UNCHECKED_CAST")
+                            (inner as Array<FloatArray>).firstOrNull()?.copyOf() ?: FloatArray(0)
+                        } else {
+                            val w = rows[0].size
+                            val flat = FloatArray(rows.size * w)
+                            var i = 0
+                            for (row in rows) {
+                                row.copyInto(flat, i)
+                                i += w
+                            }
+                            flat
+                        }
+                    }
+                    else -> FloatArray(0)
+                }
+            } ?: FloatArray(0)
+
+            // 3D: [1][H][W]
+            is FloatArray -> value
+            else -> FloatArray(0)
         }
     }
 
