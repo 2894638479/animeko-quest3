@@ -43,6 +43,8 @@ kotlin {
         implementation(libs.androidx.media3.exoplayer.hls)
         implementation(libs.libass.media)
         api(libs.mediamp.exoplayer)
+        implementation(libs.onnxruntime.android)
+        api(projects.utils.logging)
     }
     sourceSets.desktopMain.dependencies {
         api(compose.desktop.currentOs) {

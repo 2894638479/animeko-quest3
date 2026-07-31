@@ -15,8 +15,10 @@ import me.him188.ani.app.ui.settings.framework.components.SwitchItem
 fun SettingsScope.VRGroup(
     currentMode: VRBackgroundMode,
     spatialAudioEnabled: Boolean,
+    stereo3dEnabled: Boolean,
     onModeChanged: (VRBackgroundMode) -> Unit,
     onSpatialAudioChanged: (Boolean) -> Unit,
+    onStereo3dChanged: (Boolean) -> Unit,
 ) {
     var selectedMode by rememberSaveable { mutableStateOf(currentMode) }
 
@@ -43,6 +45,16 @@ fun SettingsScope.VRGroup(
             onCheckedChange = onSpatialAudioChanged,
             title = { Text("空间音频 (Spatial Audio)") },
             description = { Text("声音从虚拟面板的位置发出，随面板移动变化") },
+        )
+    }
+    Group(
+        title = { Text("3D 转换") },
+    ) {
+        SwitchItem(
+            checked = stereo3dEnabled,
+            onCheckedChange = onStereo3dChanged,
+            title = { Text("3D 视频转换 (实验)") },
+            description = { Text("用 AI 深度模型将视频转为双目立体画面，面板变为 2:1 并排布局") },
         )
     }
 }

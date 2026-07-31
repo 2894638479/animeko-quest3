@@ -54,6 +54,7 @@ import com.meta.spatial.toolkit.AvatarSystem
 import com.meta.spatial.toolkit.Controller
 import com.meta.spatial.toolkit.Hittable
 import com.meta.spatial.toolkit.Material
+import com.meta.spatial.toolkit.MediaPanelRenderOptions
 import com.meta.spatial.toolkit.Mesh
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.Panel
@@ -167,6 +168,12 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
                 layerConfig = LayerConfig(filters = LayerFilters.HIGHEST_QUALITY)
                 enableTransparent = true; alphaMode = AlphaMode.TRANSLUCENT
                 themeResourceId = R.style.PanelAppThemeTransparent
+                if (entry.size == PanelManager.PanelSize.SBS) {
+                    // SBS panels expect a side-by-side texture: left eye sees the left
+                    // half, right eye sees the right half (2:1 aspect).
+                    MediaPanelRenderOptions(stereoMode = com.meta.spatial.runtime.StereoMode.LeftRight)
+                        .applyTo(this)
+                }
             }
             subView { panelByEntity[it]?.content?.invoke() }
         }
@@ -228,7 +235,13 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             ?: VRBackgroundMode.PASSTHROUGH
         _passthroughEnabled = vrPrefs.getBoolean("passthrough", true)
         _spatialAudioEnabled = vrPrefs.getBoolean("spatial_audio", true)
+        _stereo3dEnabled = vrPrefs.getBoolean("stereo3d", false)
         applyBackgroundMode(savedMode)
+        if (_stereo3dEnabled) {
+            panelByEntity[mainPanelEntity]?.let { panel ->
+                swapPanelRatio(panel, PanelManager.PanelSize.SBS.widthPx, PanelManager.PanelSize.SBS.heightPx)
+            }
+        }
 
         // Spatial audio — audio sounds like it comes from the main panel position
         spatialAudio = SpatialAudioManager(scene, mainPanelEntity, entry.size.defaultWidth)
@@ -270,6 +283,26 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         set(value) {
             _spatialAudioEnabled = value
             vrPrefs.edit().putBoolean("spatial_audio", value).apply()
+        }
+
+    private var _stereo3dEnabled by mutableStateOf(false)
+
+    override var stereo3dEnabled: Boolean
+        get() = _stereo3dEnabled
+        set(value) {
+            _stereo3dEnabled = value
+            vrPrefs.edit().putBoolean("stereo3d", value).apply()
+            if (::mainPanelEntity.isInitialized) {
+                // Switch the main panel between 16:9 (normal) and 2:1 SBS layouts.
+                // SBS panels have StereoMode.LeftRight configured at registration.
+                panelByEntity[mainPanelEntity]?.let { panel ->
+                    swapPanelRatio(
+                        panel,
+                        if (value) PanelManager.PanelSize.SBS.widthPx else PanelManager.PanelSize.WIDE.widthPx,
+                        if (value) PanelManager.PanelSize.SBS.heightPx else PanelManager.PanelSize.WIDE.heightPx,
+                    )
+                }
+            }
         }
 
     private fun applyBackgroundMode(mode: VRBackgroundMode) {
