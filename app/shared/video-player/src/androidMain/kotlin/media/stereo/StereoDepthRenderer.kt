@@ -170,7 +170,15 @@ class StereoDepthRenderer(
 
         // Upload pending depth (from inference thread)
         uploadPendingDepthIfAny()
+
+        // Debug: log frame count periodically
+        frameCount++
+        if (frameCount % 120 == 0) {
+            logger.info { "Stereo renderer frames=$frameCount viewport=${viewportWidth}x$viewportHeight" }
+        }
     }
+
+    private var frameCount = 0
 
     private fun drawLeft() {
         GLES20.glUseProgram(leftProgram)
@@ -355,7 +363,12 @@ class StereoDepthRenderer(
             varying vec2 vUv;
             void main() {
                 vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
-                gl_FragColor = texture2D(uVideo, uv);
+                vec4 color = texture2D(uVideo, uv);
+                // DEBUG: tint red to verify the GL pipeline reaches the panel.
+                // If the panel shows red -> rendering works and the video
+                // texture is black; if it shows the normal image -> everything
+                // works; if it stays black -> GLSurfaceView is not displayed.
+                gl_FragColor = vec4(mix(color.rgb, vec3(1.0, 0.0, 0.0), 0.4), 1.0);
             }
         """.trimIndent()
 
