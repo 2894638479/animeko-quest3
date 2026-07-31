@@ -75,6 +75,20 @@ actual fun VideoPlayer(
         if (LocalPanelManager.current != null && stereo3d) {
             // VR + 3D: render the video as a side-by-side stereo pair (depth-based DIBR).
             // The main panel must be in SBS (2:1) layout with StereoMode.LeftRight.
+            // Listen for renderer evidence: video size / first rendered frame.
+            val listener = object : androidx.media3.common.Player.Listener {
+                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                    android.util.Log.i(
+                        "StereoVideoPlayer",
+                        "onVideoSizeChanged ${videoSize.width}x${videoSize.height}",
+                    )
+                }
+
+                override fun onRenderedFirstFrame() {
+                    android.util.Log.i("StereoVideoPlayer", "onRenderedFirstFrame")
+                }
+            }
+            exoPlayer.impl.addListener(listener)
             StereoVideoSurface(
                 scope = androidx.compose.runtime.rememberCoroutineScope(),
                 modifier = modifier,
