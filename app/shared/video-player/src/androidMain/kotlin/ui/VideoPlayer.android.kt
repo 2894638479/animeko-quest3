@@ -79,7 +79,11 @@ actual fun VideoPlayer(
                 scope = androidx.compose.runtime.rememberCoroutineScope(),
                 modifier = modifier,
                 onSurfaceTextureReady = { st ->
-                    exoPlayer.impl.setVideoSurface(android.view.Surface(st))
+                    // ExoPlayer requires setVideoSurface on the main thread; the
+                    // SurfaceTexture arrives on the GL thread.
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        exoPlayer.impl.setVideoSurface(android.view.Surface(st))
+                    }
                 },
             )
             return
