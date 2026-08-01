@@ -318,17 +318,30 @@ class StereoDepthRenderer(
     /** Uploads the latest inference result as a depth texture (called on GL thread). */
     private fun uploadPendingDepthIfAny() {
         val depth = pendingDepth.getAndSet(null) ?: return
-        val size = AnimeDepthEstimator.INPUT_SIZE
-        val bytes = ByteBuffer.allocateDirect(size * size)
+        // The model output may not be exactly INPUT_SIZE^2 (e.g. 126x126 for a
+        // 128 input). Derive the side from the actual element count.
+        val side = kotlin.math.sqrt(depth.size.toDouble()).toInt()
+        if (side * side != depth.size) return
+        // Flip rows vertically: GL texture (0,0) is the bottom-left, but the
+        // depth array starts with the top row of the (screen-space) frame.
+        // Without this the depth map is upside down and the stereo shape
+        // doesn't match the picture.
+        val bytes = ByteBuffer.allocateDirect(depth.size)
             .order(ByteOrder.nativeOrder())
-        for (v in depth) bytes.put((v * 255f).toInt().toByte())
+        for (row in 0 until side) {
+            val srcRow = side - 1 - row
+            val base = srcRow * side
+            for (col in 0 until side) {
+                bytes.put((depth[base + col] * 255f).toInt().toByte())
+            }
+        }
         bytes.position(0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, depthTexId)
         GLES20.glTexImage2D(
-            GLES20.GL_TEXTURE_2D, 0, GLES30.GL_R8, size, size, 0,
+            GLES20.GL_TEXTURE_2D, 0, GLES30.GL_R8, side, side, 0,
             GLES30.GL_RED, GLES20.GL_UNSIGNED_BYTE, bytes,
         )
-        logger.info { "Uploaded new depth texture" }
+        logger.info { "Uploaded new depth texture ${side}x$side" }
     }
 
     private fun createProgram(vertex: String, fragment: String): Int {
