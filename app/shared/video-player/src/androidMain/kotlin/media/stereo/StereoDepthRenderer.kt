@@ -443,8 +443,9 @@ class StereoDepthRenderer(
 
     companion object {
         // Forward-only parallax: max UV shift for the nearest (d = 1) pixels.
-        // 0.08 = 8% of the screen width, a clearly visible pop-out.
-        private const val MAX_DISP = 0.08f
+        // Lowered 0.08 -> 0.04: the real MiDaS depth map made the pop-out too
+        // strong (foreground visibly offset left vs the source).
+        private const val MAX_DISP = 0.04f
 
         private val VERTEX_SHADER = """
             attribute vec4 aPos;
