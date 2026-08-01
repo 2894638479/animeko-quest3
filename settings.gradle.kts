@@ -23,6 +23,7 @@ rootProject.name = "animeko"
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        maven("https://repo1.maven.org/maven2") // Maven Central mirror
         mavenCentral()
         google()
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev") // Compose Multiplatform pre-release versions
@@ -33,6 +34,8 @@ dependencyResolutionManagement {
     @Suppress("UnstableApiUsage")
     repositories {
         mavenLocal()
+        google()
+        maven("https://repo1.maven.org/maven2") // Maven Central mirror (repo.maven.apache.org unreachable on this network)
         mavenCentral()
     }
     versionCatalogs {

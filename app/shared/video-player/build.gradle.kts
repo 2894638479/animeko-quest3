@@ -43,7 +43,11 @@ kotlin {
         implementation(libs.androidx.media3.exoplayer.hls)
         implementation(libs.libass.media)
         api(libs.mediamp.exoplayer)
-        implementation(libs.onnxruntime.android)
+        // LiteRT (Google) + GPU delegate (Vulkan) for the depth model — GPU is
+        // the only realistic way to hit real-time on Quest (CPU/NNAPI don't
+        // accelerate depth transformers). API stays org.tensorflow.lite.*.
+        implementation("com.google.ai.edge.litert:litert:1.0.1")
+        implementation("com.google.ai.edge.litert:litert-gpu:1.0.1")
         api(projects.utils.logging)
     }
     sourceSets.desktopMain.dependencies {
