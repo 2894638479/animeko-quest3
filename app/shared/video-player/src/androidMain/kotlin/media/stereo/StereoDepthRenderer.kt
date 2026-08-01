@@ -26,6 +26,7 @@ import me.him188.ani.utils.logging.logger
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import java.nio.ShortBuffer
 import java.util.concurrent.atomic.AtomicReference
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -103,20 +104,25 @@ class StereoDepthRenderer(
     private var leftProgram = 0
     private var rightProgram = 0
     private var depthProgram = 0
+    private var warpProgram = 0
     private var quadBuffer: FloatBuffer? = null
 
-    // Uniform locations (right eye program)
-    private var uVideoRight = -1
-    private var uDepth = -1
-    private var uStrength = -1
-    private var uMaxDisp = -1
-    private var uDepthScaleY = -1
-    private var uDepthOffsetY = -1
-    private var uTexMatrixRight = -1
-
-    // Uniform locations (left eye program)
+    // Left eye program (used by frame sampling to FBO)
     private var uVideoLeft = -1
     private var uTexMatrixLeft = -1
+
+    // Forward-mapping mesh (vertices displaced by depth in the vertex shader)
+    private var meshVertices: FloatBuffer? = null
+    private var meshIndices: ShortBuffer? = null
+    private var meshIndexCount = 0
+
+    // Uniform locations (warp program — forward mapping)
+    private var warpVideo = -1
+    private var warpDepth = -1
+    private var warpDisp = -1
+    private var warpScaleY = -1
+    private var warpOffsetY = -1
+    private var warpTexMatrix = -1
 
     // Depth visualization program
     private var uDepthDepth = -1
@@ -151,16 +157,6 @@ class StereoDepthRenderer(
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
 
         leftProgram = createProgram(VERTEX_SHADER, FRAG_LEFT)
-        rightProgram = createProgram(VERTEX_SHADER, FRAG_RIGHT)
-
-        uVideoRight = GLES20.glGetUniformLocation(rightProgram, "uVideo")
-        uDepth = GLES20.glGetUniformLocation(rightProgram, "uDepth")
-        uStrength = GLES20.glGetUniformLocation(rightProgram, "uStrength")
-        uMaxDisp = GLES20.glGetUniformLocation(rightProgram, "uMaxDisp")
-        uDepthScaleY = GLES20.glGetUniformLocation(rightProgram, "uDepthScaleY")
-        uDepthOffsetY = GLES20.glGetUniformLocation(rightProgram, "uDepthOffsetY")
-        uTexMatrixRight = GLES20.glGetUniformLocation(rightProgram, "uTexMatrix")
-
         uVideoLeft = GLES20.glGetUniformLocation(leftProgram, "uVideo")
         uTexMatrixLeft = GLES20.glGetUniformLocation(leftProgram, "uTexMatrix")
 
@@ -168,6 +164,21 @@ class StereoDepthRenderer(
         uDepthDepth = GLES20.glGetUniformLocation(depthProgram, "uDepth")
         uDepthScaleYDepth = GLES20.glGetUniformLocation(depthProgram, "uDepthScaleY")
         uDepthOffsetYDepth = GLES20.glGetUniformLocation(depthProgram, "uDepthOffsetY")
+
+        // Forward-mapping warp: vertices displaced by depth (GPU interpolates
+        // the deformation, naturally filling holes instead of reverse-mapping
+        // which pulled background into the silhouette).
+        warpProgram = createProgram(VERTEX_WARP, FRAG_WARP)
+        warpVideo = GLES20.glGetUniformLocation(warpProgram, "uVideo")
+        warpDepth = GLES20.glGetUniformLocation(warpProgram, "uDepth")
+        warpDisp = GLES20.glGetUniformLocation(warpProgram, "uDisp")
+        warpScaleY = GLES20.glGetUniformLocation(warpProgram, "uDepthScaleY")
+        warpOffsetY = GLES20.glGetUniformLocation(warpProgram, "uDepthOffsetY")
+        warpTexMatrix = GLES20.glGetUniformLocation(warpProgram, "uTexMatrix")
+        val mesh = createMesh(MESH_COLS, MESH_ROWS)
+        meshVertices = mesh.first
+        meshIndices = mesh.second
+        meshIndexCount = MESH_COLS * MESH_ROWS * 6
 
         val quad = floatArrayOf(
             -1f, -1f, 0f, 0f,
@@ -248,13 +259,9 @@ class StereoDepthRenderer(
 
     private var frameCount = 0
 
+    /** Forward mapping: vertices shifted by depth so the figure moves as a whole. */
     private fun drawLeft() {
-        GLES20.glUseProgram(leftProgram)
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTexId)
-        GLES20.glUniform1i(uVideoLeft, 0)
-        GLES20.glUniformMatrix4fv(uTexMatrixLeft, 1, false, texMatrix, 0)
-        drawQuadRaw(leftProgram)
+        drawWarp(DISP_CLIP / 2f * strength) // left eye: foreground shifts right (crossed parallax = pop-out)
     }
 
     private fun drawRight() {
@@ -270,19 +277,72 @@ class StereoDepthRenderer(
             drawQuadRaw(depthProgram)
             return
         }
-        GLES20.glUseProgram(rightProgram)
+        drawWarp(-DISP_CLIP / 2f * strength) // right eye: foreground shifts left
+    }
+
+    private fun drawWarp(uDisp: Float) {
+        GLES20.glUseProgram(warpProgram)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTexId)
-        GLES20.glUniform1i(uVideoRight, 0)
-        GLES20.glUniformMatrix4fv(uTexMatrixRight, 1, false, texMatrix, 0)
+        GLES20.glUniform1i(warpVideo, 0)
+        GLES20.glUniformMatrix4fv(warpTexMatrix, 1, false, texMatrix, 0)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, depthTexId)
-        GLES20.glUniform1i(uDepth, 1)
-        GLES20.glUniform1f(uStrength, strength)
-        GLES20.glUniform1f(uMaxDisp, MAX_DISP)
-        GLES20.glUniform1f(uDepthScaleY, depthScaleY)
-        GLES20.glUniform1f(uDepthOffsetY, depthOffsetY)
-        drawQuadRaw(rightProgram)
+        GLES20.glUniform1i(warpDepth, 1)
+        GLES20.glUniform1f(warpDisp, uDisp)
+        GLES20.glUniform1f(warpScaleY, depthScaleY)
+        GLES20.glUniform1f(warpOffsetY, depthOffsetY)
+        drawMeshRaw(warpProgram)
+    }
+
+    private fun drawMeshRaw(program: Int) {
+        val vbuf = meshVertices ?: return
+        val ibuf = meshIndices ?: return
+        val aPos = GLES20.glGetAttribLocation(program, "aPos")
+        val aUv = GLES20.glGetAttribLocation(program, "aUv")
+        vbuf.position(0)
+        GLES20.glEnableVertexAttribArray(aPos)
+        GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 16, vbuf)
+        vbuf.position(2)
+        GLES20.glEnableVertexAttribArray(aUv)
+        GLES20.glVertexAttribPointer(aUv, 2, GLES20.GL_FLOAT, false, 16, vbuf)
+        ibuf.position(0)
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, meshIndexCount, GLES20.GL_UNSIGNED_SHORT, ibuf)
+        GLES20.glDisableVertexAttribArray(aPos)
+        GLES20.glDisableVertexAttribArray(aUv)
+    }
+
+    /** Builds the forward-mapping mesh: clip-space vertices + matching UVs. */
+    private fun createMesh(cols: Int, rows: Int): Pair<FloatBuffer, ShortBuffer> {
+        val vertices = FloatArray((cols + 1) * (rows + 1) * 4)
+        var i = 0
+        for (row in 0..rows) {
+            for (col in 0..cols) {
+                vertices[i++] = col.toFloat() / cols * 2f - 1f // clip x
+                vertices[i++] = row.toFloat() / rows * 2f - 1f // clip y (-1 bottom)
+                vertices[i++] = col.toFloat() / cols            // uv u
+                vertices[i++] = row.toFloat() / rows            // uv v (0 bottom)
+            }
+        }
+        val indices = ShortArray(cols * rows * 6)
+        var ii = 0
+        for (row in 0 until rows) {
+            for (col in 0 until cols) {
+                val a = (row * (cols + 1) + col).toShort()
+                val b = (a + 1).toShort()
+                val c = ((row + 1) * (cols + 1) + col).toShort()
+                val d = (c + 1).toShort()
+                indices[ii++] = a; indices[ii++] = c; indices[ii++] = b
+                indices[ii++] = b; indices[ii++] = c; indices[ii++] = d
+            }
+        }
+        val vbuf = ByteBuffer.allocateDirect(vertices.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer()
+        vbuf.put(vertices).position(0)
+        val ibuf = ByteBuffer.allocateDirect(indices.size * 2)
+            .order(ByteOrder.nativeOrder()).asShortBuffer()
+        ibuf.put(indices).position(0)
+        return vbuf to ibuf
     }
 
     private fun drawQuadRaw(program: Int) {
@@ -471,6 +531,44 @@ class StereoDepthRenderer(
         // at foreground edges so the DIBR warp doesn't pull background into
         // the silhouette (seen as a "half character + background" strip).
         private const val DEPTH_SMOOTH_KERNEL = 5
+
+        // Total clip-space disparity (MAX_DISP uv units = 2x in clip space),
+        // split symmetrically: left eye +half, right eye -half.
+        private const val DISP_CLIP = MAX_DISP * 2f
+        private const val MESH_COLS = 96
+        private const val MESH_ROWS = 54
+
+        private val VERTEX_WARP = """
+            attribute vec4 aPos;
+            attribute vec2 aUv;
+            uniform sampler2D uDepth;
+            uniform float uDisp;
+            uniform float uDepthScaleY;
+            uniform float uDepthOffsetY;
+            varying vec2 vUv;
+            void main() {
+                vUv = aUv;
+                // Sample depth at this vertex (letterboxed content region) and
+                // displace the vertex horizontally. GPU interpolation between
+                // displaced vertices deforms the mesh and fills holes naturally
+                // — the figure moves as a whole instead of reverse-mapping
+                // pulling background into the silhouette.
+                float d = texture2D(uDepth, vec2(aUv.x, uDepthOffsetY + aUv.y * uDepthScaleY)).r;
+                gl_Position = vec4(aPos.x + d * uDisp, aPos.y, 0.0, 1.0);
+            }
+        """.trimIndent()
+
+        private val FRAG_WARP = """
+            #extension GL_OES_EGL_image_external : require
+            precision mediump float;
+            uniform samplerExternalOES uVideo;
+            uniform mat4 uTexMatrix;
+            varying vec2 vUv;
+            void main() {
+                vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
+                gl_FragColor = texture2D(uVideo, uv);
+            }
+        """.trimIndent()
 
         private val VERTEX_SHADER = """
             attribute vec4 aPos;
