@@ -255,7 +255,7 @@ androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.7.0
 androidx-material = { module = "com.google.android.material:material", version = "1.12.0" }
 #androidx-material3-window-size-class0 = { module = "androidx.compose.material3:material3-window-size-class", version = "1.2.1" }
 androidx-browser = { module = "androidx.browser:browser", version = "1.8.0" }
-onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
+onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android-qnn", version.ref = "onnxruntime" }
 onnxruntime = { module = "com.microsoft.onnxruntime:onnxruntime", version.ref = "onnxruntime" }
 androidx-media = { module = "androidx.media:media", version = "1.7.0" }
 androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidx-lifecycle" }
