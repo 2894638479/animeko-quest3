@@ -52,6 +52,7 @@ class AnimeDepthEstimator(private val context: Context) {
      * @return normalized depth (0..1), size INPUT_SIZE*INPUT_SIZE
      */
     suspend fun estimateDepth(rgb: Bitmap): FloatArray = withContext(Dispatchers.Default) {
+        val t0 = System.nanoTime()
         val input = preprocess(rgb)
         OnnxTensor.createTensor(
             environment,
@@ -68,6 +69,8 @@ class AnimeDepthEstimator(private val context: Context) {
                     if (v > max) max = v
                 }
                 val range = (max - min).coerceAtLeast(1e-6f)
+                val elapsedMs = (System.nanoTime() - t0) / 1_000_000
+                logger.info { "Depth inference ok: ${depth.size}px in ${elapsedMs}ms" }
                 FloatArray(depth.size) { i ->
                     ((depth[i] - min) / range).coerceIn(0f, 1f)
                 }
@@ -134,7 +137,10 @@ class AnimeDepthEstimator(private val context: Context) {
 
     companion object {
         private val logger = logger<AnimeDepthEstimator>()
-        const val INPUT_SIZE = 518
+        // 224 keeps CPU inference fast enough (~100-200ms) to track the video.
+        // 518 was too slow: depth lagged behind the changing picture and the
+        // stereo effect faded to flat once the scene moved on.
+        const val INPUT_SIZE = 224
         private val MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         private val STD = floatArrayOf(0.229f, 0.224f, 0.225f)
     }
