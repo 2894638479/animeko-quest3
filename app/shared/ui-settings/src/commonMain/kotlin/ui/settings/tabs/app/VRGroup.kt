@@ -16,9 +16,11 @@ fun SettingsScope.VRGroup(
     currentMode: VRBackgroundMode,
     spatialAudioEnabled: Boolean,
     stereo3dEnabled: Boolean,
+    depthDebugEnabled: Boolean,
     onModeChanged: (VRBackgroundMode) -> Unit,
     onSpatialAudioChanged: (Boolean) -> Unit,
     onStereo3dChanged: (Boolean) -> Unit,
+    onDepthDebugChanged: (Boolean) -> Unit,
 ) {
     var selectedMode by rememberSaveable { mutableStateOf(currentMode) }
 
@@ -55,6 +57,12 @@ fun SettingsScope.VRGroup(
             onCheckedChange = onStereo3dChanged,
             title = { Text("3D 视频转换 (实验)") },
             description = { Text("用 AI 深度模型将视频转为双目立体画面，面板变为 2:1 并排布局") },
+        )
+        SwitchItem(
+            checked = depthDebugEnabled,
+            onCheckedChange = onDepthDebugChanged,
+            title = { Text("显示深度图 (调试)") },
+            description = { Text("右眼显示深度图伪彩色（蓝远红近），用于验证深度与画面是否匹配") },
         )
     }
 }

@@ -29,6 +29,12 @@ interface VRHost {
      * pair (depth-based DIBR) and the main panel switches to a 2:1 SBS layout.
      */
     var stereo3dEnabled: Boolean
+
+    /**
+     * Debug: render the depth map (blue far -> red near) in the right eye
+     * instead of the DIBR view, to verify the depth matches the picture.
+     */
+    var depthDebugEnabled: Boolean
 }
 
 val LocalVRHost = staticCompositionLocalOf<VRHost?> { null }
