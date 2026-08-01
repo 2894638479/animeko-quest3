@@ -383,12 +383,7 @@ class StereoDepthRenderer(
             varying vec2 vUv;
             void main() {
                 vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
-                vec4 color = texture2D(uVideo, uv);
-                // DEBUG: tint red to verify the GL pipeline reaches the panel.
-                // If the panel shows red -> rendering works and the video
-                // texture is black; if it shows the normal image -> everything
-                // works; if it stays black -> GLSurfaceView is not displayed.
-                gl_FragColor = vec4(mix(color.rgb, vec3(1.0, 0.0, 0.0), 0.4), 1.0);
+                gl_FragColor = texture2D(uVideo, uv);
             }
         """.trimIndent()
 
