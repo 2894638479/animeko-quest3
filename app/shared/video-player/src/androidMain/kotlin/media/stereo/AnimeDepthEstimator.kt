@@ -65,18 +65,21 @@ class AnimeDepthEstimator(private val context: Context) {
 
     /**
      * Runs inference on the given bitmap. Suspends on Dispatchers.Default.
-     * @return normalized depth (0..1), size INPUT_SIZE*INPUT_SIZE
+     * @return normalized depth (0..1) with its (width, height) size.
      */
-    suspend fun estimateDepth(rgb: Bitmap): FloatArray = withContext(Dispatchers.Default) {
+    suspend fun estimateDepth(rgb: Bitmap): DepthResult = withContext(Dispatchers.Default) {
         val t0 = System.nanoTime()
-        val input = preprocess(rgb)
+        val (input, h, w) = preprocess(rgb)
         OnnxTensor.createTensor(
             environment,
             FloatBuffer.wrap(input),
-            longArrayOf(1, 3, INPUT_SIZE.toLong(), INPUT_SIZE.toLong()),
+            longArrayOf(1, 3, h.toLong(), w.toLong()),
         ).use { tensor ->
             session.run(mapOf(inputName to tensor)).use { result ->
-                val depth = extractDepth(result[outputName].get().value)
+                val (depth, shape) = extractDepth(result[outputName].get().value)
+                // Output shape may be (1,1,H,W) or (1,H,W): last two dims are H,W.
+                val outH = if (shape.size >= 2) shape[shape.size - 2] else 0
+                val outW = if (shape.size >= 1) shape[shape.size - 1] else 0
                 // min-max normalize to 0..1 (inverse depth: closer = larger)
                 var min = Float.MAX_VALUE
                 var max = Float.MIN_VALUE
@@ -86,10 +89,11 @@ class AnimeDepthEstimator(private val context: Context) {
                 }
                 val range = (max - min).coerceAtLeast(1e-6f)
                 val elapsedMs = (System.nanoTime() - t0) / 1_000_000
-                logger.info { "Depth inference ok: ${depth.size}px in ${elapsedMs}ms" }
-                FloatArray(depth.size) { i ->
+                val normalized = FloatArray(depth.size) { i ->
                     ((depth[i] - min) / range).coerceIn(0f, 1f)
                 }
+                logger.info { "Depth inference ok: ${depth.size}px (${outW}x$outH) in ${elapsedMs}ms" }
+                DepthResult(normalized, outW, outH)
             }
         }
     }
@@ -97,15 +101,21 @@ class AnimeDepthEstimator(private val context: Context) {
     /**
      * Extracts a flat depth array from an ONNX output of any N-D float shape
      * (e.g. (1,1,H,W), (1,H,W), or (H,W)). Recursively descends through
-     * leading batch dims, then flattens rows into a single FloatArray.
+     * leading batch dims, flattens rows into a single FloatArray, and returns
+     * the full shape so the caller can restore H and W.
      */
-    private fun extractDepth(value: Any): FloatArray {
-        fun flatten(a: Any): FloatArray = when (a) {
+    private fun extractDepth(value: Any): Pair<FloatArray, IntArray> {
+        val dims = mutableListOf<Int>()
+
+        fun flatten(a: Any): FloatArray? = when (a) {
             is FloatArray -> a
             is Array<*> -> {
-                val rows = a.filterIsInstance<FloatArray>()
-                if (rows.isNotEmpty()) {
-                    // Array of rows: flatten them in order.
+                if (a.isEmpty()) return null
+                val first = a[0]
+                if (first is FloatArray) {
+                    dims.add(a.size)
+                    @Suppress("UNCHECKED_CAST")
+                    val rows = a as Array<FloatArray>
                     val w = rows[0].size
                     val out = FloatArray(rows.size * w)
                     var i = 0
@@ -114,28 +124,36 @@ class AnimeDepthEstimator(private val context: Context) {
                         i += w
                     }
                     out
-                } else if (a.isNotEmpty() && a[0] is Array<*>) {
-                    // Descend one leading (batch) dimension.
+                } else if (first is Array<*>) {
+                    dims.add(a.size)
                     @Suppress("UNCHECKED_CAST")
-                    flatten(a[0] as Array<*>)
+                    flatten(first)
                 } else {
-                    FloatArray(0)
+                    null
                 }
             }
-            else -> FloatArray(0)
+            else -> null
         }
-        return flatten(value)
+
+        val flat = flatten(value) ?: return FloatArray(0) to intArrayOf()
+        return flat to dims.toIntArray()
     }
 
-    private fun preprocess(rgb: Bitmap): FloatArray {
-        val resized = Bitmap.createScaledBitmap(rgb, INPUT_SIZE, INPUT_SIZE, true)
+    private fun preprocess(rgb: Bitmap): Triple<FloatArray, Int, Int> {
+        // Keep the aspect ratio: the frame is 16:9 and stretching it to a
+        // square made the depth map's shapes (e.g. character silhouettes) not
+        // match the picture once mapped back to the 16:9 video.
+        val scale = minOf(MAX_DIM.toFloat() / rgb.width, MAX_DIM.toFloat() / rgb.height)
+        val w = (rgb.width * scale).toInt().coerceAtLeast(1)
+        val h = (rgb.height * scale).toInt().coerceAtLeast(1)
+        val resized = Bitmap.createScaledBitmap(rgb, w, h, true)
         try {
-            val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
-            resized.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+            val pixels = IntArray(w * h)
+            resized.getPixels(pixels, 0, w, 0, 0, w, h)
             // DINOv2 normalization (same as Depth Anything V2)
-            return FloatArray(3 * INPUT_SIZE * INPUT_SIZE) { idx ->
-                val c = idx / (INPUT_SIZE * INPUT_SIZE)
-                val p = idx % (INPUT_SIZE * INPUT_SIZE)
+            val input = FloatArray(3 * w * h) { idx ->
+                val c = idx / (w * h)
+                val p = idx % (w * h)
                 val color = pixels[p]
                 val channel = when (c) {
                     0 -> color shr 16 and 0xff
@@ -144,6 +162,7 @@ class AnimeDepthEstimator(private val context: Context) {
                 }
                 (channel / 255f - MEAN[c]) / STD[c]
             }
+            return Triple(input, h, w)
         } finally {
             if (resized !== rgb) resized.recycle()
         }
@@ -151,14 +170,16 @@ class AnimeDepthEstimator(private val context: Context) {
 
     companion object {
         private val logger = logger<AnimeDepthEstimator>()
-        // 128 keeps CPU inference as fast as possible (~200-400ms) so the
-        // depth can keep up with the video; NNAPI (when available) is faster
-        // still. 518/224 lagged and the stereo effect faded to flat.
-        const val INPUT_SIZE = 128
+        // Max side in pixels, aspect-preserving. Keeps CPU/NNAPI fast while
+        // keeping enough resolution for character-level depth shapes.
+        private const val MAX_DIM = 160
         private val MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         private val STD = floatArrayOf(0.229f, 0.224f, 0.225f)
     }
 }
+
+/** Normalized depth (0..1, closer = larger) plus its spatial size. */
+data class DepthResult(val depth: FloatArray, val width: Int, val height: Int)
 
 /** A small async helper: keeps the latest depth, updated at most every [intervalMillis]. */
 class DepthRefresher(
@@ -166,8 +187,8 @@ class DepthRefresher(
     private val estimator: AnimeDepthEstimator,
     private val intervalMillis: Long = 1_500L,
 ) {
-    private val _depth = AtomicReference<FloatArray?>(null)
-    val depth: FloatArray? get() = _depth.get()
+    private val _depth = AtomicReference<DepthResult?>(null)
+    val depth: DepthResult? get() = _depth.get()
 
     private var lastUpdate = 0L
     private var running = false
