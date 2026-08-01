@@ -103,7 +103,7 @@ actual fun VideoPlayer(
             StereoVideoSurface(
                 scope = androidx.compose.runtime.rememberCoroutineScope(),
                 modifier = modifier,
-                debugShowDepth = true,
+                debugShowDepth = me.him188.ani.app.platform.LocalVRHost.current?.depthDebugEnabled == true,
                 onSurfaceTextureReady = { st ->
                     surfaceTexture = st
                     bindSurface(st)

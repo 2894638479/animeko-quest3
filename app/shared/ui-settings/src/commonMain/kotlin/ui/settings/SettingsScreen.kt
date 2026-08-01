@@ -393,9 +393,11 @@ fun SettingsScreen(
                                         currentMode = vrHost.backgroundMode,
                                         spatialAudioEnabled = vrHost.spatialAudioEnabled,
                                         stereo3dEnabled = vrHost.stereo3dEnabled,
+                                        depthDebugEnabled = vrHost.depthDebugEnabled,
                                         onModeChanged = { vrHost.backgroundMode = it },
                                         onSpatialAudioChanged = { vrHost.spatialAudioEnabled = it },
                                         onStereo3dChanged = { vrHost.stereo3dEnabled = it },
+                                        onDepthDebugChanged = { vrHost.depthDebugEnabled = it },
                                     )
                                 }
                             }
