@@ -39,8 +39,24 @@ class AnimeDepthEstimator(private val context: Context) {
     }
     private val session: OrtSession by lazy {
         val model = context.assets.open("model_fp16.onnx").use { it.readBytes() }
-        environment.createSession(model, OrtSession.SessionOptions()).also {
-            logger.info { "Loaded depth model. inputs=${it.inputNames}, outputs=${it.outputNames}" }
+        // Prefer NNAPI (Quest DSP/GPU) for fast inference; fall back to CPU.
+        val nnapiOptions = OrtSession.SessionOptions().apply {
+            try {
+                addNnapi()
+                logger.info { "NNAPI execution provider enabled" }
+            } catch (e: Throwable) {
+                logger.info(e) { "NNAPI not available" }
+            }
+        }
+        try {
+            environment.createSession(model, nnapiOptions).also {
+                logger.info { "Loaded depth model with NNAPI/CPU. inputs=${it.inputNames}, outputs=${it.outputNames}" }
+            }
+        } catch (e: Throwable) {
+            logger.info(e) { "NNAPI session failed, falling back to CPU" }
+            environment.createSession(model, OrtSession.SessionOptions()).also {
+                logger.info { "Loaded depth model (CPU). inputs=${it.inputNames}, outputs=${it.outputNames}" }
+            }
         }
     }
 
@@ -137,10 +153,10 @@ class AnimeDepthEstimator(private val context: Context) {
 
     companion object {
         private val logger = logger<AnimeDepthEstimator>()
-        // 224 keeps CPU inference fast enough (~100-200ms) to track the video.
-        // 518 was too slow: depth lagged behind the changing picture and the
-        // stereo effect faded to flat once the scene moved on.
-        const val INPUT_SIZE = 224
+        // 128 keeps CPU inference as fast as possible (~200-400ms) so the
+        // depth can keep up with the video; NNAPI (when available) is faster
+        // still. 518/224 lagged and the stereo effect faded to flat.
+        const val INPUT_SIZE = 128
         private val MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         private val STD = floatArrayOf(0.229f, 0.224f, 0.225f)
     }
