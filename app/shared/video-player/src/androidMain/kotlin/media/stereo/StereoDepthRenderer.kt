@@ -77,7 +77,6 @@ class StereoDepthRenderer(
     private var uDepth = -1
     private var uStrength = -1
     private var uMaxDisp = -1
-    private var uConverge = -1
     private var uTexMatrixRight = -1
 
     // Uniform locations (left eye program)
@@ -114,7 +113,6 @@ class StereoDepthRenderer(
         uDepth = GLES20.glGetUniformLocation(rightProgram, "uDepth")
         uStrength = GLES20.glGetUniformLocation(rightProgram, "uStrength")
         uMaxDisp = GLES20.glGetUniformLocation(rightProgram, "uMaxDisp")
-        uConverge = GLES20.glGetUniformLocation(rightProgram, "uConverge")
         uTexMatrixRight = GLES20.glGetUniformLocation(rightProgram, "uTexMatrix")
 
         uVideoLeft = GLES20.glGetUniformLocation(leftProgram, "uVideo")
@@ -219,7 +217,6 @@ class StereoDepthRenderer(
         GLES20.glUniform1i(uDepth, 1)
         GLES20.glUniform1f(uStrength, strength)
         GLES20.glUniform1f(uMaxDisp, MAX_DISP)
-        GLES20.glUniform1f(uConverge, CONVERGE)
         drawQuadRaw(rightProgram)
     }
 
@@ -366,12 +363,9 @@ class StereoDepthRenderer(
     }
 
     companion object {
-        // Half-range of the parallax swing (d - 0.5) * MAX_DISP, so the total
-        // far-to-near swing is 2 * MAX_DISP in UV units.
-        private const val MAX_DISP = 0.045f
-        // Shifts the whole right-eye view left by this much so the average
-        // scene plane sits at the panel instead of appearing closer.
-        private const val CONVERGE = 0.008f
+        // Forward-only parallax: max UV shift for the nearest (d = 1) pixels.
+        // 0.08 = 8% of the screen width, a clearly visible pop-out.
+        private const val MAX_DISP = 0.08f
 
         private val VERTEX_SHADER = """
             attribute vec4 aPos;
@@ -403,18 +397,16 @@ class StereoDepthRenderer(
             uniform mat4 uTexMatrix;
             uniform float uStrength;
             uniform float uMaxDisp;
-            uniform float uConverge;
             varying vec2 vUv;
             void main() {
                 vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
                 float d = texture2D(uDepth, uv).r;
-                // Inverse depth 0 (far) .. 1 (near). Bidirectional parallax
-                // centered at the screen plane (d = 0.5): far regions shift
-                // left in the right eye, near regions shift right. A small
-                // convergence offset shifts the whole right-eye view left so
-                // the average scene plane sits at the screen instead of
-                // appearing closer than the panel.
-                float disp = (d - 0.5) * uMaxDisp * uStrength - uConverge;
+                // Forward-only parallax: background (d ~ 0) stays glued to the
+                // screen plane; only nearer regions shift right in the right
+                // eye so they visibly pop out toward the viewer. No convergence
+                // offset — the background never moves, so the scene can't
+                // appear closer than the panel.
+                float disp = d * uMaxDisp * uStrength;
                 uv.x = clamp(uv.x - disp, 0.0, 1.0);
                 gl_FragColor = texture2D(uVideo, uv);
             }
