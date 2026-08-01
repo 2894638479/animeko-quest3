@@ -39,8 +39,16 @@ class AnimeDepthEstimator(private val context: Context) {
     }
     private val session: OrtSession by lazy {
         val model = context.assets.open("model_uint8.onnx").use { it.readBytes() }
-        // Prefer NNAPI (Quest DSP/GPU) for fast inference; fall back to CPU.
-        val nnapiOptions = OrtSession.SessionOptions().apply {
+        // Prefer QNN (Qualcomm Hexagon NPU) for quantized models, then NNAPI
+        // (Quest GPU/DSP), then CPU. DAv2 is a transformer, so NNAPI supports
+        // few of its ops and effectively runs CPU; QNN is the real NPU path.
+        val hardwareOptions = OrtSession.SessionOptions().apply {
+            try {
+                addQnn(mapOf("backend_path" to "Htp"))
+                logger.info { "QNN execution provider enabled" }
+            } catch (e: Throwable) {
+                logger.info(e) { "QNN not available" }
+            }
             try {
                 addNnapi()
                 logger.info { "NNAPI execution provider enabled" }
@@ -49,11 +57,11 @@ class AnimeDepthEstimator(private val context: Context) {
             }
         }
         try {
-            environment.createSession(model, nnapiOptions).also {
-                logger.info { "Loaded depth model with NNAPI/CPU. inputs=${it.inputNames}, outputs=${it.outputNames}" }
+            environment.createSession(model, hardwareOptions).also {
+                logger.info { "Loaded depth model (hardware). inputs=${it.inputNames}, outputs=${it.outputNames}" }
             }
         } catch (e: Throwable) {
-            logger.info(e) { "NNAPI session failed, falling back to CPU" }
+            logger.info(e) { "Hardware session failed, falling back to CPU" }
             environment.createSession(model, OrtSession.SessionOptions()).also {
                 logger.info { "Loaded depth model (CPU). inputs=${it.inputNames}, outputs=${it.outputNames}" }
             }
