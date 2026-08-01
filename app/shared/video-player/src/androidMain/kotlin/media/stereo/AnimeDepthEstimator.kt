@@ -24,21 +24,21 @@ import java.nio.FloatBuffer
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Anime depth estimation using DepthAnything V2 Small (ONNX, fp16).
+ * Anime depth estimation using DepthAnything V2 Small (ONNX, uint8 quantized).
  *
- * Input: RGB bitmap (any aspect, stretched to [INPUT_SIZE]x[INPUT_SIZE]).
- * Output: FloatArray of size W*H where each value is relative inverse depth
+ * The uint8 model is ~3x faster than fp16 on CPU while keeping accuracy close,
+ * which matters because inference runs on the CPU (NNAPI doesn't accelerate
+ * this transformer on Quest). Input keeps the aspect ratio.
+ *
+ * Output: FloatArray of W*H where each value is relative inverse depth
  * (0 = farthest, 1 = closest), computed via min-max normalization.
- *
- * CPU inference is slow (~hundreds of ms per frame), so callers should run it
- * sparingly (e.g. once per second) and reuse the result between updates.
  */
 class AnimeDepthEstimator(private val context: Context) {
     private val environment: OrtEnvironment by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         OrtEnvironment.getEnvironment()
     }
     private val session: OrtSession by lazy {
-        val model = context.assets.open("model_fp16.onnx").use { it.readBytes() }
+        val model = context.assets.open("model_uint8.onnx").use { it.readBytes() }
         // Prefer NNAPI (Quest DSP/GPU) for fast inference; fall back to CPU.
         val nnapiOptions = OrtSession.SessionOptions().apply {
             try {
