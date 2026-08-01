@@ -495,8 +495,11 @@ class StereoDepthRenderer(
             varying vec2 vUv;
             void main() {
                 vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
-                // Sample the letterboxed video region inside the square depth map.
-                float d = texture2D(uDepth, vec2(uv.x, uDepthOffsetY + uv.y * uDepthScaleY)).r;
+                // uv.y is the (texMatrix-corrected) video coordinate with 0 at
+                // the top; the depth texture has 0 at the bottom (we flipped
+                // rows on upload), so mirror y before mapping into the
+                // letterboxed content region.
+                float d = texture2D(uDepth, vec2(uv.x, uDepthOffsetY + (1.0 - uv.y) * uDepthScaleY)).r;
                 // Forward-only parallax: background (d ~ 0) stays glued to the
                 // screen plane; only nearer regions shift right in the right
                 // eye so they visibly pop out toward the viewer. No convergence
