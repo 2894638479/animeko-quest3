@@ -172,9 +172,11 @@ class AnimeDepthEstimator(private val context: Context) {
 
     companion object {
         private val logger = logger<AnimeDepthEstimator>()
-        // Max side in pixels, aspect-preserving. Keeps CPU/NNAPI fast while
-        // keeping enough resolution for character-level depth shapes.
-        private const val MAX_DIM = 160
+        // Max side in pixels, aspect-preserving. 224 is a good balance for
+        // character-level depth accuracy (160 lost fine shapes); CPU inference
+        // is ~600ms, NNAPI is faster. Raised from 160 to improve how well the
+        // depth matches the picture.
+        private const val MAX_DIM = 224
         private val MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         private val STD = floatArrayOf(0.229f, 0.224f, 0.225f)
     }
