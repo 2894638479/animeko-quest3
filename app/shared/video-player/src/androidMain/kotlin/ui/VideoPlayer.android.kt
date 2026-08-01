@@ -103,6 +103,7 @@ actual fun VideoPlayer(
             StereoVideoSurface(
                 scope = androidx.compose.runtime.rememberCoroutineScope(),
                 modifier = modifier,
+                debugShowDepth = true,
                 onSurfaceTextureReady = { st ->
                     surfaceTexture = st
                     bindSurface(st)

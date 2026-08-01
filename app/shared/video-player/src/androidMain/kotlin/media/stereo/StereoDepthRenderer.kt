@@ -43,6 +43,7 @@ class StereoDepthRenderer(
     private val estimator: AnimeDepthEstimator,
     private val refreshMillis: Long = 1_500L,
     var strength: Float = 1f,
+    var debugShowDepth: Boolean = false,
     private val onSurfaceTextureReady: (android.graphics.SurfaceTexture) -> Unit = {},
 ) : GLSurfaceView.Renderer {
 
@@ -70,6 +71,7 @@ class StereoDepthRenderer(
     // Shader programs
     private var leftProgram = 0
     private var rightProgram = 0
+    private var depthProgram = 0
     private var quadBuffer: FloatBuffer? = null
 
     // Uniform locations (right eye program)
@@ -82,6 +84,9 @@ class StereoDepthRenderer(
     // Uniform locations (left eye program)
     private var uVideoLeft = -1
     private var uTexMatrixLeft = -1
+
+    // Depth visualization program
+    private var uDepthDepth = -1
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0f, 0f, 0f, 1f)
@@ -117,6 +122,9 @@ class StereoDepthRenderer(
 
         uVideoLeft = GLES20.glGetUniformLocation(leftProgram, "uVideo")
         uTexMatrixLeft = GLES20.glGetUniformLocation(leftProgram, "uTexMatrix")
+
+        depthProgram = createProgram(VERTEX_SHADER, FRAG_DEPTH)
+        uDepthDepth = GLES20.glGetUniformLocation(depthProgram, "uDepth")
 
         val quad = floatArrayOf(
             -1f, -1f, 0f, 0f,
@@ -207,6 +215,16 @@ class StereoDepthRenderer(
     }
 
     private fun drawRight() {
+        if (debugShowDepth) {
+            // Debug: render the depth map as a blue( far) -> red(near) colormap
+            // so we can visually check it matches the picture.
+            GLES20.glUseProgram(depthProgram)
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, depthTexId)
+            GLES20.glUniform1i(uDepthDepth, 1)
+            drawQuadRaw(depthProgram)
+            return
+        }
         GLES20.glUseProgram(rightProgram)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTexId)
@@ -399,6 +417,18 @@ class StereoDepthRenderer(
             void main() {
                 vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
                 gl_FragColor = texture2D(uVideo, uv);
+            }
+        """.trimIndent()
+
+        private val FRAG_DEPTH = """
+            precision mediump float;
+            uniform sampler2D uDepth;
+            varying vec2 vUv;
+            void main() {
+                float d = texture2D(uDepth, vUv).r;
+                // blue (far) -> cyan -> yellow -> red (near) colormap
+                vec3 col = mix(vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0), d);
+                gl_FragColor = vec4(col, 1.0);
             }
         """.trimIndent()
 
