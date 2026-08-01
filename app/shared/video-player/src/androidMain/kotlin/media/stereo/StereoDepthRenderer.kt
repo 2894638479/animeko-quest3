@@ -15,8 +15,11 @@ import android.opengl.GLES20
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
-import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import me.him188.ani.utils.logging.info
 import me.him188.ani.utils.logging.logger
@@ -26,6 +29,7 @@ import java.nio.FloatBuffer
 import java.util.concurrent.atomic.AtomicReference
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * GL renderer that draws the video frame as a side-by-side stereo pair:
@@ -41,9 +45,6 @@ import javax.microedition.khronos.opengles.GL10
 class StereoDepthRenderer(
     private val scope: CoroutineScope,
     private val estimator: AnimeDepthEstimator,
-    // GPU inference is ~36ms, so refresh depth ~6x/sec for a near-live effect.
-    // (was 1500ms when CPU inference took 300ms+)
-    private val refreshMillis: Long = 150L,
     var strength: Float = 1f,
     var debugShowDepth: Boolean = false,
     private val onSurfaceTextureReady: (android.graphics.SurfaceTexture) -> Unit = {},
@@ -59,7 +60,35 @@ class StereoDepthRenderer(
     // Depth
     private var depthTexId = 0
     private val pendingDepth = AtomicReference<DepthResult?>(null)
-    private var lastDepthSample = 0L
+
+    // Pipeline: the GL thread samples every frame and drops the latest frame
+    // into this conflated channel (old frames overwritten); the inference
+    // thread runs at full throughput (receive -> infer -> next), so the depth
+    // update rate equals the inference rate (~27fps at ~36ms), not a throttled
+    // interval.
+    private val frameChannel = Channel<Bitmap>(Channel.CONFLATED)
+
+    init {
+        scope.launch(Dispatchers.Default) {
+            while (currentCoroutineContext().isActive) {
+                val frame = try {
+                    frameChannel.receive()
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Throwable) {
+                    continue
+                }
+                try {
+                    val result = estimator.estimateDepth(frame)
+                    pendingDepth.set(result)
+                } catch (e: Throwable) {
+                    logger.info(e) { "Depth inference failed" }
+                } finally {
+                    frame.recycle()
+                }
+            }
+        }
+    }
 
     // FBO for frame sampling
     private var sampleFbo = 0
@@ -271,14 +300,16 @@ class StereoDepthRenderer(
         GLES20.glDisableVertexAttribArray(aUv)
     }
 
-    /** Copies the current frame to a small bitmap and triggers async depth inference. */
+    /**
+     * Samples the current frame on the GL thread and hands it to the rotating
+     * inference thread via the conflated channel. Every frame is sampled (no
+     * throttling); if the inference thread is busy, older frames are overwritten
+     * so it always processes the most recent one.
+     */
     private fun maybeSampleFrame() {
-        // No video frames yet (media source still loading) — skip inference to
+        // No video frames yet (media source still loading) — skip sampling to
         // keep CPU free for the player. Depth texture stays at the placeholder.
         if (!hasVideoFrame) return
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastDepthSample < refreshMillis) return
-        lastDepthSample = now
 
         ensureSampleFbo(SAMPLE_WIDTH, SAMPLE_HEIGHT)
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, sampleFbo)
@@ -304,16 +335,7 @@ class StereoDepthRenderer(
         canvas.drawBitmap(bitmap, 0f, -SAMPLE_HEIGHT.toFloat(), null)
         bitmap.recycle()
 
-        scope.launch {
-            try {
-                val result = estimator.estimateDepth(flipped)
-                pendingDepth.set(result)
-            } catch (e: Throwable) {
-                logger.info(e) { "Depth inference failed" }
-            } finally {
-                flipped.recycle()
-            }
-        }
+        frameChannel.trySend(flipped) // CONFLATED: overwrites any unprocessed frame
     }
 
     private fun ensureSampleFbo(w: Int, h: Int) {
