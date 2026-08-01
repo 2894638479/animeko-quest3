@@ -388,13 +388,34 @@ class StereoDepthRenderer(
         // depth array starts with the top row of the (screen-space) frame.
         // Without this the depth map is upside down and the stereo shape
         // doesn't match the picture.
+        // Horizontal depth smoothing: DIBR's reverse mapping pulls the source
+        // left of a foreground edge into the shifted region, causing a "half
+        // character + background" strip to drift instead of the whole figure.
+        // Blurring depth horizontally smooths the disparity ramp at edges so
+        // the warp doesn't grab background into the silhouette.
+        val smoothed = FloatArray(depth.size)
+        val half = DEPTH_SMOOTH_KERNEL / 2
+        for (row in 0 until h) {
+            val base = row * w
+            for (col in 0 until w) {
+                var sum = 0f
+                var n = 0
+                for (k in -half..half) {
+                    val c = (col + k).coerceIn(0, w - 1)
+                    sum += depth[base + c]
+                    n++
+                }
+                smoothed[base + col] = sum / n
+            }
+        }
+
         val bytes = ByteBuffer.allocateDirect(depth.size)
             .order(ByteOrder.nativeOrder())
         for (row in 0 until h) {
             val srcRow = h - 1 - row
             val base = srcRow * w
             for (col in 0 until w) {
-                bytes.put((depth[base + col] * 255f).toInt().toByte())
+                bytes.put((smoothed[base + col] * 255f).toInt().toByte())
             }
         }
         bytes.position(0)
@@ -446,6 +467,10 @@ class StereoDepthRenderer(
         // Lowered 0.08 -> 0.04: the real MiDaS depth map made the pop-out too
         // strong (foreground visibly offset left vs the source).
         private const val MAX_DISP = 0.04f
+        // Horizontal depth blur kernel width (odd). Smooths the disparity ramp
+        // at foreground edges so the DIBR warp doesn't pull background into
+        // the silhouette (seen as a "half character + background" strip).
+        private const val DEPTH_SMOOTH_KERNEL = 5
 
         private val VERTEX_SHADER = """
             attribute vec4 aPos;
