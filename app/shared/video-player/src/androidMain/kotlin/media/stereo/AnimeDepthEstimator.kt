@@ -42,7 +42,13 @@ class AnimeDepthEstimator(private val context: Context) {
     private val gpuDelegate: GpuDelegate by lazy { GpuDelegate() }
 
     private val interpreter: Interpreter by lazy {
-        val model = ByteBuffer.wrap(context.assets.open(MODEL_ASSET).use { it.readBytes() })
+        // TFLite requires a direct ByteBuffer with native byte order, not a
+        // heap buffer (ByteBuffer.wrap would throw at Interpreter creation).
+        val bytes = context.assets.open(MODEL_ASSET).use { it.readBytes() }
+        val model = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply {
+            put(bytes)
+            rewind()
+        }
         val opts = Interpreter.Options()
         try {
             opts.addDelegate(gpuDelegate)
