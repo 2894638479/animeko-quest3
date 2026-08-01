@@ -113,9 +113,11 @@ class AnimeDepthEstimator(private val context: Context) {
                 if (a.isEmpty()) return null
                 val first = a[0]
                 if (first is FloatArray) {
+                    // Rows of floats: record both H (row count) and W (row length).
                     dims.add(a.size)
                     @Suppress("UNCHECKED_CAST")
                     val rows = a as Array<FloatArray>
+                    dims.add(rows[0].size)
                     val w = rows[0].size
                     val out = FloatArray(rows.size * w)
                     var i = 0
