@@ -41,7 +41,9 @@ import javax.microedition.khronos.opengles.GL10
 class StereoDepthRenderer(
     private val scope: CoroutineScope,
     private val estimator: AnimeDepthEstimator,
-    private val refreshMillis: Long = 1_500L,
+    // GPU inference is ~36ms, so refresh depth ~6x/sec for a near-live effect.
+    // (was 1500ms when CPU inference took 300ms+)
+    private val refreshMillis: Long = 150L,
     var strength: Float = 1f,
     var debugShowDepth: Boolean = false,
     private val onSurfaceTextureReady: (android.graphics.SurfaceTexture) -> Unit = {},
