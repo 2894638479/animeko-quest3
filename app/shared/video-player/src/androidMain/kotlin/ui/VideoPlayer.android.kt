@@ -96,9 +96,19 @@ actual fun VideoPlayer(
                     // ExoPlayer requires setVideoSurface on the main thread; the
                     // SurfaceTexture arrives on the GL thread.
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        val impl = exoPlayer.impl
+                        val hasVideo = impl.currentTracks.groups.any {
+                            it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO
+                        }
+                        android.util.Log.i(
+                            "StereoVideoPlayer",
+                            "state=${impl.playbackState} isPlaying=${impl.isPlaying} " +
+                                    "videoSize=${impl.videoSize.width}x${impl.videoSize.height} " +
+                                    "hasVideoTrack=$hasVideo",
+                        )
                         val surf = android.view.Surface(st)
                         android.util.Log.i("StereoVideoPlayer", "setVideoSurface valid=${surf.isValid} on main thread")
-                        exoPlayer.impl.setVideoSurface(surf)
+                        impl.setVideoSurface(surf)
                         android.util.Log.i("StereoVideoPlayer", "setVideoSurface returned")
                     }
                 },
