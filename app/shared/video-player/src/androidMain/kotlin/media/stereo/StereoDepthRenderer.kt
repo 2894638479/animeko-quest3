@@ -79,6 +79,8 @@ class StereoDepthRenderer(
     private var uDepth = -1
     private var uStrength = -1
     private var uMaxDisp = -1
+    private var uDepthScaleY = -1
+    private var uDepthOffsetY = -1
     private var uTexMatrixRight = -1
 
     // Uniform locations (left eye program)
@@ -87,6 +89,12 @@ class StereoDepthRenderer(
 
     // Depth visualization program
     private var uDepthDepth = -1
+    private var uDepthScaleYDepth = -1
+    private var uDepthOffsetYDepth = -1
+
+    // Letterboxed content region inside the square depth texture.
+    private var depthScaleY = 1f
+    private var depthOffsetY = 0f
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0f, 0f, 0f, 1f)
@@ -118,6 +126,8 @@ class StereoDepthRenderer(
         uDepth = GLES20.glGetUniformLocation(rightProgram, "uDepth")
         uStrength = GLES20.glGetUniformLocation(rightProgram, "uStrength")
         uMaxDisp = GLES20.glGetUniformLocation(rightProgram, "uMaxDisp")
+        uDepthScaleY = GLES20.glGetUniformLocation(rightProgram, "uDepthScaleY")
+        uDepthOffsetY = GLES20.glGetUniformLocation(rightProgram, "uDepthOffsetY")
         uTexMatrixRight = GLES20.glGetUniformLocation(rightProgram, "uTexMatrix")
 
         uVideoLeft = GLES20.glGetUniformLocation(leftProgram, "uVideo")
@@ -125,6 +135,8 @@ class StereoDepthRenderer(
 
         depthProgram = createProgram(VERTEX_SHADER, FRAG_DEPTH)
         uDepthDepth = GLES20.glGetUniformLocation(depthProgram, "uDepth")
+        uDepthScaleYDepth = GLES20.glGetUniformLocation(depthProgram, "uDepthScaleY")
+        uDepthOffsetYDepth = GLES20.glGetUniformLocation(depthProgram, "uDepthOffsetY")
 
         val quad = floatArrayOf(
             -1f, -1f, 0f, 0f,
@@ -222,6 +234,8 @@ class StereoDepthRenderer(
             GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, depthTexId)
             GLES20.glUniform1i(uDepthDepth, 1)
+            GLES20.glUniform1f(uDepthScaleYDepth, depthScaleY)
+            GLES20.glUniform1f(uDepthOffsetYDepth, depthOffsetY)
             drawQuadRaw(depthProgram)
             return
         }
@@ -235,6 +249,8 @@ class StereoDepthRenderer(
         GLES20.glUniform1i(uDepth, 1)
         GLES20.glUniform1f(uStrength, strength)
         GLES20.glUniform1f(uMaxDisp, MAX_DISP)
+        GLES20.glUniform1f(uDepthScaleY, depthScaleY)
+        GLES20.glUniform1f(uDepthOffsetY, depthOffsetY)
         drawQuadRaw(rightProgram)
     }
 
@@ -341,6 +357,9 @@ class StereoDepthRenderer(
         val w = result.width
         val h = result.height
         if (w <= 0 || h <= 0 || w * h != depth.size) return
+        // Letterboxed content region (video area inside the square depth map).
+        depthScaleY = result.contentScaleY.coerceIn(0.01f, 1f)
+        depthOffsetY = result.contentOffsetY.coerceIn(0f, 0.99f)
         // Flip rows vertically: GL texture (0,0) is the bottom-left, but the
         // depth array starts with the top row of the (screen-space) frame.
         // Without this the depth map is upside down and the stereo shape
@@ -428,9 +447,11 @@ class StereoDepthRenderer(
         private val FRAG_DEPTH = """
             precision mediump float;
             uniform sampler2D uDepth;
+            uniform float uDepthScaleY;
+            uniform float uDepthOffsetY;
             varying vec2 vUv;
             void main() {
-                float d = texture2D(uDepth, vUv).r;
+                float d = texture2D(uDepth, vec2(vUv.x, uDepthOffsetY + vUv.y * uDepthScaleY)).r;
                 // blue (far) -> cyan -> yellow -> red (near) colormap
                 vec3 col = mix(vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0), d);
                 gl_FragColor = vec4(col, 1.0);
@@ -445,10 +466,13 @@ class StereoDepthRenderer(
             uniform mat4 uTexMatrix;
             uniform float uStrength;
             uniform float uMaxDisp;
+            uniform float uDepthScaleY;
+            uniform float uDepthOffsetY;
             varying vec2 vUv;
             void main() {
                 vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
-                float d = texture2D(uDepth, uv).r;
+                // Sample the letterboxed video region inside the square depth map.
+                float d = texture2D(uDepth, vec2(uv.x, uDepthOffsetY + uv.y * uDepthScaleY)).r;
                 // Forward-only parallax: background (d ~ 0) stays glued to the
                 // screen plane; only nearer regions shift right in the right
                 // eye so they visibly pop out toward the viewer. No convergence
