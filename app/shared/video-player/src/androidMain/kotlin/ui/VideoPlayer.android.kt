@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.CaptionStyleCompat
@@ -75,44 +78,41 @@ actual fun VideoPlayer(
         if (LocalPanelManager.current != null && stereo3d) {
             // VR + 3D: render the video as a side-by-side stereo pair (depth-based DIBR).
             // The main panel must be in SBS (2:1) layout with StereoMode.LeftRight.
-            // Listen for renderer evidence: video size / first rendered frame.
-            val listener = object : androidx.media3.common.Player.Listener {
-                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+            //
+            // The player instance can be replaced (replacePlayer, for spatial audio
+            // session refresh). The StereoVideoSurface captures the surface once at
+            // composition, but we must hand it to whichever ExoPlayer is *currently*
+            // playing. Track the latest instance and re-bind when it changes.
+            val currentExoPlayer by rememberUpdatedState(exoPlayer)
+            var surfaceTexture by remember { mutableStateOf<android.graphics.SurfaceTexture?>(null) }
+
+            fun bindSurface(st: android.graphics.SurfaceTexture) {
+                // ExoPlayer requires setVideoSurface on the main thread; the
+                // SurfaceTexture arrives on the GL thread.
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    val impl = currentExoPlayer.impl
                     android.util.Log.i(
                         "StereoVideoPlayer",
-                        "onVideoSizeChanged ${videoSize.width}x${videoSize.height}",
+                        "setVideoSurface state=${impl.playbackState} " +
+                                "videoSize=${impl.videoSize.width}x${impl.videoSize.height}",
                     )
-                }
-
-                override fun onRenderedFirstFrame() {
-                    android.util.Log.i("StereoVideoPlayer", "onRenderedFirstFrame")
+                    impl.setVideoSurface(android.view.Surface(st))
                 }
             }
-            exoPlayer.impl.addListener(listener)
+
             StereoVideoSurface(
                 scope = androidx.compose.runtime.rememberCoroutineScope(),
                 modifier = modifier,
                 onSurfaceTextureReady = { st ->
-                    // ExoPlayer requires setVideoSurface on the main thread; the
-                    // SurfaceTexture arrives on the GL thread.
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        val impl = exoPlayer.impl
-                        val hasVideo = impl.currentTracks.groups.any {
-                            it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO
-                        }
-                        android.util.Log.i(
-                            "StereoVideoPlayer",
-                            "state=${impl.playbackState} isPlaying=${impl.isPlaying} " +
-                                    "videoSize=${impl.videoSize.width}x${impl.videoSize.height} " +
-                                    "hasVideoTrack=$hasVideo",
-                        )
-                        val surf = android.view.Surface(st)
-                        android.util.Log.i("StereoVideoPlayer", "setVideoSurface valid=${surf.isValid} on main thread")
-                        impl.setVideoSurface(surf)
-                        android.util.Log.i("StereoVideoPlayer", "setVideoSurface returned")
-                    }
+                    surfaceTexture = st
+                    bindSurface(st)
                 },
             )
+
+            // Re-bind the same SurfaceTexture whenever the player instance changes.
+            LaunchedEffect(player) {
+                surfaceTexture?.let { bindSurface(it) }
+            }
             return
         }
         ExoPlayerMediampPlayerSurface(exoPlayer, modifier) {
