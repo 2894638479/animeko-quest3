@@ -94,39 +94,36 @@ class AnimeDepthEstimator(private val context: Context) {
         }
     }
 
-    /** Extracts a flat depth array from an ONNX output of shape (1,1,H,W) or (1,H,W). */
+    /**
+     * Extracts a flat depth array from an ONNX output of any N-D float shape
+     * (e.g. (1,1,H,W), (1,H,W), or (H,W)). Recursively descends through
+     * leading batch dims, then flattens rows into a single FloatArray.
+     */
     private fun extractDepth(value: Any): FloatArray {
-        @Suppress("UNCHECKED_CAST")
-        return when (value) {
-            // 4D: [1][1][H][W] (primitive float[][][][])
-            is Array<*> -> (value[0] as Array<*>)[0]?.let { inner ->
-                when (inner) {
-                    is FloatArray -> inner // [1][1][H*W] flattened
-                    is Array<*> -> {
-                        // [1][1][H][W]
-                        val rows = inner.filterIsInstance<FloatArray>()
-                        if (rows.isEmpty()) {
-                            @Suppress("UNCHECKED_CAST")
-                            (inner as Array<FloatArray>).firstOrNull()?.copyOf() ?: FloatArray(0)
-                        } else {
-                            val w = rows[0].size
-                            val flat = FloatArray(rows.size * w)
-                            var i = 0
-                            for (row in rows) {
-                                row.copyInto(flat, i)
-                                i += w
-                            }
-                            flat
-                        }
+        fun flatten(a: Any): FloatArray = when (a) {
+            is FloatArray -> a
+            is Array<*> -> {
+                val rows = a.filterIsInstance<FloatArray>()
+                if (rows.isNotEmpty()) {
+                    // Array of rows: flatten them in order.
+                    val w = rows[0].size
+                    val out = FloatArray(rows.size * w)
+                    var i = 0
+                    for (row in rows) {
+                        row.copyInto(out, i)
+                        i += w
                     }
-                    else -> FloatArray(0)
+                    out
+                } else if (a.isNotEmpty() && a[0] is Array<*>) {
+                    // Descend one leading (batch) dimension.
+                    flatten(a[0])
+                } else {
+                    FloatArray(0)
                 }
-            } ?: FloatArray(0)
-
-            // 3D: [1][H][W]
-            is FloatArray -> value
+            }
             else -> FloatArray(0)
         }
+        return flatten(value)
     }
 
     private fun preprocess(rgb: Bitmap): FloatArray {
