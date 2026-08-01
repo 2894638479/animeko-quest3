@@ -116,7 +116,8 @@ class AnimeDepthEstimator(private val context: Context) {
                     out
                 } else if (a.isNotEmpty() && a[0] is Array<*>) {
                     // Descend one leading (batch) dimension.
-                    flatten(a[0])
+                    @Suppress("UNCHECKED_CAST")
+                    flatten(a[0] as Array<*>)
                 } else {
                     FloatArray(0)
                 }
