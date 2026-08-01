@@ -273,6 +273,7 @@ class StereoDepthRenderer(
         drawQuadRaw(leftProgram)
 
         val pixels = ByteBuffer.allocateDirect(SAMPLE_WIDTH * SAMPLE_HEIGHT * 4)
+        GLES20.glPixelStorei(GLES20.GL_PACK_ALIGNMENT, 1)
         GLES20.glReadPixels(0, 0, SAMPLE_WIDTH, SAMPLE_HEIGHT, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
 
@@ -355,6 +356,10 @@ class StereoDepthRenderer(
         }
         bytes.position(0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, depthTexId)
+        // Row length may not be a multiple of 4 (154 bytes here); the default
+        // UNPACK_ALIGNMENT of 4 would pad each row and skew the depth map into
+        // diagonal artifacts. Pack tightly.
+        GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
         GLES20.glTexImage2D(
             GLES20.GL_TEXTURE_2D, 0, GLES30.GL_R8, w, h, 0,
             GLES30.GL_RED, GLES20.GL_UNSIGNED_BYTE, bytes,
