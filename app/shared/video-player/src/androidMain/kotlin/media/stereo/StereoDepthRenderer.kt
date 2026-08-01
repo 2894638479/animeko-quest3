@@ -363,7 +363,7 @@ class StereoDepthRenderer(
     }
 
     companion object {
-        private const val MAX_DISP = 0.06f
+        private const val MAX_DISP = 0.03f
 
         private val VERTEX_SHADER = """
             attribute vec4 aPos;
@@ -399,10 +399,12 @@ class StereoDepthRenderer(
             void main() {
                 vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
                 float d = texture2D(uDepth, uv).r;
-                // Inverse depth 0 (far) .. 1 (near). Closer objects shift right
-                // more in the right eye (parallax). Negative shift pushes far
-                // objects slightly left, deepening the stereo feel.
-                float disp = (d - 0.5) * uMaxDisp * uStrength * 2.0;
+                // Inverse depth 0 (far) .. 1 (near). Forward-only parallax:
+                // far regions (d ~ 0) stay at the screen plane, nearer regions
+                // shift right in the right eye so they pop toward the viewer.
+                // Using d directly (not d - 0.5) avoids a convergence offset
+                // that pushed the whole image closer to the viewer.
+                float disp = d * uMaxDisp * uStrength;
                 uv.x = clamp(uv.x - disp, 0.0, 1.0);
                 gl_FragColor = texture2D(uVideo, uv);
             }
