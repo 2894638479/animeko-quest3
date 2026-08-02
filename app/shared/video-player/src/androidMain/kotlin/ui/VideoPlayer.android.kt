@@ -104,6 +104,7 @@ actual fun VideoPlayer(
                 scope = androidx.compose.runtime.rememberCoroutineScope(),
                 modifier = modifier,
                 debugShowDepth = me.him188.ani.app.platform.LocalVRHost.current?.depthDebugEnabled == true,
+                temporalFilterEnabled = me.him188.ani.app.platform.LocalVRHost.current?.depthTemporalFilterEnabled == true,
                 onSurfaceTextureReady = { st ->
                     surfaceTexture = st
                     bindSurface(st)

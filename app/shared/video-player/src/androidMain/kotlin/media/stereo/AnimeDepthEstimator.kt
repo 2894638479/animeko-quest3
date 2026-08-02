@@ -39,7 +39,17 @@ import java.util.concurrent.atomic.AtomicReference
 class AnimeDepthEstimator(private val context: Context) {
     private val logger = logger<AnimeDepthEstimator>()
 
-    private val gpuDelegate: GpuDelegate by lazy { GpuDelegate() }
+    private val gpuDelegate: GpuDelegate by lazy {
+        try {
+            // Allow FP16 (half precision) math on the GPU: halves memory
+            // bandwidth and usually speeds up inference on Adreno OpenCL, which
+            // directly reduces how far the depth lags the displayed video.
+            GpuDelegate(GpuDelegate.Options().setPrecisionLossAllowed(true))
+        } catch (e: Throwable) {
+            logger.info(e) { "GpuDelegate(FP16) init failed, using default" }
+            GpuDelegate()
+        }
+    }
 
     private val interpreter: Interpreter by lazy {
         // TFLite requires a direct ByteBuffer with native byte order, not a
@@ -93,7 +103,12 @@ class AnimeDepthEstimator(private val context: Context) {
         val raw = FloatArray(outSize)
         outputBuffer.asFloatBuffer().get(raw)
 
-        // min-max normalize to 0..1 (inverse depth: closer = larger)
+        // Per-frame min-max normalize to 0..1 (inverse depth: closer = larger).
+        // NOTE: this per-frame normalization is NOT temporally stable — if any
+        // other part of the frame changes, the global max jumps and every value
+        // shifts (a static object swings between near and far). The renderer
+        // re-normalizes from [DepthResult.raw] against a running min/max for
+        // stability; this per-frame value is only a convenience.
         var min = Float.MAX_VALUE
         var max = Float.MIN_VALUE
         for (v in raw) {
@@ -107,6 +122,7 @@ class AnimeDepthEstimator(private val context: Context) {
 
         DepthResult(
             depth = normalized,
+            raw = raw,
             width = outW,
             height = outH,
             contentScaleX = prep.contentScaleX,
@@ -188,11 +204,18 @@ class AnimeDepthEstimator(private val context: Context) {
 }
 
 /**
- * Normalized depth (0..1, closer = larger) plus its spatial size and the
+ * Depth inference result.
+ *
+ * [depth] is normalized 0..1 (closer = larger) and [raw] is the unnormalized
+ * model output. The per-frame normalized [depth] is convenient but flickers
+ * because it depends on that frame's own global min/max; consumers that need
+ * temporal stability should re-normalize [raw] against a running range (see
+ * StereoDepthRenderer.processDepth). Both share the same spatial size and the
  * letterboxed content region inside the square depth texture.
  */
 data class DepthResult(
     val depth: FloatArray,
+    val raw: FloatArray,
     val width: Int,
     val height: Int,
     val contentScaleX: Float = 1f,

@@ -237,6 +237,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         _spatialAudioEnabled = vrPrefs.getBoolean("spatial_audio", true)
         _stereo3dEnabled = vrPrefs.getBoolean("stereo3d", false)
         _depthDebugEnabled = vrPrefs.getBoolean("depth_debug", false)
+        _depthTemporalFilterEnabled = vrPrefs.getBoolean("depth_temporal_filter", true)
         applyBackgroundMode(savedMode)
         if (_stereo3dEnabled) {
             panelByEntity[mainPanelEntity]?.let { panel ->
@@ -313,6 +314,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         set(value) {
             _depthDebugEnabled = value
             vrPrefs.edit().putBoolean("depth_debug", value).apply()
+        }
+
+    private var _depthTemporalFilterEnabled by mutableStateOf(true)
+
+    override var depthTemporalFilterEnabled: Boolean
+        get() = _depthTemporalFilterEnabled
+        set(value) {
+            _depthTemporalFilterEnabled = value
+            vrPrefs.edit().putBoolean("depth_temporal_filter", value).apply()
         }
 
     private fun applyBackgroundMode(mode: VRBackgroundMode) {

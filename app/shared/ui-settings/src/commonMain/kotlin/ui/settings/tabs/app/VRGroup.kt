@@ -17,10 +17,12 @@ fun SettingsScope.VRGroup(
     spatialAudioEnabled: Boolean,
     stereo3dEnabled: Boolean,
     depthDebugEnabled: Boolean,
+    depthTemporalFilterEnabled: Boolean,
     onModeChanged: (VRBackgroundMode) -> Unit,
     onSpatialAudioChanged: (Boolean) -> Unit,
     onStereo3dChanged: (Boolean) -> Unit,
     onDepthDebugChanged: (Boolean) -> Unit,
+    onDepthTemporalFilterChanged: (Boolean) -> Unit,
 ) {
     var selectedMode by rememberSaveable { mutableStateOf(currentMode) }
 
@@ -63,6 +65,12 @@ fun SettingsScope.VRGroup(
             onCheckedChange = onDepthDebugChanged,
             title = { Text("显示深度图 (调试)") },
             description = { Text("右眼显示深度图伪彩色（蓝远红近），用于验证深度与画面是否匹配") },
+        )
+        SwitchItem(
+            checked = depthTemporalFilterEnabled,
+            onCheckedChange = onDepthTemporalFilterChanged,
+            title = { Text("深度时间滤波 (调试)") },
+            description = { Text("开启后对深度做自适应时间平滑+稳定归一化消除闪烁；关闭可对比原始推理结果") },
         )
     }
 }
