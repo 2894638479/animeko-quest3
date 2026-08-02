@@ -35,6 +35,13 @@ interface VRHost {
      * instead of the DIBR view, to verify the depth matches the picture.
      */
     var depthDebugEnabled: Boolean
+
+    /**
+     * Debug: adaptive temporal EMA + running-min/max normalization of the raw
+     * depth (kills per-frame flicker). Turn off to feed raw inference through
+     * and A/B test the filter's contribution.
+     */
+    var depthTemporalFilterEnabled: Boolean
 }
 
 val LocalVRHost = staticCompositionLocalOf<VRHost?> { null }

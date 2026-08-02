@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.math.abs
 
 /**
  * GL renderer that draws the video frame as a side-by-side stereo pair:
@@ -48,6 +49,13 @@ class StereoDepthRenderer(
     private val estimator: AnimeDepthEstimator,
     var strength: Float = 1f,
     var debugShowDepth: Boolean = false,
+    /**
+     * When true (default), consecutive raw depth maps are blended with an
+     * adaptive EMA and normalized against a running min/max. Set to false to
+     * feed the raw per-frame inference straight through — for A/B testing the
+     * temporal filter's contribution.
+     */
+    var temporalFilterEnabled: Boolean = true,
     private val onSurfaceTextureReady: (android.graphics.SurfaceTexture) -> Unit = {},
 ) : GLSurfaceView.Renderer {
 
@@ -61,6 +69,14 @@ class StereoDepthRenderer(
     // Depth
     private var depthTexId = 0
     private val pendingDepth = AtomicReference<DepthResult?>(null)
+
+    // Temporal + normalization stability state (raw domain, see processDepth)
+    private var prevRawDepth: FloatArray? = null
+    private var prevRawW = 0
+    private var prevRawH = 0
+    private var rawRangeInitialized = false
+    private var rawMinEst = 0f
+    private var rawMaxEst = 1f
 
     // Pipeline: the GL thread samples every frame and drops the latest frame
     // into this conflated channel (old frames overwritten); the inference
@@ -81,7 +97,7 @@ class StereoDepthRenderer(
                 }
                 try {
                     val result = estimator.estimateDepth(frame)
-                    pendingDepth.set(result)
+                    pendingDepth.set(processDepth(result))
                 } catch (e: Throwable) {
                     logger.info(e) { "Depth inference failed" }
                 } finally {
@@ -89,6 +105,75 @@ class StereoDepthRenderer(
                 }
             }
         }
+    }
+
+    /**
+     * Stabilizes the per-frame inference output in the RAW (unnormalized)
+     * domain, then normalizes against a running min/max.
+     *
+     * The model's raw output for a static object is roughly constant frame to
+     * frame; what flickers is the per-frame min-max normalization — if any
+     * other part of the frame changes, the global max jumps and the same
+     * object swings from near to far (the "red -> blue" flicker). So:
+     *
+     *  1. an adaptive EMA blends the raw values (small deltas smooth inference
+     *     noise, large deltas = real motion / cuts pass through cleanly);
+     *  2. raw min/max are tracked with a slow-running EMA, giving a stable
+     *     mapping so an object's depth no longer depends on this frame's
+     *     global extremes;
+     *  3. the blended raw is normalized with that stable range.
+     *
+     * A resolution change or the first frame resets the running state.
+     */
+    private fun processDepth(incoming: DepthResult): DepthResult {
+        val raw = incoming.raw
+        val w = incoming.width
+        val h = incoming.height
+
+        // Per-frame raw extremes, only used to nudge the running estimates.
+        var frameMin = Float.MAX_VALUE
+        var frameMax = Float.MIN_VALUE
+        for (v in raw) {
+            if (v < frameMin) frameMin = v
+            if (v > frameMax) frameMax = v
+        }
+        val prev = prevRawDepth
+        val sameSize = prev != null && prev.size == raw.size && prevRawW == w && prevRawH == h
+        if (!rawRangeInitialized || !sameSize) {
+            rawMinEst = frameMin
+            rawMaxEst = frameMax
+            rawRangeInitialized = true
+        } else {
+            rawMinEst += RANGE_ALPHA * (frameMin - rawMinEst)
+            rawMaxEst += RANGE_ALPHA * (frameMax - rawMaxEst)
+        }
+        val range = (rawMaxEst - rawMinEst).coerceAtLeast(1e-6f)
+
+        val blended: FloatArray
+        if (!temporalFilterEnabled || prev == null || prev.size != raw.size) {
+            // Filter disabled (A/B test) or no previous frame: feed through.
+            blended = raw.copyOf()
+        } else {
+            blended = FloatArray(raw.size)
+            for (i in raw.indices) {
+                // delta measured relative to the stable range, so thresholds
+                // are scale-free across scenes.
+                val diff = abs(raw[i] - prev[i]) / range
+                val alpha = when {
+                    diff <= TEMPORAL_DIFF_LO -> TEMPORAL_ALPHA_MIN
+                    diff >= TEMPORAL_DIFF_HI -> TEMPORAL_ALPHA_MAX
+                    else -> TEMPORAL_ALPHA_MIN + (TEMPORAL_ALPHA_MAX - TEMPORAL_ALPHA_MIN) *
+                            (diff - TEMPORAL_DIFF_LO) / (TEMPORAL_DIFF_HI - TEMPORAL_DIFF_LO)
+                }
+                blended[i] = prev[i] + alpha * (raw[i] - prev[i])
+            }
+        }
+        prevRawDepth = blended.copyOf()
+        prevRawW = w
+        prevRawH = h
+
+        val norm = FloatArray(raw.size) { i -> ((blended[i] - rawMinEst) / range).coerceIn(0f, 1f) }
+        return incoming.copy(depth = norm)
     }
 
     // FBO for frame sampling
@@ -102,7 +187,6 @@ class StereoDepthRenderer(
 
     // Shader programs
     private var leftProgram = 0
-    private var rightProgram = 0
     private var depthProgram = 0
     private var warpProgram = 0
     private var quadBuffer: FloatBuffer? = null
@@ -123,15 +207,22 @@ class StereoDepthRenderer(
     private var warpScaleY = -1
     private var warpOffsetY = -1
     private var warpTexMatrix = -1
+    private var warpTexH = -1
 
     // Depth visualization program
     private var uDepthDepth = -1
     private var uDepthScaleYDepth = -1
     private var uDepthOffsetYDepth = -1
+    private var uDepthTexHDepth = -1
 
     // Letterboxed content region inside the square depth texture.
     private var depthScaleY = 1f
     private var depthOffsetY = 0f
+    // Depth texture height (texels), used to clamp samples off the letterbox.
+    private var depthTexH = 256f
+
+    // Diagnostic: throttled boundary-vs-interior depth log (see uploadPendingDepthIfAny)
+    private var depthDiagCount = 0
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0f, 0f, 0f, 1f)
@@ -164,6 +255,7 @@ class StereoDepthRenderer(
         uDepthDepth = GLES20.glGetUniformLocation(depthProgram, "uDepth")
         uDepthScaleYDepth = GLES20.glGetUniformLocation(depthProgram, "uDepthScaleY")
         uDepthOffsetYDepth = GLES20.glGetUniformLocation(depthProgram, "uDepthOffsetY")
+        uDepthTexHDepth = GLES20.glGetUniformLocation(depthProgram, "uDepthTexH")
 
         // Forward-mapping warp: vertices displaced by depth (GPU interpolates
         // the deformation, naturally filling holes instead of reverse-mapping
@@ -175,6 +267,7 @@ class StereoDepthRenderer(
         warpScaleY = GLES20.glGetUniformLocation(warpProgram, "uDepthScaleY")
         warpOffsetY = GLES20.glGetUniformLocation(warpProgram, "uDepthOffsetY")
         warpTexMatrix = GLES20.glGetUniformLocation(warpProgram, "uTexMatrix")
+        warpTexH = GLES20.glGetUniformLocation(warpProgram, "uDepthTexH")
         val mesh = createMesh(MESH_COLS, MESH_ROWS)
         meshVertices = mesh.first
         meshIndices = mesh.second
@@ -223,6 +316,10 @@ class StereoDepthRenderer(
 
     override fun onDrawFrame(gl: GL10?) {
         val st = surfaceTexture ?: return
+        // Clear every frame: regions the displaced mesh no longer covers
+        // (disocclusion gaps at the leading edge) render as clean black
+        // instead of the previous frame's stale content.
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         st.updateTexImage()
         st.getTransformMatrix(texMatrix)
         // SurfaceTexture's transform matrix is undefined (all zeros) before the
@@ -274,6 +371,7 @@ class StereoDepthRenderer(
             GLES20.glUniform1i(uDepthDepth, 1)
             GLES20.glUniform1f(uDepthScaleYDepth, depthScaleY)
             GLES20.glUniform1f(uDepthOffsetYDepth, depthOffsetY)
+            GLES20.glUniform1f(uDepthTexHDepth, depthTexH)
             drawQuadRaw(depthProgram)
             return
         }
@@ -292,6 +390,7 @@ class StereoDepthRenderer(
         GLES20.glUniform1f(warpDisp, uDisp)
         GLES20.glUniform1f(warpScaleY, depthScaleY)
         GLES20.glUniform1f(warpOffsetY, depthOffsetY)
+        GLES20.glUniform1f(warpTexH, depthTexH)
         drawMeshRaw(warpProgram)
     }
 
@@ -444,15 +543,14 @@ class StereoDepthRenderer(
         // Letterboxed content region (video area inside the square depth map).
         depthScaleY = result.contentScaleY.coerceIn(0.01f, 1f)
         depthOffsetY = result.contentOffsetY.coerceIn(0f, 0.99f)
+        depthTexH = h.toFloat()
         // Flip rows vertically: GL texture (0,0) is the bottom-left, but the
         // depth array starts with the top row of the (screen-space) frame.
         // Without this the depth map is upside down and the stereo shape
         // doesn't match the picture.
-        // Horizontal depth smoothing: DIBR's reverse mapping pulls the source
-        // left of a foreground edge into the shifted region, causing a "half
-        // character + background" strip to drift instead of the whole figure.
-        // Blurring depth horizontally smooths the disparity ramp at edges so
-        // the warp doesn't grab background into the silhouette.
+        // Horizontal depth smoothing: spreads hard silhouette depth steps over
+        // a few columns so adjacent mesh vertices never cross/fold (the max
+        // displacement ~MAX_DISP is ~2x a mesh cell). See DEPTH_SMOOTH_KERNEL.
         val smoothed = FloatArray(depth.size)
         val half = DEPTH_SMOOTH_KERNEL / 2
         for (row in 0 until h) {
@@ -466,6 +564,37 @@ class StereoDepthRenderer(
                     n++
                 }
                 smoothed[base + col] = sum / n
+            }
+        }
+
+        // Diagnostic (throttled): quantify the letterbox boundary bias that
+        // warps the panel top/bottom. Compare mean depth of the top/bottom
+        // content rows vs the interior. If top/bot differ from mid by a large
+        // margin, the first/last rows are biased by the black bars.
+        depthDiagCount++
+        if (depthDiagCount % 60 == 0) {
+            val ct = (result.contentOffsetY * h).toInt().coerceIn(0, h - 1)
+            val cb = ((result.contentOffsetY + result.contentScaleY) * h).toInt().coerceIn(ct + 1, h)
+            val edge = CONTENT_EDGE_SKIP.toInt()
+            if (cb - ct > edge * 2) {
+                var topSum = 0f; var botSum = 0f; var midSum = 0f
+                var topN = 0; var botN = 0; var midN = 0
+                for (row in ct until cb) {
+                    val base = row * w
+                    for (col in 0 until w step 4) {
+                        val d = smoothed[base + col]
+                        when {
+                            row < ct + edge -> { topSum += d; topN++ }
+                            row >= cb - edge -> { botSum += d; botN++ }
+                            else -> { midSum += d; midN++ }
+                        }
+                    }
+                }
+                logger.info {
+                    "Depth boundary: top=${"%.3f".format(topSum / topN)} " +
+                            "bot=${"%.3f".format(botSum / botN)} mid=${"%.3f".format(midSum / midN)} " +
+                            "(content rows $ct..$cb)"
+                }
             }
         }
 
@@ -527,14 +656,43 @@ class StereoDepthRenderer(
         // Lowered 0.08 -> 0.04: the real MiDaS depth map made the pop-out too
         // strong (foreground visibly offset left vs the source).
         private const val MAX_DISP = 0.04f
-        // Horizontal depth blur kernel width (odd). Smooths the disparity ramp
-        // at foreground edges so the DIBR warp doesn't pull background into
-        // the silhouette (seen as a "half character + background" strip).
+        // Horizontal depth blur kernel width (odd). In forward mapping the max
+        // vertex displacement (~MAX_DISP = 0.04 clip) is about twice a mesh
+        // cell (2/MESH_COLS ≈ 0.021 clip), so at a hard silhouette step the
+        // adjacent vertices would cross each other and fold the mesh triangles
+        // (torn/seam artifacts). Smoothing spreads each depth step over ~5
+        // texture pixels (~2 mesh cells) so adjacent vertices never cross.
+        // This is NOT the old reverse-mapping fix ("half character + background"
+        // pull-through) — forward mapping already solved that.
         private const val DEPTH_SMOOTH_KERNEL = 5
 
         // Total clip-space disparity (MAX_DISP uv units = 2x in clip space),
         // split symmetrically: left eye +half, right eye -half.
         private const val DISP_CLIP = MAX_DISP * 2f
+
+        // Adaptive temporal filter: blend alpha ramps from TEMPORAL_ALPHA_MIN
+        // (small per-pixel delta = inference noise, heavy smoothing kills
+        // flicker) to TEMPORAL_ALPHA_MAX (large delta = real motion / shot
+        // change, fast follow avoids ghosting). Delta is measured relative to
+        // the running raw range, so these are scale-free across scenes.
+        private const val TEMPORAL_ALPHA_MIN = 0.12f
+        private const val TEMPORAL_ALPHA_MAX = 0.9f
+        private const val TEMPORAL_DIFF_LO = 0.02f
+        private const val TEMPORAL_DIFF_HI = 0.25f
+
+        // Running min/max adaptation speed for the stable normalization.
+        // 0.1 -> the mapping converges to a changed scene within ~10 frames
+        // (~0.4s). Fast enough to track real content change, slow enough that
+        // a single frame's global extremes can't swing the colors.
+        private const val RANGE_ALPHA = 0.1f
+
+        // How many depth texels the panel's top/bottom edge skips when sampling
+        // depth. MiDaS's receptive field sees the black letterbox bars at the
+        // content boundary, biasing the first ~1-2 content rows' depth; the
+        // mesh then interpolates that thin biased band into a ~2% shear at the
+        // panel top/bottom. Sampling a few texels inside skips the bias without
+        // touching the data or fading the edge. (~0.016 * 256 input px)
+        private const val CONTENT_EDGE_SKIP = 4f
         private const val MESH_COLS = 96
         private const val MESH_ROWS = 54
 
@@ -545,15 +703,26 @@ class StereoDepthRenderer(
             uniform float uDisp;
             uniform float uDepthScaleY;
             uniform float uDepthOffsetY;
+            uniform float uDepthTexH;
             varying vec2 vUv;
             void main() {
                 vUv = aUv;
-                // Sample depth at this vertex (letterboxed content region) and
-                // displace the vertex horizontally. GPU interpolation between
-                // displaced vertices deforms the mesh and fills holes naturally
-                // — the figure moves as a whole instead of reverse-mapping
-                // pulling background into the silhouette.
-                float d = texture2D(uDepth, vec2(aUv.x, uDepthOffsetY + aUv.y * uDepthScaleY)).r;
+                // Sample depth at this vertex and displace the vertex
+                // horizontally. GPU interpolation between displaced vertices
+                // deforms the mesh and fills holes naturally — the figure moves
+                // as a whole instead of reverse-mapping pulling background into
+                // the silhouette.
+                //
+                // Clamp the depth sample a few texels INSIDE the content region:
+                // the panel's top/bottom edge would otherwise sample the exact
+                // content/letterbox boundary, where GL_LINEAR blends the black
+                // bar's depth and where MiDaS's receptive field biases the
+                // first content rows — both warp the top/bottom of the picture.
+                // (Left/right are unaffected — 16:9 content spans the full
+                // texture width, so no clamp is needed horizontally.)
+                float v = uDepthOffsetY + aUv.y * uDepthScaleY;
+                v = clamp(v, uDepthOffsetY + $CONTENT_EDGE_SKIP / uDepthTexH, uDepthOffsetY + uDepthScaleY - $CONTENT_EDGE_SKIP / uDepthTexH);
+                float d = texture2D(uDepth, vec2(aUv.x, v)).r;
                 gl_Position = vec4(aPos.x + d * uDisp, aPos.y, 0.0, 1.0);
             }
         """.trimIndent()
@@ -597,41 +766,17 @@ class StereoDepthRenderer(
             uniform sampler2D uDepth;
             uniform float uDepthScaleY;
             uniform float uDepthOffsetY;
+            uniform float uDepthTexH;
             varying vec2 vUv;
             void main() {
-                float d = texture2D(uDepth, vec2(vUv.x, uDepthOffsetY + vUv.y * uDepthScaleY)).r;
+                // Same clamp as the warp shader so the debug view matches the
+                // depth the renderer actually uses (skips the biased boundary).
+                float v = uDepthOffsetY + vUv.y * uDepthScaleY;
+                v = clamp(v, uDepthOffsetY + $CONTENT_EDGE_SKIP / uDepthTexH, uDepthOffsetY + uDepthScaleY - $CONTENT_EDGE_SKIP / uDepthTexH);
+                float d = texture2D(uDepth, vec2(vUv.x, v)).r;
                 // blue (far) -> cyan -> yellow -> red (near) colormap
                 vec3 col = mix(vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0), d);
                 gl_FragColor = vec4(col, 1.0);
-            }
-        """.trimIndent()
-
-        private val FRAG_RIGHT = """
-            #extension GL_OES_EGL_image_external : require
-            precision mediump float;
-            uniform samplerExternalOES uVideo;
-            uniform sampler2D uDepth;
-            uniform mat4 uTexMatrix;
-            uniform float uStrength;
-            uniform float uMaxDisp;
-            uniform float uDepthScaleY;
-            uniform float uDepthOffsetY;
-            varying vec2 vUv;
-            void main() {
-                vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
-                // uv.y is the (texMatrix-corrected) video coordinate with 0 at
-                // the top; the depth texture has 0 at the bottom (we flipped
-                // rows on upload), so mirror y before mapping into the
-                // letterboxed content region.
-                float d = texture2D(uDepth, vec2(uv.x, uDepthOffsetY + (1.0 - uv.y) * uDepthScaleY)).r;
-                // Forward-only parallax: background (d ~ 0) stays glued to the
-                // screen plane; only nearer regions shift right in the right
-                // eye so they visibly pop out toward the viewer. No convergence
-                // offset — the background never moves, so the scene can't
-                // appear closer than the panel.
-                float disp = d * uMaxDisp * uStrength;
-                uv.x = clamp(uv.x - disp, 0.0, 1.0);
-                gl_FragColor = texture2D(uVideo, uv);
             }
         """.trimIndent()
 
