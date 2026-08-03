@@ -88,8 +88,6 @@ import me.him188.ani.app.ui.settings.tabs.network.toDataSettings
 import me.him188.ani.app.ui.settings.tabs.network.toUIConfig
 import me.him188.ani.app.ui.user.SelfInfoStateProducer
 import me.him188.ani.danmaku.ui.DanmakuConfig
-import me.him188.ani.datasources.api.source.ConnectionStatus
-import me.him188.ani.datasources.bangumi.BangumiClient
 import me.him188.ani.app.domain.foundation.ScopedHttpClientUserAgent
 import me.him188.ani.torrent.pikpak.testPikPakLogin
 import me.him188.ani.utils.ktor.UnsafeScopedHttpClientApi
@@ -101,7 +99,6 @@ import org.koin.core.component.inject
 class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
     private val settingsRepository: SettingsRepository by inject()
     private val permissionManager: PermissionManager by inject()
-    private val bangumiClient: BangumiClient by inject()
     private val danmakuRegexFilterRepository: DanmakuRegexFilterRepository by inject()
 
     private val mediaSourceManager: MediaSourceManager by inject()
@@ -288,22 +285,6 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
     )
 
 
-    // do not add more, check ui first.
-    val otherTesters: DefaultConnectionTesterRunner<ConnectionTester> = DefaultConnectionTesterRunner(
-        listOf(
-            ConnectionTester(
-                id = "Bangumi", // Bangumi 顺便也测一下
-            ) {
-                if (bangumiClient.testConnectionMaster() == ConnectionStatus.SUCCESS) {
-                    ConnectionTestResult.SUCCESS
-                } else {
-                    ConnectionTestResult.FAILED
-                }
-            },
-        ),
-        backgroundScope,
-    )
-
     private val mediaSourceLoader = MediaSourceLoader(
         mediaSourceManager,
         mediaSourceSubscriptionRepository.flow,
@@ -326,8 +307,8 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
             mediaSourceManager.addInstance(instanceId, instanceId, factoryId, config)
         },
         onEdit = { instanceId, config -> mediaSourceManager.updateConfig(instanceId, config) },
-        onDelete = { instanceId -> mediaSourceManager.removeInstance(instanceId) },
-        onSetEnabled = { instanceId, enabled -> mediaSourceManager.setEnabled(instanceId, enabled) },
+        onDelete = { instanceIds -> mediaSourceManager.removeInstances(instanceIds) },
+        onSetEnabled = { instanceIds, enabled -> mediaSourceManager.setEnabled(instanceIds, enabled) },
         backgroundScope,
     )
 
@@ -338,9 +319,9 @@ class SettingsViewModel : AbstractSettingsViewModel(), KoinComponent {
         onAdd = { mediaSourceSubscriptionRepository.add(it) },
         onDelete = {
             launchInBackground {
-                for (save in mediaSourceManager.getListBySubscriptionId(it.subscriptionId)) {
-                    mediaSourceManager.removeInstance(save.instanceId)
-                }
+                mediaSourceManager.removeInstances(
+                    mediaSourceManager.getListBySubscriptionId(it.subscriptionId).map { save -> save.instanceId },
+                )
                 mediaSourceSubscriptionRepository.remove(it)
             }
         },

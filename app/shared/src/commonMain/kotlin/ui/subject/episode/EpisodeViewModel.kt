@@ -61,11 +61,11 @@ import me.him188.ani.app.data.models.subject.nameCnOrName
 import me.him188.ani.app.data.network.AutoSkipRepository
 import me.him188.ani.app.data.repository.episode.EpisodeCollectionRepository
 import me.him188.ani.app.data.repository.episode.EpisodeCommentRepository
+import me.him188.ani.app.data.repository.RepositoryServiceUnavailableException
 import me.him188.ani.app.data.repository.player.DanmakuRegexFilterRepository
 import me.him188.ani.app.data.repository.subject.SetSubjectCollectionTypeOrDeleteUseCase
 import me.him188.ani.app.data.repository.user.SettingsRepository
 import me.him188.ani.app.domain.comment.PostCommentUseCase
-import me.him188.ani.app.domain.comment.TurnstileState
 import me.him188.ani.app.domain.danmaku.DanmakuRepository
 import me.him188.ani.app.domain.danmaku.SetDanmakuEnabledUseCase
 import me.him188.ani.app.domain.episode.EpisodeCompletionContext.isKnownCompleted
@@ -265,7 +265,6 @@ class EpisodeViewModel(
     private val setDanmakuEnabledUseCase: SetDanmakuEnabledUseCase by inject()
     private val postCommentUseCase: PostCommentUseCase by inject()
     private val autoSkipRepository: AutoSkipRepository by inject()
-    val turnstileState: TurnstileState by inject()
     private val getMediaSelectorSettings: GetMediaSelectorSettingsUseCase by inject()
     private val getMediaSourceInstances: GetMediaSourceInstancesUseCase by inject()
     val setEpisodeCollectionType: SetEpisodeCollectionTypeUseCase by inject()
@@ -293,12 +292,25 @@ class EpisodeViewModel(
     private val currentChapters = playerFlow.flatMapLatest { it.chapters ?: flowOf(emptyList()) }
     private val currentPositionMillis = playerFlow.flatMapLatest { it.currentPositionMillis }
 
+    /** `null` 表示本次播放尚未调整过倍速, 此时跟随配置. */
+    private val playbackSpeedOverride = MutableStateFlow<Float?>(null)
+
+    /**
+     * 当前生效的倍速. 作用域为一次播放 (本 ViewModel 的生命周期), 播放页内切集保持.
+     */
+    private val playbackSpeedFlow: Flow<Float> = combine(
+        settingsRepository.videoScaffoldConfig.flow,
+        playbackSpeedOverride,
+    ) { config, override ->
+        override ?: config.playbackSpeed
+    }.distinctUntilChanged()
+
     @OptIn(UnsafeEpisodeSessionApi::class)
     private val fetchPlayState = EpisodeFetchSelectPlayState(
         subjectId, initialEpisodeId, player, backgroundScope,
         extensions = listOf(
             AnalyticsExtension,
-            PlaybackSpeedExtension,
+            PlaybackSpeedExtension.Factory(playbackSpeedFlow),
             RememberPlayProgressExtension,
             WatchTogetherPlayerExtension,
             MarkAsWatchedExtension,
@@ -420,14 +432,22 @@ class EpisodeViewModel(
     val playbackSpeedRange: ClosedFloatingPointRange<Float>
         get() = videoScaffoldConfig.minPlaybackSpeed..videoScaffoldConfig.maxPlaybackSpeed
 
-    /** 持久化全局倍速；播放器会通过上方的配置订阅同步该值. */
+    /** 总是对本次播放生效; 仅在开启「记住播放倍速」时才另外写回配置. */
     fun setPlaybackSpeed(speed: Float) {
+        playbackSpeedOverride.value = speed
         launchInBackground {
-            settingsRepository.videoScaffoldConfig.update {
-                copy(playbackSpeed = speed)
+            if (settingsRepository.videoScaffoldConfig.flow.first().rememberPlaybackSpeed) {
+                settingsRepository.videoScaffoldConfig.update {
+                    copy(playbackSpeed = speed)
+                }
             }
         }
     }
+
+    /**
+     * 桌面端: 用户是否通过播放器内按钮开启了窗口置顶. 退出播放页时需要自动取消置顶.
+     */
+    var desktopAlwaysOnTopSetByPlayer: Boolean = false
 
     val playerVolumeFlow: Flow<VideoScaffoldConfig.PlayerVolume> =
         settingsRepository.videoScaffoldConfig.flow.map { it.playerVolume }
@@ -688,22 +708,26 @@ class EpisodeViewModel(
             .flatMapLatest { episodeId ->
                 episodeCommentRepository.subjectEpisodeCommentsPager(
                     episodeId.toLong(),
-                    onAniLoadFailed = { commentLoadFailureChannel.trySend(it) },
+                    // Ani 评论正常但服务端没取到 Bangumi 评论: 列表照常显示, 额外提示一次, 免得看起来像"没有评论"
+                    onBangumiUnavailable = {
+                        commentLoadFailureChannel.trySend(
+                            RepositoryServiceUnavailableException("Bangumi episode comments unavailable"),
+                        )
+                    },
                 )
                     .map { page -> page.map { it.parseToUIComment() } }
             }.cachedIn(backgroundScope),
         countState = stateOf(null),
         onSubmitCommentReaction = { comment, value, selected ->
-            episodeCommentRepository.submitReaction(
-                episodeId = episodeIdFlow.first().toLong(),
-                source = when (comment.source) {
-                    UICommentSource.ANI -> me.him188.ani.app.data.models.episode.EpisodeCommentSource.ANI
-                    UICommentSource.BANGUMI -> me.him188.ani.app.data.models.episode.EpisodeCommentSource.BANGUMI
-                },
-                commentId = comment.sourceCommentId,
-                value = value,
-                selected = selected,
-            )
+            // Bangumi 评论只读, 不支持提交表情回应
+            if (comment.source == UICommentSource.ANI) {
+                episodeCommentRepository.submitReaction(
+                    episodeId = episodeIdFlow.first().toLong(),
+                    commentId = comment.sourceCommentId,
+                    value = value,
+                    selected = selected,
+                )
+            }
         },
         backgroundScope = backgroundScope,
         commentLoadFailures = commentLoadFailureChannel.receiveAsFlow(),
@@ -1073,7 +1097,6 @@ class EpisodeViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        turnstileState.cancel()
         webSessionManager.cancelAutoSolves()
         backgroundScope.launch(NonCancellable + CoroutineName("EpisodeViewModel#onCleared")) {
             fetchPlayState.onClose()

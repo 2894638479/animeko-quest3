@@ -77,6 +77,8 @@ import me.him188.ani.app.ui.subject.episode.video.sidesheet.DanmakuRegexFilterSe
 import me.him188.ani.app.ui.subject.episode.video.sidesheet.EpisodeSelectorSheet
 import me.him188.ani.app.ui.subject.episode.video.sidesheet.MediaSelectorSheet
 import me.him188.ani.app.ui.subject.episode.video.sidesheet.rememberTestEpisodeSelectorState
+import me.him188.ani.app.ui.watchtogether.LocalWatchTogetherPlayerController
+import me.him188.ani.app.ui.watchtogether.WatchTogetherPlayerController
 import me.him188.ani.app.videoplayer.ui.ControllerVisibility
 import me.him188.ani.app.videoplayer.ui.NoOpPlaybackSpeedController
 import me.him188.ani.app.videoplayer.ui.NoOpVideoAspectRatio
@@ -214,18 +216,25 @@ class EpisodeVideoControllerTest {
         playbackSpeed: PlaybackSpeed = NoOpPlaybackSpeedController,
         onCommitPlaybackSpeed: (Float) -> Unit = {},
         opEdSkipDuration: Duration = 85.seconds,
+        watchTogetherPlayerController: WatchTogetherPlayerController? = null,
         onPlayerStateCreated: (TestMediampPlayer) -> Unit = {},
         onPlatformWindow: (PlatformWindow) -> Unit = {},
         platformWindowOverride: PlatformWindow? = null,
         showDanmakuEditor: () -> Boolean = { true },
         onEditorEscape: (() -> Unit)? = null,
         expanded: Boolean = true,
+        isFullscreen: Boolean = expanded,
         framePreview: MediaProgressFramePreviewState? = null,
         cacheChunkState: ChunkState = ChunkState.NONE,
     ) {
         ProvideCompositionLocalsForPreview(darkMode = DarkMode.DARK) {
             val platformWindow = platformWindowOverride ?: LocalPlatformWindow.current
-            CompositionLocalProvider(LocalPlatformWindow provides platformWindow) {
+            val actualWatchTogetherPlayerController = watchTogetherPlayerController
+                ?: remember { WatchTogetherPlayerController() }
+            CompositionLocalProvider(
+                LocalPlatformWindow provides platformWindow,
+                LocalWatchTogetherPlayerController provides actualWatchTogetherPlayerController,
+            ) {
                 onPlatformWindow(platformWindow)
                 val scope = rememberCoroutineScope()
                 val playerState = remember {
@@ -352,6 +361,7 @@ class EpisodeVideoControllerTest {
                 gestureFamily = gestureFamily,
                 shareData = MediaShareData(null, null),
                 onClickCache = {},
+                isFullscreen = isFullscreen,
                 modifier = Modifier.testTag("PLAYER"),
                 )
             }
@@ -416,6 +426,83 @@ class EpisodeVideoControllerTest {
             runOnIdle {
                 assertEquals((durationSeconds + 5) * 1_000L, playerState.currentPositionMillis.value)
             }
+        }
+    }
+
+    @Test
+    fun `player menu shows watch together first and dispatches click`() = runAniComposeUiTest {
+        var watchTogetherClicks = 0
+        val visibleControllerState = PlayerControllerState(NORMAL_VISIBLE)
+        val watchTogetherPlayerController = WatchTogetherPlayerController { watchTogetherClicks++ }
+        setContent {
+            Player(
+                GestureFamily.MOUSE,
+                playerControllerState = visibleControllerState,
+                watchTogetherPlayerController = watchTogetherPlayerController,
+            )
+        }
+
+        onNodeWithContentDescription("More options").performClick()
+
+        val watchTogetherItem = onNodeWithTag(TAG_WATCH_TOGETHER_MENU_ITEM)
+        val playerStatsItem = onNodeWithText("Show Playback Info")
+        waitUntil(timeoutMillis = WAIT_TIMEOUT) {
+            watchTogetherItem.exists() && playerStatsItem.exists()
+        }
+        val watchTogetherTop = watchTogetherItem.fetchSemanticsNode().boundsInRoot.top
+        val playerStatsTop = playerStatsItem.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(watchTogetherTop < playerStatsTop)
+
+        watchTogetherItem.performClick()
+
+        runOnIdle {
+            assertEquals(1, watchTogetherClicks)
+        }
+        watchTogetherItem.doesNotExist()
+    }
+
+    @Test
+    fun `watch together popup follows controller only in fullscreen`() = runAniComposeUiTest {
+        val visibleControllerState = PlayerControllerState(NORMAL_VISIBLE)
+        val watchTogetherPlayerController = WatchTogetherPlayerController()
+        var isFullscreen by mutableStateOf(true)
+        mainClock.autoAdvance = false
+        setContent {
+            Player(
+                GestureFamily.MOUSE,
+                playerControllerState = visibleControllerState,
+                watchTogetherPlayerController = watchTogetherPlayerController,
+                isFullscreen = isFullscreen,
+            )
+        }
+
+        runOnIdle {
+            assertTrue(watchTogetherPlayerController.isDraggablePopupVisible)
+            visibleControllerState.toggleFullVisible(false)
+        }
+        waitUntil(timeoutMillis = WAIT_TIMEOUT) {
+            !watchTogetherPlayerController.isDraggablePopupVisible
+        }
+
+        runOnIdle {
+            visibleControllerState.toggleFullVisible(true)
+        }
+        waitUntil(timeoutMillis = WAIT_TIMEOUT) {
+            watchTogetherPlayerController.isDraggablePopupVisible
+        }
+
+        runOnIdle {
+            visibleControllerState.toggleFullVisible(false)
+        }
+        waitUntil(timeoutMillis = WAIT_TIMEOUT) {
+            !watchTogetherPlayerController.isDraggablePopupVisible
+        }
+
+        runOnIdle {
+            isFullscreen = false
+        }
+        waitUntil(timeoutMillis = WAIT_TIMEOUT) {
+            watchTogetherPlayerController.isDraggablePopupVisible
         }
     }
 
@@ -661,6 +748,49 @@ class EpisodeVideoControllerTest {
         runOnIdle {
             assertEquals(1f, playbackSpeed.value)
             assertEquals(listOf(0.75f, 1f, 1f), committedPlaybackSpeeds)
+        }
+    }
+
+    @Test
+    fun `touch - keyboard shortcuts - digit keys jump to speed presets`() = runAniComposeUiTest {
+        lateinit var playbackSpeed: TestPlaybackSpeed
+        val committedPlaybackSpeeds = mutableListOf<Float>()
+        setContent {
+            CompositionLocalProvider(LocalPlatform provides Platform.Android(Arch.ARMV8A)) {
+                playbackSpeed = remember { TestPlaybackSpeed(1f) }
+                Player(
+                    GestureFamily.TOUCH,
+                    playbackSpeed = playbackSpeed,
+                    onCommitPlaybackSpeed = { committedPlaybackSpeeds.add(it) },
+                )
+            }
+        }
+        waitForIdle()
+
+        videoGestureHost.performKeyInput {
+            pressKey(Key.Two)
+        }
+        waitForIdle()
+        runOnIdle {
+            assertEquals(2f, playbackSpeed.value)
+        }
+
+        // 3x 超出默认范围 0.5x..2.5x, clamp 到上界而不是不响应
+        videoGestureHost.performKeyInput {
+            pressKey(Key.Three)
+        }
+        waitForIdle()
+        runOnIdle {
+            assertEquals(2.5f, playbackSpeed.value)
+        }
+
+        videoGestureHost.performKeyInput {
+            pressKey(Key.NumPad1)
+        }
+        waitForIdle()
+        runOnIdle {
+            assertEquals(1f, playbackSpeed.value)
+            assertEquals(listOf(2f, 2.5f, 1f), committedPlaybackSpeeds)
         }
     }
 

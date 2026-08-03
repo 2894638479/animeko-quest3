@@ -25,8 +25,9 @@ The transport is a stateless subset of the MCP Streamable HTTP spec: JSON-RPC me
   命名分组等. 接受 App 导出格式 / 裸 arguments / 裸 searchConfig / 订阅列表四种形态.
 - `selector_resolve_episode` — 提供 subjectId+episodeId+配置, 自动跑 `SelectorMediaSourceEngine`
   全流程 (searchSubjects → selectSubjects → searchEpisodes → selectEpisodes → selectMedia),
-  返回每个步骤的 trace 便于定位问题. **默认**继续做 WebView 视频解析与播放探测
-  (会启动 CEF); 只测解析层传 `extractVideo=false`.
+  返回每个步骤的 trace 便于定位问题. **默认**继续做 WebView 视频解析与 HTTP 可达性探测
+  (会启动 CEF, 但不会启动播放器); 只取最终视频 URL 时传 `probeVideo=false`, 连 WebView
+  解析也不需要时传 `extractVideo=false`.
 - `selector_run_step` — 单步执行任意引擎步骤: 支持离线传 HTML 调试 selector, 离线测 matchVideo 正则,
   以及真实 WebView 拦截视频 URL.
 - `get_selector_engine_docs` — 返回引擎步骤文档 (源文件: [selector-engine-docs.md](src/main/resources/selector-engine-docs.md)).
@@ -55,10 +56,11 @@ The transport is a stateless subset of the MCP Streamable HTTP spec: JSON-RPC me
 - `mcp/` — HTTP MCP server (Streamable HTTP/JSON-RPC) 与工具注册表
 - `info/` — 信息能力: Ani API 番剧/剧集查询
 - `selector/` — 数据源能力: 配置解析校验 + 引擎全流程/单步执行
+- `captcha/` — web 数据源取页会话: 复用 App 的 `WebSessionManager` 自动过验证码
 - `resolver/` — WebView 视频解析管线 (播放页 → 视频 URL) 与逐线路测试
 - `video/` — 视频能力: HTTP 探测 + mpv 真实播放分析 + HLS 广告分析
 - `source/` — 通用数据源端到端测试 (dmhy/mikan/... 工厂注册, 域名诊断)
-- 根包 — 入口 `Main.kt` 与共享模型 (`StageResult` 等)
+- 根包 — 入口 `Main.kt`、共享模型 (`StageResult` 等) 与共享的 JCEF 初始化入口
 
 ## Typical debugging flow
 
@@ -70,7 +72,22 @@ The transport is a stateless subset of the MCP Streamable HTTP spec: JSON-RPC me
 4. `selector_run_step` 单独重跑该步骤 (支持直接传 HTML 离线迭代 selector);
 5. `probe_video` 验证解析出的视频 URL 真实可播放.
 
-站点开了人机验证 (trace 里 captchaKind 非空) 时, 本工具无法过验证码, 请改用 App 内设置页的数据源测试器.
+## 人机验证 (验证码)
+
+所有取页都走 App 同一条链路 (`WebSessionManager` + `PageEvaluator`), 因此站点开了人机验证时,
+本工具会用与 App **完全相同**的自动策略去解 —— 先是纯 HTTP 的 MacCMS 图片验证码协议,
+再退到 JCEF 浏览器里读验证码图 + ONNX 识别 + 填答案; 解出来的 cookie 与 UA 会同步到 HTTP 侧与
+播放页 WebView, 后续步骤沿用同一个会话.
+
+MCP 是无人值守的, 没有 App 那样的手动兜底对话框, 所以只有两种结局:
+
+- **能自动解** → 解完重试, 该步骤正常返回, `details.autoSolvedCaptcha` 记录解掉的验证码类型;
+- **解不掉** → **立即终止这个数据源的整个流程** (不再换搜索词硬试, 也不再对站点发请求),
+  返回 `ok=false` 且 summary 形如
+  `<host> 开了人机验证 (<kind>), 自动解决失败 (<原因>), 已终止该数据源的流程`.
+
+自动解不掉通常意味着该站点的挑战超出现有 solver 能力 (如 Cloudflare 交互挑战),
+或当前出口 IP 被站点整体封禁 —— 此时改用 App 内设置页的数据源测试器手动过验证.
 
 ## Handshake Failure Hints
 
@@ -108,10 +125,12 @@ This matches the app's current playback model:
 `test_subject_episode_source` and `selector_resolve_episode` test candidates channel by channel:
 
 - `all_channels`: test every candidate channel (default for `test_subject_episode_source`)
-- `first_success`: stop after the first channel that passes both resolve and playback probe
+- `first_success`: stop after the first channel that passes both resolve and HTTP probe
   (default for `selector_resolve_episode`)
 
-Top-level `ok` means at least one tested channel passed playback probing.
+With `probeVideo=true`, top-level `ok` means at least one tested channel passed HTTP probing. With
+`probeVideo=false`, it means at least one channel resolved a final video URL. Probe timeout/failure never
+removes an already resolved URL; inspect `resolveStatus`, `probeStatus`, and the explicit result counts.
 
 ## Run
 
@@ -119,6 +138,10 @@ Top-level `ok` means at least one tested channel passed playback probing.
 ./gradlew :tools:datasource-test-mcp:installDist
 ./tools/datasource-test-mcp/build/install/datasource-test-mcp/bin/datasource-test-mcp
 ```
+
+WebView/CEF tools must run on a JetBrains Runtime that includes JCEF (prefer JBR 21); a plain OpenJDK can
+still start the server but cannot resolve WebVideo pages. On Windows, the datasource-eval launcher also uses
+a Java argument file to avoid `cmd.exe`'s 8191-character command limit.
 
 Defaults to `http://127.0.0.1:8264/mcp`; override with `--host <host>` / `--port <port>`.
 
