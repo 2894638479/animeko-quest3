@@ -65,7 +65,7 @@ fun SettingsScope.VRGroup(
             checked = stereo3dEnabled,
             onCheckedChange = onStereo3dChanged,
             title = { Text("3D 视频转换 (实验)") },
-            description = { Text("用 AI 深度模型将视频转为双目立体画面，面板变为 2:1 并排布局") },
+            description = { Text("用 AI 深度模型实时估算深度，把视频渲染成双目立体画面，并移到一个独立的全屏立体面板（主面板的文字、控件保持正常）。为让深度与画面同步，视频会延迟约 1~2 帧，音频因此轻微超前，属轻度失配") },
         )
         SwitchItem(
             checked = depthDebugEnabled,
