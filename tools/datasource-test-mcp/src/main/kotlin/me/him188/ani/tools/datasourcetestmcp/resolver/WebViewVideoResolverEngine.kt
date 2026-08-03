@@ -10,6 +10,7 @@
 package me.him188.ani.tools.datasourcetestmcp.resolver
 
 import io.ktor.http.HttpHeaders
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -26,6 +27,7 @@ import me.him188.ani.datasources.api.matcher.WebVideoMatcher.MatchResult
 import me.him188.ani.datasources.api.matcher.WebVideoMatcherContext
 import me.him188.ani.datasources.api.matcher.WebViewConfig
 import me.him188.ani.datasources.api.topic.ResourceLocation
+import me.him188.ani.tools.datasourcetestmcp.McpCefApp
 import java.io.File
 import java.util.ServiceLoader
 
@@ -68,7 +70,7 @@ class WebViewVideoResolverEngine(
         pageUrl: String,
         matchers: List<WebVideoMatcher>,
     ): ResolveResult {
-        return runCatching {
+        return try {
             initializeCef()
 
             val allMatchers = (matchers + classpathMatchers).distinctBy { it.javaClass.name }
@@ -135,7 +137,9 @@ class WebViewVideoResolverEngine(
                 ),
                 errors = if (video == null) listOf("No video URL matched by the webview resolver engine") else emptyList(),
             )
-        }.getOrElse { exception ->
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Throwable) {
             ResolveResult(
                 diagnostics = diagnostics(
                     pageUrl = pageUrl,
@@ -150,14 +154,7 @@ class WebViewVideoResolverEngine(
         }
     }
 
-    private suspend fun initializeCef() {
-        val logsDir = workDir.resolve("logs").also(File::mkdirs)
-        val cacheDir = workDir.resolve("cache").also(File::mkdirs)
-        AniCefApp.initialize(
-            logDir = logsDir,
-            cacheDir = cacheDir,
-        )
-    }
+    private suspend fun initializeCef() = McpCefApp.initialize(workDir)
 
     private fun diagnostics(
         pageUrl: String,
@@ -186,10 +183,7 @@ class WebViewVideoResolverEngine(
     }
 
     companion object {
-        private fun defaultWorkDir(): File {
-            return File(System.getProperty("java.io.tmpdir"))
-                .resolve("ani-datasource-test-mcp")
-                .resolve("cef")
-        }
+        // 与验证码浏览器共用同一个 CefApp 与 cache 目录, 解掉的验证码会话在两边都有效
+        private fun defaultWorkDir(): File = McpCefApp.defaultWorkDir()
     }
 }

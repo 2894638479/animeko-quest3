@@ -178,6 +178,7 @@ fun EpisodeComment(
             CommentDefaults.ReactionRow(
                 comment.reactions,
                 onClickItem = onClickReaction,
+                clickEnabled = canAddReaction,
             )
         },
         actionRow = {

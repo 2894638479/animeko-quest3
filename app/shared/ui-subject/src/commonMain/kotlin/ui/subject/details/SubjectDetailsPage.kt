@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -36,7 +37,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -51,8 +51,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -112,6 +112,7 @@ import me.him188.ani.app.ui.foundation.layout.NestedScrollableColumnState
 import me.him188.ani.app.ui.foundation.layout.NestedScrollableScope
 import me.him188.ani.app.ui.foundation.layout.PaddingValuesSides
 import me.him188.ani.app.ui.foundation.layout.currentWindowAdaptiveInfo1
+import me.him188.ani.app.ui.foundation.layout.isWidthCompact
 import me.him188.ani.app.ui.foundation.layout.only
 import me.him188.ani.app.ui.foundation.layout.paneHorizontalPadding
 import me.him188.ani.app.ui.foundation.layout.paneVerticalPadding
@@ -160,12 +161,13 @@ import me.him188.ani.app.ui.subject.details.components.SubjectDetailsHeader
 import me.him188.ani.app.ui.subject.details.layout.CompactDetailsTabContent
 import me.him188.ani.app.ui.subject.details.layout.SubjectDetailsLayoutParams
 import me.him188.ani.app.ui.subject.details.layout.SubjectDetailsMultiColumnPage
-import me.him188.ani.app.ui.subject.person.PeoplePreviewHost
 import me.him188.ani.app.ui.subject.details.layout.SubjectDetailsMultiColumnPlaceholder
 import me.him188.ani.app.ui.subject.details.sections.SubjectCommentsSheet
 import me.him188.ani.app.ui.subject.details.state.SubjectDetailsState
 import me.him188.ani.app.ui.subject.details.state.createTestSubjectDetailsState
 import me.him188.ani.app.ui.subject.episode.list.EpisodeListDialog
+import me.him188.ani.app.ui.subject.episode.list.EpisodeListItem
+import me.him188.ani.app.ui.subject.person.PeoplePreviewHost
 import me.him188.ani.app.ui.user.SelfInfoUiState
 import me.him188.ani.app.ui.user.TestSelfInfoUiState
 import me.him188.ani.datasources.api.PackedDate
@@ -316,6 +318,15 @@ private fun SubjectDetailsPage(
     BackHandler(enabled = imageViewer.viewing.value) { imageViewer.clear() }
 
     val presentation by state.presentation.collectAsStateWithLifecycle()
+    val onEpisodeLongClick: (EpisodeListItem) -> Unit = {
+        onEpisodeCollectionUpdate(
+            SetEpisodeCollectionTypeRequest(
+                presentation.subjectId,
+                it.episodeId,
+                it.collectionType.toggleCollected(),
+            ),
+        )
+    }
 
     // 评论中的链接/图片点击 (手机"评价" tab 与桌面评论 sheet 共用)
     val onClickCommentUrl = { url: String ->
@@ -352,15 +363,7 @@ private fun SubjectDetailsPage(
                 onDismissRequest = { showSelectEpisode = false },
                 { navigator.navigateSubjectCaches(presentation.subjectId) },
                 { navigator.navigateEpisodeDetails(presentation.subjectId, it.episodeId) },
-                {
-                    onEpisodeCollectionUpdate(
-                        SetEpisodeCollectionTypeRequest(
-                            presentation.subjectId,
-                            it.episodeId,
-                            it.collectionType.toggleCollected(),
-                        ),
-                    )
-                },
+                onEpisodeLongClick,
             )
         }
 
@@ -385,6 +388,7 @@ private fun SubjectDetailsPage(
                     selfInfo = selfInfo,
                     layoutParams = layoutParams,
                     onPlay = onPlay,
+                    onEpisodeLongClick = onEpisodeLongClick,
                     onClickTag = onClickTag,
                     onClickLogin = onClickLogin,
                     onShowComments = { showComments = true },
@@ -461,10 +465,10 @@ private fun SubjectDetailsPage(
             },
             tabRow = { isOverlay, visible ->
                 SubjectDetailsContentTabRow(
-                    pagerState, 
+                    pagerState,
                     modifier = Modifier.ifThen(!isOverlay) {
                         alpha(if (visible) 1f else 0f)
-                    }
+                    },
                 )
             },
             nestedScrollableColumnState = nestedScrollableColumnState,
@@ -478,6 +482,7 @@ private fun SubjectDetailsPage(
                         state = state,
                         info = state.info,
                         onPlay = onPlay,
+                        onEpisodeLongClick = onEpisodeLongClick,
                         onClickTag = onClickTag,
                         onShowEpisodeList = { showSelectEpisode = true },
                         onClickCache = { navigator.navigateSubjectCaches(presentation.subjectId) },
@@ -724,7 +729,7 @@ fun SubjectDetailsSingleColumnPage(
                 contentAlignment = Alignment.TopCenter,
             ) {
                 var tabRowHeightPx by remember { mutableStateOf(0) }
-                
+
                 // 粘性面板: 第二个 TopAppBar + 第二份 TabRow.
                 // 作为模糊来源的 sibling 绘制在其上方, 毛玻璃可采样到下方滚动的内容.
                 val density = LocalDensity.current
@@ -836,7 +841,8 @@ fun SubjectDetailsSingleColumnPage(
                                         modifier = panelBackgroundModifier,
                                         navigationIcon = navigationIcon,
                                         actions = topAppBarActions,
-                                        colors = AniThemeDefaults.topAppBarColors().copy(containerColor = Color.Transparent),
+                                        colors = AniThemeDefaults.topAppBarColors()
+                                            .copy(containerColor = Color.Transparent),
                                         windowInsets = windowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
                                     )
                                 }
@@ -872,13 +878,14 @@ fun SubjectDetailsSingleColumnPage(
 private fun SubjectDetailsContentTabRow(
     pagerState: PagerState,
     modifier: Modifier = Modifier,
+    compact: Boolean = currentWindowAdaptiveInfo1().isWidthCompact
 ) {
     val scope = rememberCoroutineScope()
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
-        TabRow(
+        ScrollableTabRow(
             selectedTabIndex = pagerState.currentPage,
             modifier = Modifier.widthIn(max = SubjectDetailsDefaults.TabRowWidth),
             indicator = @Composable { tabPositions ->
@@ -888,17 +895,21 @@ private fun SubjectDetailsContentTabRow(
             },
             containerColor = Color.Transparent,
             contentColor = TabRowDefaults.secondaryContentColor,
+            edgePadding = if (compact) 0.dp else TabRowDefaults.ScrollableTabRowEdgeStartPadding,
             divider = {},
         ) {
             SubjectDetailsTab.entries.forEachIndexed { index, tabId ->
                 Tab(
                     selected = pagerState.currentPage == index,
-                    modifier = Modifier.widthIn(max = SubjectDetailsDefaults.TabWidth),
+                    modifier = Modifier.widthIn(min = TabRowDefaults.ScrollableTabRowMinTabWidth),
                     onClick = {
                         scope.launch { pagerState.animateScrollToPage(index) }
                     },
                     text = {
-                        Text(text = renderSubjectDetailsTab(tabId))
+                        Text(
+                            text = renderSubjectDetailsTab(tabId),
+                            softWrap = false,
+                        )
                     },
                 )
             }

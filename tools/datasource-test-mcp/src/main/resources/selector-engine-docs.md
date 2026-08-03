@@ -14,7 +14,8 @@ searchSubjects → selectSubjects → searchEpisodes → selectEpisodes → sele
 MCP 工具对应关系:
 
 - `selector_resolve_episode` 自动跑完整流程并返回每步 trace。**默认**还会继续做 WebView 视频解析与
-  VLC 播放探测(会启动 CEF 与播放器,耗时较长),只测解析层请传 `extractVideo=false`。
+  HTTP 可达性探测(会启动 CEF,不会启动播放器)。只提取最终视频 URL 请传 `probeVideo=false`;
+  连 WebView 解析也不需要时传 `extractVideo=false`。HTTP 探测超时/失败不会丢弃已解析出的 URL。
   每个搜索词默认只访问前 3 个条目的详情页(`maxSubjectsPerName`;App 内无此限制。条目按名称长度
   升序排序,目标条目排名靠后时把它调大);
 - `selector_run_step` 单独跑其中一个步骤;
@@ -30,13 +31,15 @@ MCP 工具对应关系:
 
 **输入**: `searchUrl`、关键词、`searchUseOnlyFirstWord`(只用名字的第一个词搜索)、`searchRemoveSpecial`(移除特殊字符,并删除「剧场版」「OVA」「总集篇」等标记词——例如「剧场版 命运石之门」会以「命运石之门」作为关键词,避免取首词时只剩「剧场版」)。
 
-**输出**: `SearchSubjectResult { url, document, captchaKind }`。
-`document == null` 表示 404;`captchaKind != null` 表示被人机验证(Cloudflare 等)拦截。
+**输出**: 页面 HTML,外加 `blockReason`(被挡原因,正常为空)与 `autoSolvedCaptcha`(本次自动解掉的验证码类型)。
+
+取页与 App 走同一条链路,站点开了人机验证时会先用与 App 相同的策略自动解;
+解不掉则**终止整个数据源的流程**(summary 含「已终止该数据源的流程」)。
 
 **常见问题**:
 - 返回 404 / 空页面 → searchUrl 模板错误,或站点换了搜索路径;
-- captchaKind 非空 → 站点开了防爬。本工具**没有**过验证码/注入浏览器 cookie 的能力,
-  请改用 App 内设置页的数据源测试器(支持交互过验证码);
+- 「已终止该数据源的流程」→ 自动解不掉的人机验证(如 Cloudflare 交互挑战),
+  或当前出口 IP 被站点整体封禁。**不要重试**,改用 App 内设置页的数据源测试器(支持交互过验证);
 - 返回的是 JSON API 响应 → 配合 `json-path-indexed` 条目格式使用。
 
 `selector_run_step(step=searchSubjects, config, keyword)` 会返回抓到的原始 HTML(默认最多 100k 字符,超长会截断,用 `maxHtmlLength` 调大;截断的 HTML 再拿去离线解析可能失真),便于人工检查页面结构。后续 select* 步骤也支持直接传 `url` 由其自行抓取,不必手动搬运 HTML。
