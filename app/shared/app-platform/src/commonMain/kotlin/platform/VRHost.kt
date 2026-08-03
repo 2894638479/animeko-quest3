@@ -57,6 +57,9 @@ interface VRHost {
      * 1 = default MAX_DISP, higher = stronger pop-out). Live-adjustable.
      */
     var depthStrength: Float
+
+    /** Front/back offset (local Z, meters) of the danmaku panel relative to the main panel. */
+    var danmakuZOffset: Float
 }
 
 val LocalVRHost = staticCompositionLocalOf<VRHost?> { null }

@@ -233,6 +233,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         _depthTemporalFilterEnabled = vrPrefs.getBoolean("depth_temporal_filter", true)
         _depthFixedScaleEnabled = vrPrefs.getBoolean("depth_fixed_scale", false)
         _depthStrength = vrPrefs.getFloat("depth_strength", 1f)
+        _danmakuZOffset = vrPrefs.getFloat("danmaku_z_offset", 0.2f)
         applyBackgroundMode(savedMode)
         // Note: the main panel is always WIDE now. stereo3dEnabled only causes
         // the player screen to open a separate SBS video panel behind it.
@@ -325,6 +326,15 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         set(value) {
             _depthStrength = value
             vrPrefs.edit().putFloat("depth_strength", value).apply()
+        }
+
+    private var _danmakuZOffset by mutableStateOf(0.2f)
+
+    override var danmakuZOffset: Float
+        get() = _danmakuZOffset
+        set(value) {
+            _danmakuZOffset = value
+            vrPrefs.edit().putFloat("danmaku_z_offset", value).apply()
         }
 
     private fun applyBackgroundMode(mode: VRBackgroundMode) {
@@ -676,8 +686,18 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             else -> return
         } ?: return
         val pp = lastRawPose; lastRawPose = ap
-        val dx = if (pp != null) ap.t.x - pp.t.x else 0f
-        val dz = if (pp != null) ap.t.z - pp.t.z else 0f
+        // Measure the hand's movement in the HEAD's frame, not world space, so
+        // the gesture direction stays intuitive when you turn your head:
+        // hand to the head's right = enlarge, left = shrink, forward = push
+        // away, backward = pull closer.
+        var dx = 0f
+        var dz = 0f
+        if (pp != null) {
+            val delta = ap.t.minus(pp.t)
+            val vp = scene.getViewerPose()
+            dx = delta.dot(vp.q.times(Vector3(1f, 0f, 0f))) // + = hand moved to the head's right
+            dz = delta.dot(vp.forward())                    // + = hand moved forward (away from viewer)
+        }
 
         for (p in active) {
             when (p.activeMode) {
@@ -734,7 +754,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             entry = panel.entry,
             subScale = subScale,
             mainScale = mainScale,
-            zOffset = panel.zOffset,
+            zOffset = panel.zOffsetValue,
         )
         panel.entity.setComponent(scale)
         panel.entity.setComponent(transform)

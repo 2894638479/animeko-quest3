@@ -61,20 +61,17 @@ fun PlayerDanmakuHost(
 
 
     val panelManager = LocalPanelManager.current ?: return
-    // In stereo mode the danmaku sits at the video plane (BEHIND the main panel,
-    // in front of the SBS video panel), so it overlays the video instead of
-    // floating 0.2 m in front of the whole panel. Reopened when the mode toggles.
-    val stereo3d = me.him188.ani.app.platform.LocalVRHost.current?.stereo3dEnabled == true
+    // Danmaku floats IN FRONT of the main panel (MIDDLE) so it is always
+    // readable over the video; its front/back distance is adjustable via the
+    // VR setting.
+    val danmakuZ = me.him188.ani.app.platform.LocalVRHost.current?.danmakuZOffset ?: 0.2f
     var panel by remember { mutableStateOf<PanelHandle?>(null) }
-    DisposableEffect(stereo3d) {
-        val position =
-            if (stereo3d) PanelManager.PanelPosition.BEHIND
-            else PanelManager.PanelPosition.MIDDLE
+    DisposableEffect(Unit) {
         panel = panelManager.openPanel(
-            PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, position, PanelManager.PanelHittable.FALSE),
+            PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, PanelManager.PanelPosition.MIDDLE, PanelManager.PanelHittable.FALSE),
             options = PanelManager.PanelOpenOptions(
                 withControlBar = false, // non-hittable — the control bar is dead UI
-                zOffset = if (stereo3d) 0.04f else null,
+                zOffset = danmakuZ,
             ),
         ) {
             DanmakuHost(danmakuHostState, modifier)
@@ -82,6 +79,10 @@ fun PlayerDanmakuHost(
         onDispose {
             panel?.close()
         }
+    }
+    // Live-adjust the danmaku's front/back distance when the VR slider changes.
+    LaunchedEffect(danmakuZ) {
+        panel?.setZOffset(danmakuZ)
     }
 }
 
