@@ -36,6 +36,7 @@ fun StereoVideoSurface(
     strength: Float = 1f,
     debugShowDepth: Boolean = false,
     temporalFilterEnabled: Boolean = true,
+    fixedScaleEnabled: Boolean = false,
     onSurfaceTextureReady: (SurfaceTexture) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -50,6 +51,7 @@ fun StereoVideoSurface(
                 estimator = estimator,
                 debugShowDepth = debugShowDepth,
                 temporalFilterEnabled = temporalFilterEnabled,
+                fixedScaleEnabled = fixedScaleEnabled,
                 onSurfaceTextureReady = { st ->
                     logger.info { "Stereo surface texture ready" }
                     onSurfaceTextureReady(st)
@@ -68,6 +70,7 @@ fun StereoVideoSurface(
                 it.strength = strength
                 it.debugShowDepth = debugShowDepth
                 it.temporalFilterEnabled = temporalFilterEnabled
+                it.fixedScaleEnabled = fixedScaleEnabled
             }
         },
     )

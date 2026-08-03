@@ -44,6 +44,19 @@ interface VRHost {
      * and A/B test the filter's contribution.
      */
     var depthTemporalFilterEnabled: Boolean
+
+    /**
+     * Debug: instead of normalizing the raw depth against a running min/max
+     * (scene-relative 0..1), multiply it by a fixed constant so the depth is an
+     * absolute mapping (deterministic across scenes).
+     */
+    var depthFixedScaleEnabled: Boolean
+
+    /**
+     * Parallax strength multiplier for the stereo depth conversion (0 = flat,
+     * 1 = default MAX_DISP, higher = stronger pop-out). Live-adjustable.
+     */
+    var depthStrength: Float
 }
 
 val LocalVRHost = staticCompositionLocalOf<VRHost?> { null }

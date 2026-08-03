@@ -231,6 +231,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         _stereo3dEnabled = vrPrefs.getBoolean("stereo3d", false)
         _depthDebugEnabled = vrPrefs.getBoolean("depth_debug", false)
         _depthTemporalFilterEnabled = vrPrefs.getBoolean("depth_temporal_filter", true)
+        _depthFixedScaleEnabled = vrPrefs.getBoolean("depth_fixed_scale", false)
+        _depthStrength = vrPrefs.getFloat("depth_strength", 1f)
         applyBackgroundMode(savedMode)
         // Note: the main panel is always WIDE now. stereo3dEnabled only causes
         // the player screen to open a separate SBS video panel behind it.
@@ -305,6 +307,24 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         set(value) {
             _depthTemporalFilterEnabled = value
             vrPrefs.edit().putBoolean("depth_temporal_filter", value).apply()
+        }
+
+    private var _depthFixedScaleEnabled by mutableStateOf(false)
+
+    override var depthFixedScaleEnabled: Boolean
+        get() = _depthFixedScaleEnabled
+        set(value) {
+            _depthFixedScaleEnabled = value
+            vrPrefs.edit().putBoolean("depth_fixed_scale", value).apply()
+        }
+
+    private var _depthStrength by mutableStateOf(1f)
+
+    override var depthStrength: Float
+        get() = _depthStrength
+        set(value) {
+            _depthStrength = value
+            vrPrefs.edit().putFloat("depth_strength", value).apply()
         }
 
     private fun applyBackgroundMode(mode: VRBackgroundMode) {

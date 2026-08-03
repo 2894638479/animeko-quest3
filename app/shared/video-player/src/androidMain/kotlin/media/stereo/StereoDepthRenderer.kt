@@ -56,6 +56,11 @@ class StereoDepthRenderer(
      * temporal filter's contribution.
      */
     var temporalFilterEnabled: Boolean = true,
+    /**
+     * When true, the raw depth is NOT normalized against a running min/max;
+     * instead it is multiplied by [FIXED_DEPTH_SCALE] (an absolute mapping).
+     */
+    var fixedScaleEnabled: Boolean = false,
     private val onSurfaceTextureReady: (android.graphics.SurfaceTexture) -> Unit = {},
 ) : GLSurfaceView.Renderer {
 
@@ -77,6 +82,7 @@ class StereoDepthRenderer(
     private var rawRangeInitialized = false
     private var rawMinEst = 0f
     private var rawMaxEst = 1f
+    private var rawRangeDiagCount = 0 // throttled "Raw depth range" log for calibrating FIXED_DEPTH_SCALE
 
     // Pipeline: the GL thread copies every frame into the video ring and drops
     // the latest sample (tagged with its seq) into this conflated channel (old
@@ -175,6 +181,13 @@ class StereoDepthRenderer(
         }
         val range = (rawMaxEst - rawMinEst).coerceAtLeast(1e-6f)
 
+        // Diagnostic (throttled): report the running raw range so FIXED_DEPTH_SCALE
+        // can be calibrated — a fixed scale should map a typical rawMax to ~1.0.
+        rawRangeDiagCount++
+        if (rawRangeDiagCount % 60 == 0) {
+            logger.info { "Raw depth range: min=${rawMinEst} max=${rawMaxEst}" }
+        }
+
         val blended: FloatArray
         if (!temporalFilterEnabled || prev == null || prev.size != raw.size) {
             // Filter disabled (A/B test) or no previous frame: feed through.
@@ -198,7 +211,13 @@ class StereoDepthRenderer(
         prevRawW = w
         prevRawH = h
 
-        val norm = FloatArray(raw.size) { i -> ((blended[i] - rawMinEst) / range).coerceIn(0f, 1f) }
+        val norm = if (fixedScaleEnabled) {
+            // Absolute mapping: no scene-relative min/max, just a fixed gain.
+            // Values above 1 clamp (near), below 0 clamp (far).
+            FloatArray(raw.size) { i -> (blended[i] * FIXED_DEPTH_SCALE).coerceIn(0f, 1f) }
+        } else {
+            FloatArray(raw.size) { i -> ((blended[i] - rawMinEst) / range).coerceIn(0f, 1f) }
+        }
         return incoming.copy(depth = norm)
     }
 
@@ -803,6 +822,12 @@ class StereoDepthRenderer(
         // (~0.4s). Fast enough to track real content change, slow enough that
         // a single frame's global extremes can't swing the colors.
         private const val RANGE_ALPHA = 0.1f
+
+        // Fixed-depth-scale mode: normalized depth = raw × this constant instead
+        // of the running min/max normalization. Calibrated from the "Raw depth
+        // range" log: this model's typical rawMax is ~850-1050, so 1/1000 maps
+        // a typical near point to ~1.0 (raw 60 -> 0.06, 500 -> 0.5, 950 -> 0.95).
+        private const val FIXED_DEPTH_SCALE = 0.001f
 
         // How many depth texels the panel's top/bottom edge skips when sampling
         // depth. MiDaS's receptive field sees the black letterbox bars at the
