@@ -68,7 +68,7 @@ class StereoDepthRenderer(
 
     // Depth
     private var depthTexId = 0
-    private val pendingDepth = AtomicReference<DepthResult?>(null)
+    private val pendingDepth = AtomicReference<DepthWithSeq?>(null)
 
     // Temporal + normalization stability state (raw domain, see processDepth)
     private var prevRawDepth: FloatArray? = null
@@ -78,12 +78,38 @@ class StereoDepthRenderer(
     private var rawMinEst = 0f
     private var rawMaxEst = 1f
 
-    // Pipeline: the GL thread samples every frame and drops the latest frame
-    // into this conflated channel (old frames overwritten); the inference
-    // thread runs at full throughput (receive -> infer -> next), so the depth
-    // update rate equals the inference rate (~27fps at ~36ms), not a throttled
-    // interval.
-    private val frameChannel = Channel<Bitmap>(Channel.CONFLATED)
+    // Pipeline: the GL thread copies every frame into the video ring and drops
+    // the latest sample (tagged with its seq) into this conflated channel (old
+    // frames overwritten); the inference thread runs at full throughput
+    // (receive -> infer -> next), so the depth update rate equals the inference
+    // rate (~27fps at ~36ms), not a throttled interval.
+    private val frameChannel = Channel<FrameSample>(Channel.CONFLATED)
+
+    // Video ring buffer: each live frame is copied into a ring slot with a
+    // monotonically increasing seq. The DISPLAY shows the slot whose seq
+    // matches the latest uploaded depth (see latestDepthSeq) — so the stereo
+    // warp always uses the depth of the exact frame being shown, instead of a
+    // fixed-latency guess. The display advances whenever a new depth arrives
+    // (~inference rate), which covers the 24fps anime source.
+    private val videoRing = Array(RING_SIZE) { RingSlot() }
+    private var ringHead = 0 // next slot to overwrite
+    private var ringSeqCounter = 0L
+    private var latestDepthSeq = -1L // seq of the frame the current depth corresponds to
+
+    /** A video sample handed to the inference thread, tagged with its ring seq. */
+    private data class FrameSample(val bitmap: Bitmap, val seq: Long)
+
+    /** An inference result tagged with the seq of the frame it was computed from. */
+    private data class DepthWithSeq(val seq: Long, val result: DepthResult)
+
+    /** One slot of the video ring: a full-res RGBA texture + FBO holding a frame. */
+    private class RingSlot {
+        var tex = 0
+        var fbo = 0
+        var w = 0
+        var h = 0
+        var seq = -1L
+    }
 
     init {
         scope.launch(Dispatchers.Default) {
@@ -96,12 +122,12 @@ class StereoDepthRenderer(
                     continue
                 }
                 try {
-                    val result = estimator.estimateDepth(frame)
-                    pendingDepth.set(processDepth(result))
+                    val result = estimator.estimateDepth(frame.bitmap)
+                    pendingDepth.set(DepthWithSeq(frame.seq, processDepth(result)))
                 } catch (e: Throwable) {
                     logger.info(e) { "Depth inference failed" }
                 } finally {
-                    frame.recycle()
+                    frame.bitmap.recycle()
                 }
             }
         }
@@ -189,11 +215,15 @@ class StereoDepthRenderer(
     private var leftProgram = 0
     private var depthProgram = 0
     private var warpProgram = 0
+    private var copyProgram = 0 // ring texture -> model-input FBO downscale
     private var quadBuffer: FloatBuffer? = null
 
-    // Left eye program (used by frame sampling to FBO)
+    // Left eye program (used to copy the OES frame into the ring + model FBO)
     private var uVideoLeft = -1
     private var uTexMatrixLeft = -1
+
+    // Copy program (samples a regular texture into an FBO)
+    private var uTexCopy = -1
 
     // Forward-mapping mesh (vertices displaced by depth in the vertex shader)
     private var meshVertices: FloatBuffer? = null
@@ -206,7 +236,6 @@ class StereoDepthRenderer(
     private var warpDisp = -1
     private var warpScaleY = -1
     private var warpOffsetY = -1
-    private var warpTexMatrix = -1
     private var warpTexH = -1
 
     // Depth visualization program
@@ -259,15 +288,20 @@ class StereoDepthRenderer(
 
         // Forward-mapping warp: vertices displaced by depth (GPU interpolates
         // the deformation, naturally filling holes instead of reverse-mapping
-        // which pulled background into the silhouette).
+        // which pulled background into the silhouette). Samples the video ring
+        // (a display-ready GL_TEXTURE_2D), not the OES surface.
         warpProgram = createProgram(VERTEX_WARP, FRAG_WARP)
         warpVideo = GLES20.glGetUniformLocation(warpProgram, "uVideo")
         warpDepth = GLES20.glGetUniformLocation(warpProgram, "uDepth")
         warpDisp = GLES20.glGetUniformLocation(warpProgram, "uDisp")
         warpScaleY = GLES20.glGetUniformLocation(warpProgram, "uDepthScaleY")
         warpOffsetY = GLES20.glGetUniformLocation(warpProgram, "uDepthOffsetY")
-        warpTexMatrix = GLES20.glGetUniformLocation(warpProgram, "uTexMatrix")
         warpTexH = GLES20.glGetUniformLocation(warpProgram, "uDepthTexH")
+
+        // Copy program: downsamples a ring frame into the small model-input FBO.
+        copyProgram = createProgram(VERTEX_SHADER, FRAG_COPY)
+        uTexCopy = GLES20.glGetUniformLocation(copyProgram, "uTex")
+
         val mesh = createMesh(MESH_COLS, MESH_ROWS)
         meshVertices = mesh.first
         meshIndices = mesh.second
@@ -299,6 +333,7 @@ class StereoDepthRenderer(
                 logger.info { "First video frame arrived on SurfaceTexture" }
             }
             hasVideoFrame = true
+            newFramePending = true
         }
         surfaceTexture = st
         onSurfaceTextureReady(st)
@@ -307,6 +342,10 @@ class StereoDepthRenderer(
     }
 
     private var hasVideoFrame = false
+
+    /** Set when a NEW video frame is queued; gates the ring rotation to the VIDEO frame rate. */
+    @Volatile
+    private var newFramePending = false
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         viewportWidth = width
@@ -329,7 +368,11 @@ class StereoDepthRenderer(
             Matrix.setIdentityM(texMatrix, 0)
         }
 
-        maybeSampleFrame()
+        maybeSampleFrame() // copies the live frame into the ring + samples it for inference
+
+        // Upload pending depth (from inference thread) BEFORE drawing so the
+        // warp samples the ring frame whose depth just became ready.
+        uploadPendingDepthIfAny()
 
         val half = viewportWidth / 2
 
@@ -340,9 +383,6 @@ class StereoDepthRenderer(
         // Right eye: DIBR warped
         GLES20.glViewport(half, 0, viewportWidth - half, viewportHeight)
         drawRight()
-
-        // Upload pending depth (from inference thread)
-        uploadPendingDepthIfAny()
 
         // Debug: log frame count periodically
         frameCount++
@@ -378,12 +418,26 @@ class StereoDepthRenderer(
         drawWarp(-DISP_CLIP / 2f * strength) // right eye: foreground shifts left
     }
 
+    /**
+     * The ring slot to display: the frame whose depth is currently uploaded
+     * (so the warp always uses the depth of the exact frame on screen). Falls
+     * back to the newest slot before any depth is ready.
+     */
+    private fun currentDisplayTexture(): Int {
+        for (slot in videoRing) {
+            if (slot.tex != 0 && slot.seq == latestDepthSeq) return slot.tex
+        }
+        val newest = videoRing[(ringHead - 1 + RING_SIZE) % RING_SIZE]
+        return newest.tex
+    }
+
     private fun drawWarp(uDisp: Float) {
         GLES20.glUseProgram(warpProgram)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTexId)
+        // The ring texture is already display-ready (the OES was copied into it
+        // with the transform matrix applied), so no texMatrix is needed here.
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, currentDisplayTexture())
         GLES20.glUniform1i(warpVideo, 0)
-        GLES20.glUniformMatrix4fv(warpTexMatrix, 1, false, texMatrix, 0)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, depthTexId)
         GLES20.glUniform1i(warpDepth, 1)
@@ -460,25 +514,38 @@ class StereoDepthRenderer(
     }
 
     /**
-     * Samples the current frame on the GL thread and hands it to the rotating
-     * inference thread via the conflated channel. Every frame is sampled (no
-     * throttling); if the inference thread is busy, older frames are overwritten
-     * so it always processes the most recent one.
+     * Copies the live frame into the next video-ring slot, then downsamples
+     * that slot for the inference thread. The sample is tagged with the ring
+     * slot's seq so the finished depth can be matched back to the exact frame
+     * it came from (see [uploadPendingDepthIfAny] and [currentDisplayTexture]).
      */
     private fun maybeSampleFrame() {
         // No video frames yet (media source still loading) — skip sampling to
         // keep CPU free for the player. Depth texture stays at the placeholder.
         if (!hasVideoFrame) return
+        // Rotate the ring ONLY when a new video frame has actually arrived: the
+        // render loop runs faster than the video, and copying the same frame
+        // into many slots would burn ring capacity and let the depth's frame be
+        // evicted (causing flash-back). At video frame rate, RING_SIZE covers
+        // many frames of inference latency.
+        if (!newFramePending) return
+        newFramePending = false
 
+        // 1. Copy the live frame into the next ring slot (full res, display-ready).
+        val slot = videoRing[ringHead]
+        renderVideoToRing(slot)
+        slot.seq = ringSeqCounter++
+        ringHead = (ringHead + 1) % RING_SIZE
+
+        // 2. Downscale the ring frame to the model input and read it back.
         ensureSampleFbo(SAMPLE_WIDTH, SAMPLE_HEIGHT)
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, sampleFbo)
         GLES20.glViewport(0, 0, SAMPLE_WIDTH, SAMPLE_HEIGHT)
-        GLES20.glUseProgram(leftProgram)
+        GLES20.glUseProgram(copyProgram)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTexId)
-        GLES20.glUniform1i(uVideoLeft, 0)
-        GLES20.glUniformMatrix4fv(uTexMatrixLeft, 1, false, texMatrix, 0)
-        drawQuadRaw(leftProgram)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, slot.tex)
+        GLES20.glUniform1i(uTexCopy, 0)
+        drawQuadRaw(copyProgram)
 
         val pixels = ByteBuffer.allocateDirect(SAMPLE_WIDTH * SAMPLE_HEIGHT * 4)
         GLES20.glPixelStorei(GLES20.GL_PACK_ALIGNMENT, 1)
@@ -494,7 +561,54 @@ class StereoDepthRenderer(
         canvas.drawBitmap(bitmap, 0f, -SAMPLE_HEIGHT.toFloat(), null)
         bitmap.recycle()
 
-        frameChannel.trySend(flipped) // CONFLATED: overwrites any unprocessed frame
+        // CONFLATED: overwrites any unprocessed frame. The seq tags which ring
+        // slot this sample's depth corresponds to.
+        frameChannel.trySend(FrameSample(flipped, slot.seq))
+    }
+
+    /** Renders the live OES frame (with the transform matrix) into the ring slot. */
+    private fun renderVideoToRing(slot: RingSlot) {
+        ensureRingSlot(slot)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, slot.fbo)
+        GLES20.glViewport(0, 0, RING_W, RING_H)
+        GLES20.glUseProgram(leftProgram)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTexId)
+        GLES20.glUniform1i(uVideoLeft, 0)
+        GLES20.glUniformMatrix4fv(uTexMatrixLeft, 1, false, texMatrix, 0)
+        drawQuadRaw(leftProgram)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+    }
+
+    private fun ensureRingSlot(slot: RingSlot) {
+        if (slot.tex != 0 && slot.w == RING_W && slot.h == RING_H) return
+        if (slot.tex != 0) {
+            GLES20.glDeleteFramebuffers(1, intArrayOf(slot.fbo), 0)
+            GLES20.glDeleteTextures(1, intArrayOf(slot.tex), 0)
+        }
+        val tex = IntArray(1)
+        GLES20.glGenTextures(1, tex, 0)
+        slot.tex = tex[0]
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, slot.tex)
+        GLES20.glTexImage2D(
+            GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, RING_W, RING_H, 0,
+            GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null,
+        )
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        val fbo = IntArray(1)
+        GLES20.glGenFramebuffers(1, fbo, 0)
+        slot.fbo = fbo[0]
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, slot.fbo)
+        GLES20.glFramebufferTexture2D(
+            GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+            GLES20.GL_TEXTURE_2D, slot.tex, 0,
+        )
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        slot.w = RING_W
+        slot.h = RING_H
     }
 
     private fun ensureSampleFbo(w: Int, h: Int) {
@@ -535,7 +649,11 @@ class StereoDepthRenderer(
 
     /** Uploads the latest inference result as a depth texture (called on GL thread). */
     private fun uploadPendingDepthIfAny() {
-        val result = pendingDepth.getAndSet(null) ?: return
+        val entry = pendingDepth.getAndSet(null) ?: return
+        // The depth belongs to a specific ring frame; the warp must display
+        // exactly that frame so the depth matches the picture.
+        latestDepthSeq = entry.seq
+        val result = entry.result
         val depth = result.depth
         val w = result.width
         val h = result.height
@@ -727,15 +845,24 @@ class StereoDepthRenderer(
             }
         """.trimIndent()
 
+        // The video ring frame is already display-ready (the OES was copied into
+        // it with the transform matrix applied), so no texMatrix is needed.
         private val FRAG_WARP = """
-            #extension GL_OES_EGL_image_external : require
             precision mediump float;
-            uniform samplerExternalOES uVideo;
-            uniform mat4 uTexMatrix;
+            uniform sampler2D uVideo;
             varying vec2 vUv;
             void main() {
-                vec2 uv = (uTexMatrix * vec4(vUv, 0.0, 1.0)).xy;
-                gl_FragColor = texture2D(uVideo, uv);
+                gl_FragColor = texture2D(uVideo, vUv);
+            }
+        """.trimIndent()
+
+        // Samples a regular 2D texture into an FBO (ring frame -> model input).
+        private val FRAG_COPY = """
+            precision mediump float;
+            uniform sampler2D uTex;
+            varying vec2 vUv;
+            void main() {
+                gl_FragColor = texture2D(uTex, vUv);
             }
         """.trimIndent()
 
@@ -782,5 +909,12 @@ class StereoDepthRenderer(
 
         const val SAMPLE_WIDTH = 320
         const val SAMPLE_HEIGHT = 180
+
+        // Video ring: how many display frames we keep, and the copy resolution.
+        // Depth inference takes ~36ms (~2-3 frames at 60fps), so 6 slots
+        // comfortably cover the latency before a frame's depth is ready.
+        private const val RING_SIZE = 6
+        private const val RING_W = 1920
+        private const val RING_H = 1080
     }
 }
