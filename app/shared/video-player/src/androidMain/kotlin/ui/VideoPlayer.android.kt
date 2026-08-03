@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -30,7 +28,7 @@ import io.github.peerless2012.ass.media.widget.AssSubtitleView
 import me.him188.ani.app.platform.LocalSpatialAudioHost
 import me.him188.ani.app.ui.foundation.LocalPanelManager
 import me.him188.ani.app.videoplayer.media.LibassExoPlayerMediampPlayer
-import me.him188.ani.app.videoplayer.media.stereo.StereoVideoSurface
+import me.him188.ani.app.videoplayer.media.stereo.StereoVideoPanelHost
 import org.openani.mediamp.MediampPlayer
 import org.openani.mediamp.exoplayer.ExoPlayerMediampPlayer
 import org.openani.mediamp.exoplayer.compose.ExoPlayerMediampPlayerSurface
@@ -72,51 +70,17 @@ actual fun VideoPlayer(
     if (isPreviewing) {
         Box(modifier)
     } else {
-        val libassPlayer = player as? LibassExoPlayerMediampPlayer
-        val exoPlayer = libassPlayer?.exoMediampPlayer ?: player as ExoPlayerMediampPlayer
+        val panelManager = LocalPanelManager.current
         val stereo3d = me.him188.ani.app.platform.LocalVRHost.current?.stereo3dEnabled == true
-        if (LocalPanelManager.current != null && stereo3d) {
-            // VR + 3D: render the video as a side-by-side stereo pair (depth-based DIBR).
-            // The main panel must be in SBS (2:1) layout with StereoMode.LeftRight.
-            //
-            // The player instance can be replaced (replacePlayer, for spatial audio
-            // session refresh). The StereoVideoSurface captures the surface once at
-            // composition, but we must hand it to whichever ExoPlayer is *currently*
-            // playing. Track the latest instance and re-bind when it changes.
-            val currentExoPlayer by rememberUpdatedState(exoPlayer)
-            var surfaceTexture by remember { mutableStateOf<android.graphics.SurfaceTexture?>(null) }
-
-            fun bindSurface(st: android.graphics.SurfaceTexture) {
-                // ExoPlayer requires setVideoSurface on the main thread; the
-                // SurfaceTexture arrives on the GL thread.
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    val impl = currentExoPlayer.impl
-                    android.util.Log.i(
-                        "StereoVideoPlayer",
-                        "setVideoSurface state=${impl.playbackState} " +
-                                "videoSize=${impl.videoSize.width}x${impl.videoSize.height}",
-                    )
-                    impl.setVideoSurface(android.view.Surface(st))
-                }
-            }
-
-            StereoVideoSurface(
-                scope = androidx.compose.runtime.rememberCoroutineScope(),
-                modifier = modifier,
-                debugShowDepth = me.him188.ani.app.platform.LocalVRHost.current?.depthDebugEnabled == true,
-                temporalFilterEnabled = me.him188.ani.app.platform.LocalVRHost.current?.depthTemporalFilterEnabled == true,
-                onSurfaceTextureReady = { st ->
-                    surfaceTexture = st
-                    bindSurface(st)
-                },
-            )
-
-            // Re-bind the same SurfaceTexture whenever the player instance changes.
-            LaunchedEffect(player) {
-                surfaceTexture?.let { bindSurface(it) }
-            }
+        if (panelManager != null && stereo3d) {
+            // VR + 3D: the video renders in a separate SBS stereo panel bound
+            // BEHIND the (single-eye) main panel; the Compose controls in the
+            // main panel stay in front, readable.
+            StereoVideoPanelHost(player, panelManager, modifier)
             return
         }
+        val libassPlayer = player as? LibassExoPlayerMediampPlayer
+        val exoPlayer = libassPlayer?.exoMediampPlayer ?: player as ExoPlayerMediampPlayer
         ExoPlayerMediampPlayerSurface(exoPlayer, modifier) {
             (videoSurfaceView as? SurfaceView)?.let { registerAndroidVideoSurface(player, it) }
             controllerAutoShow = false
