@@ -106,8 +106,10 @@ private fun StereoVideoPanelContent(state: StereoVideoPanelState) {
     StereoVideoSurface(
         scope = rememberCoroutineScope(),
         modifier = Modifier.fillMaxSize(),
+        strength = host?.depthStrength ?: 1f,
         debugShowDepth = host?.depthDebugEnabled == true,
         temporalFilterEnabled = host?.depthTemporalFilterEnabled == true,
+        fixedScaleEnabled = host?.depthFixedScaleEnabled == true,
         onSurfaceTextureReady = { st ->
             surfaceTexture = st
             state.ready = true
