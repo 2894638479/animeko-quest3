@@ -36,7 +36,23 @@ interface PanelHandle {
  * all other operations are on the returned [PanelHandle].
  */
 interface PanelManager {
-    fun openPanel(entry: PanelEntry, content: @Composable () -> Unit): PanelHandle
+    fun openPanel(
+        entry: PanelEntry,
+        options: PanelOpenOptions = PanelOpenOptions(),
+        content: @Composable () -> Unit,
+    ): PanelHandle
+
+    /**
+     * Tuning knobs for [openPanel]: the child's scale relative to the main
+     * panel, a local-Z override (scaled by the child scale, like the MIDDLE
+     * position's built-in 0.2f), and whether the per-panel control bar is
+     * wrapped around the content.
+     */
+    data class PanelOpenOptions(
+        val scaleMultiplier: Float = 1f,
+        val zOffset: Float? = null,
+        val withControlBar: Boolean = true,
+    )
 
     enum class PanelSize(val widthPx: Int,val heightPx: Int) {
         WIDE(3840,2160),TALL(2160,3840),SIDE(960,1920),
@@ -48,7 +64,10 @@ interface PanelManager {
         val defaultDpi get() = heightPx / 5
     }
     enum class PanelPosition {
-        LEFT,RIGHT,TOP,BOTTOM,MIDDLE;
+        LEFT,RIGHT,TOP,BOTTOM,MIDDLE,
+        /** In the main panel's local space, positive Z (behind the panel plane). */
+        BEHIND,
+        ;
     }
     enum class PanelHittable {
         TRUE,FALSE;

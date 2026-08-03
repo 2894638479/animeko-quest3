@@ -186,12 +186,18 @@ fun EpisodeScreen(
     windowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
 ) {
     val themeSettings = LocalThemeSettings.current
+    // In VR stereo mode the SBS video panel sits BEHIND the main panel; the
+    // main panel must be transparent where the video area is so the stereo
+    // video shows through. Content surfaces (summary, comments) keep their own
+    // opaque backgrounds.
+    val stereo3d = me.him188.ani.app.platform.LocalVRHost.current?.stereo3dEnabled == true
     AniTheme(
         darkModeOverride = if (themeSettings.alwaysDarkInEpisodePage) DarkMode.DARK else null,
     ) {
         Column(modifier.fillMaxSize()) {
             Scaffold(
                 contentWindowInsets = WindowInsets(0.dp),
+                containerColor = if (stereo3d) Color.Transparent else MaterialTheme.colorScheme.background,
             ) {
                 EpisodeScreenContent(
                     viewModel,
@@ -887,6 +893,13 @@ private fun EpisodeVideo(
     val navigator = LocalNavigator.current
     val isAndroid = LocalPlatform.current.isAndroid()
 
+    // In VR stereo mode the video renders in a separate SBS panel BEHIND the
+    // main panel; keep this player's video area transparent so the stereo video
+    // shows through. Otherwise it's a black video screen (the normal look).
+    val videoAreaBackground =
+        if (me.him188.ani.app.platform.LocalVRHost.current?.stereo3dEnabled == true) Color.Transparent
+        else Color.Black
+
     // Don't rememberSavable. 刻意让每次切换都是隐藏的
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         playerControllerState.toggleFullVisible(false) // 每次切换全屏后隐藏
@@ -1106,7 +1119,7 @@ private fun EpisodeVideo(
         shareData = page.shareData,
         onClickCache = { navigator.navigateSubjectCaches(vm.subjectId) },
         modifier = modifier
-            .fillMaxWidth().background(Color.Black)
+            .fillMaxWidth().background(videoAreaBackground)
             .then(if (expanded) Modifier.fillMaxSize() else Modifier.statusBarsPadding()),
         maintainAspectRatio = maintainAspectRatio,
         contentWindowInsets = windowInsets,

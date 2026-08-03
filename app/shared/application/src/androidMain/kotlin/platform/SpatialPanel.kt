@@ -23,7 +23,14 @@ class SpatialPanel internal constructor(
     val entity: Entity,
     var entry: PanelManager.PanelEntry,
     private val host: BaseVRActivity,
+    val options: PanelManager.PanelOpenOptions = PanelManager.PanelOpenOptions(),
 ) : PanelHandle {
+
+    /** Child scale = main panel scale × [scaleMultiplier] (video panel = 2f). */
+    val scaleMultiplier: Float get() = options.scaleMultiplier
+
+    /** Local-Z override, scaled by the child scale; null = position default. */
+    val zOffset: Float? get() = options.zOffset
 
     internal var content: (@androidx.compose.runtime.Composable () -> Unit)? = null
 

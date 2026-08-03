@@ -26,7 +26,9 @@ interface VRHost {
 
     /**
      * 3D video conversion: video frames are rendered as a side-by-side stereo
-     * pair (depth-based DIBR) and the main panel switches to a 2:1 SBS layout.
+     * pair (depth-based DIBR). The player screen opens a separate SBS stereo
+     * video panel behind the (single-eye) main panel, so the Compose controls
+     * stay readable in front of the video.
      */
     var stereo3dEnabled: Boolean
 

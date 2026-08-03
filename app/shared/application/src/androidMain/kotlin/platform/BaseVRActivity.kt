@@ -30,7 +30,6 @@ import com.meta.spatial.core.Color4
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.PerformanceLevel
 import com.meta.spatial.core.Pose
-import com.meta.spatial.core.Quaternion
 import com.meta.spatial.core.Query
 import com.meta.spatial.core.SpatialSDKExperimentalAPI
 import com.meta.spatial.core.Vector3
@@ -111,10 +110,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             mainPanelEntity.setComponent(Scale(Vector3(clamped)))
             if (::spatialAudio.isInitialized) spatialAudio.updateScale(clamped)
             for (panel in panelByEntity.values) {
-                if (panel.isBound) {
-                    panel.entity.setComponent(Scale(Vector3(clamped)))
-                    panel.entity.setComponent(Transform(calculateRelativePose(panel.entry, clamped)))
-                }
+                if (panel.isBound) applyBoundPanelLayout(panel, clamped)
             }
         }
 
@@ -196,10 +192,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         for (panel in panelByEntity.values) {
             if (panel.entity == mainPanelEntity) continue
             if (!panel.isBound) panel.toggleBind()
-            if (panel.isBound) {
-                panel.entity.setComponent(Scale(Vector3(1f)))
-                panel.entity.setComponent(Transform(calculateRelativePose(panel.entry, 1f, 1f)))
-            }
+            if (panel.isBound) applyBoundPanelLayout(panel, 1f)
         }
     }
 
@@ -239,11 +232,8 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         _depthDebugEnabled = vrPrefs.getBoolean("depth_debug", false)
         _depthTemporalFilterEnabled = vrPrefs.getBoolean("depth_temporal_filter", true)
         applyBackgroundMode(savedMode)
-        if (_stereo3dEnabled) {
-            panelByEntity[mainPanelEntity]?.let { panel ->
-                swapPanelRatio(panel, PanelManager.PanelSize.SBS.widthPx, PanelManager.PanelSize.SBS.heightPx)
-            }
-        }
+        // Note: the main panel is always WIDE now. stereo3dEnabled only causes
+        // the player screen to open a separate SBS video panel behind it.
 
         // Spatial audio — audio sounds like it comes from the main panel position
         spatialAudio = SpatialAudioManager(scene, mainPanelEntity, entry.size.defaultWidth)
@@ -294,17 +284,9 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         set(value) {
             _stereo3dEnabled = value
             vrPrefs.edit().putBoolean("stereo3d", value).apply()
-            if (::mainPanelEntity.isInitialized) {
-                // Switch the main panel between 16:9 (normal) and 2:1 SBS layouts.
-                // SBS panels have StereoMode.LeftRight configured at registration.
-                panelByEntity[mainPanelEntity]?.let { panel ->
-                    swapPanelRatio(
-                        panel,
-                        if (value) PanelManager.PanelSize.SBS.widthPx else PanelManager.PanelSize.WIDE.widthPx,
-                        if (value) PanelManager.PanelSize.SBS.heightPx else PanelManager.PanelSize.WIDE.heightPx,
-                    )
-                }
-            }
+            // The main panel stays single-eye (WIDE). The player screen opens a
+            // separate SBS stereo video panel BEHIND it (see StereoVideoPanelHost),
+            // so the Compose controls stay readable in front of the video.
         }
 
     private var _depthDebugEnabled by mutableStateOf(false)
@@ -447,7 +429,11 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     //   distance along the controller ray direction.
     // - Two hands on the same target: pinch‑to‑zoom via controller distance.
 
-    companion object { private const val RAY_MAX_DISTANCE = 50f }
+    companion object {
+        private const val RAY_MAX_DISTANCE = 50f
+        private val DEFAULT_MAIN_ENTRY =
+            PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, PanelManager.PanelPosition.MIDDLE)
+    }
 
     /** Read digital thumbstick axes from a controller. Returns (thumbX, thumbY). */
     private fun readThumbstick(ctrl: Controller?, isLeft: Boolean): Pair<Float, Float> {
@@ -468,7 +454,16 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         return tx to ty
     }
 
-    /** Resolve which dragger to use. Main panel and bound panels use controllerDragger. */
+    /**
+     * Resolve which dragger to use. Main panel and bound panels share
+     * [controllerDragger]: grabbing a bound panel (or the main panel) moves the
+     * main panel, and every bound panel follows via `TransformParent` — so a
+     * "player group" (video + danmaku bound to the main panel) drags as one
+     * unit. Bound panels are excluded from target acquisition entirely
+     * ([raycastTarget]/[findOrKeepTarget] skip them), and the video panel is
+     * non-hittable, so it never blocks rays to the main panel. Only unbound
+     * panels get their own dragger.
+     */
     private fun draggerFor(target: SpatialPanel?): ControllerDragger =
         when {
             target == null || target.isBound || target.entity == mainPanelEntity -> controllerDragger
@@ -496,40 +491,11 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val rt = if (rs) (rightDragTarget ?: raycastTarget(isLeft = false)) else null
         leftDragTarget = lt; rightDragTarget = rt
 
-        // Only dragged panels lose hittable — others stay enabled so a second
-        // controller can still raycast them independently.
-        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt && p.activeMode == PanelControlMode.NONE)
-
         val lc = ab.leftHand.tryGetComponent<Controller>()
         val rc = ab.rightHand.tryGetComponent<Controller>()
-
-        // Two hands on the same target → pinch‑to‑zoom (no thumbstick)
-        if (lt != null && lt == rt && ls && rs) {
-            draggerFor(lt).drag(
-                scene.getControllerPoseAtTime(true, System.currentTimeMillis()),
-                scene.getControllerPoseAtTime(false, System.currentTimeMillis()), 0f, 0f)
-            return
-        }
-
-        if (ls) {
-            val (tx, ty) = readThumbstick(lc, isLeft = true)
-            draggerFor(lt).drag(
-                scene.getControllerPoseAtTime(true, System.currentTimeMillis()),
-                null, tx, ty)
-        }
-        if (rs) {
-            val (tx, ty) = readThumbstick(rc, isLeft = false)
-            draggerFor(rt).drag(
-                null,
-                scene.getControllerPoseAtTime(false, System.currentTimeMillis()),
-                tx, ty)
-        }
-
-        if (!ls && !rs) {
-            leftDragTarget = null; rightDragTarget = null
-            controllerDragger.drag(null, null, 0f, 0f)
-            for (p in panelByEntity.values) p.resetDragger()
-        }
+        val (ltx, lty) = if (ls) readThumbstick(lc, isLeft = true) else 0f to 0f
+        val (rtx, rty) = if (rs) readThumbstick(rc, isLeft = false) else 0f to 0f
+        tickDrag(ls, rs, lt, rt, ltx, lty, rtx, rty)
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
@@ -539,20 +505,43 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         val lt = if (la) findOrKeepTarget(hs.leftPose, leftDragTarget) else null
         val rt = if (ra) findOrKeepTarget(hs.rightPose, rightDragTarget) else null
         leftDragTarget = lt; rightDragTarget = rt
+        tickDrag(la, ra, lt, rt)
+    }
 
-        // Only dragged panels lose hittable — others stay enabled for independent grabs
-        for (p in panelByEntity.values) p.setHittable(p != lt && p != rt && p.activeMode == PanelControlMode.NONE)
+    /**
+     * Shared drag tick for both input modes. Target acquisition differs
+     * (controller ray-cast vs hand proximity) but the drag body is identical:
+     * keep only the grabbed panels non-hittable, two-hand pinch-to-zoom,
+     * single-hand drag, and on release reset the draggers. Controller poses are
+     * used in both modes (existing behavior).
+     */
+    @OptIn(SpatialSDKExperimentalAPI::class)
+    private fun tickDrag(
+        leftActive: Boolean,
+        rightActive: Boolean,
+        leftTarget: SpatialPanel?,
+        rightTarget: SpatialPanel?,
+        leftThumbX: Float = 0f,
+        leftThumbY: Float = 0f,
+        rightThumbX: Float = 0f,
+        rightThumbY: Float = 0f,
+    ) {
+        // Only dragged panels lose hittable — others stay enabled so a second
+        // controller/hand can still grab them independently.
+        for (p in panelByEntity.values) {
+            p.setHittable(p != leftTarget && p != rightTarget && p.activeMode == PanelControlMode.NONE)
+        }
+        val lPose = scene.getControllerPoseAtTime(true, System.currentTimeMillis())
+        val rPose = scene.getControllerPoseAtTime(false, System.currentTimeMillis())
 
-        // Two hands on same target → pinch‑to‑zoom
-        if (lt != null && lt == rt && la && ra) {
-            draggerFor(lt).drag(
-                scene.getControllerPoseAtTime(true, System.currentTimeMillis()),
-                scene.getControllerPoseAtTime(false, System.currentTimeMillis()), 0f, 0f)
+        // Two hands on the same target → pinch‑to‑zoom (no thumbstick)
+        if (leftTarget != null && leftTarget == rightTarget && leftActive && rightActive) {
+            draggerFor(leftTarget).drag(lPose, rPose, 0f, 0f)
             return
         }
-        if (la) draggerFor(lt).drag(scene.getControllerPoseAtTime(true, System.currentTimeMillis()), null, 0f, 0f)
-        if (ra) draggerFor(rt).drag(null, scene.getControllerPoseAtTime(false, System.currentTimeMillis()), 0f, 0f)
-        if (!la && !ra) {
+        if (leftActive) draggerFor(leftTarget).drag(lPose, null, leftThumbX, leftThumbY)
+        if (rightActive) draggerFor(rightTarget).drag(null, rPose, rightThumbX, rightThumbY)
+        if (!leftActive && !rightActive) {
             leftDragTarget = null; rightDragTarget = null
             controllerDragger.drag(null, null, 0f, 0f)
             for (p in panelByEntity.values) p.resetDragger()
@@ -578,17 +567,26 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     // ── PanelManager.openPanel ───────────────────────────────────────────────
 
-    override fun openPanel(entry: PanelEntry, content: @Composable (() -> Unit)): PanelHandle {
+    override fun openPanel(
+        entry: PanelEntry,
+        options: PanelManager.PanelOpenOptions,
+        content: @Composable (() -> Unit),
+    ): PanelHandle {
         if (!::mainPanelEntity.isInitialized) error("scene not ready")
         val regId = regIds[entry] ?: error("no registration for $entry")
         val ms = try { mainPanelEntity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
-        val rp = calculateRelativePose(entry, ms)
+        val subScale = ms * options.scaleMultiplier
+        val rp = calculateRelativePose(entry, subScale, ms, options.zOffset)
         val entity = Entity.create(
             if (entry.hittable == PanelManager.PanelHittable.TRUE) Panel(regId)
             else Panel(regId, MeshCollision.NoCollision),
-            Scale(Vector3(ms)), TransformParent(mainPanelEntity), Transform(rp))
-        val panel = SpatialPanel(entity, entry, this)
-        panel.content = { VrPanelControlBarHost(panel, isMainPanel = false) { content() } }
+            Scale(Vector3(subScale)), TransformParent(mainPanelEntity), Transform(rp))
+        val panel = SpatialPanel(entity, entry, this, options)
+        panel.content = if (options.withControlBar) {
+            { VrPanelControlBarHost(panel, isMainPanel = false) { content() } }
+        } else {
+            content
+        }
         panelByEntity[entity] = panel
         systemManager.findSystem<SceneObjectSystem>().getSceneObject(entity)?.thenAccept { o ->
             o.addInputListener(trackInputHand(false))
@@ -628,10 +626,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     private fun refreshBoundPanelPositions() {
         val ms = try { mainPanelEntity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
         for (p in panelByEntity.values) {
-            if (p.isBound) {
-                val ss = try { p.entity.getComponent<Scale>().scale.x } catch (_: Exception) { ms }
-                p.entity.setComponent(Transform(calculateRelativePose(p.entry, ss, ms)))
-            }
+            if (p.isBound) applyBoundPanelLayout(p, ms)
         }
     }
 
@@ -684,10 +679,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         if (entity == mainPanelEntity) {
             if (::spatialAudio.isInitialized) spatialAudio.updateScale(scale)
             for (panel in panelByEntity.values) {
-                if (panel.isBound) {
-                    panel.entity.setComponent(Scale(Vector3(scale)))
-                    panel.entity.setComponent(Transform(calculateRelativePose(panel.entry, scale)))
-                }
+                if (panel.isBound) applyBoundPanelLayout(panel, scale)
             }
         }
     }
@@ -702,23 +694,29 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
 
     // ── Pose helper ─────────────────────────────────────────────────────────
 
-    internal fun calculateRelativePose(entry: PanelEntry, subScale: Float, mainScale: Float = subScale): Pose {
-        val mainEntry = if (::mainPanelEntity.isInitialized)
-            panelByEntity[mainPanelEntity]?.entry else null
-        val mainSize = mainEntry?.size ?: PanelManager.PanelSize.WIDE
-        val mw = mainSize.defaultWidth * mainScale
-        val mh = mainSize.defaultHeight * mainScale
-        val sw = entry.size.defaultWidth * subScale; val sh = entry.size.defaultHeight * subScale
-        val mg = 0.08f * mainScale
-        val hp: Vector3; val op: Vector3; var ry = 0f; var rx = 0f
-        when (entry.position) {
-            PanelPosition.LEFT -> { hp = Vector3(-(mw/2+mg),0f,0f); op = Vector3(-sw/2,0f,0f); ry = -25f }
-            PanelPosition.RIGHT -> { hp = Vector3(mw/2+mg,0f,0f); op = Vector3(sw/2,0f,0f); ry = 25f }
-            PanelPosition.TOP -> { hp = Vector3(0f,mh/2+mg,0f); op = Vector3(0f,sh/2,0f); rx = -15f }
-            PanelPosition.BOTTOM -> { hp = Vector3(0f,-(mh/2+mg),0f); op = Vector3(0f,-sh/2,0f); rx = 15f }
-            PanelPosition.MIDDLE -> return Pose(Vector3(0f,0f,-0.2f*subScale), Quaternion.fromEuler(0f,0f,0f))
-        }
-        val q = Quaternion.fromEuler(rx, ry, 0f)
-        return Pose(hp.plus(q.times(op)).plus(Vector3(0f,0f,0.02f*subScale)), q)
+    internal fun calculateRelativePose(
+        entry: PanelEntry,
+        subScale: Float,
+        mainScale: Float = subScale,
+        zOffset: Float? = null,
+    ): Pose = PanelLayout.relativePose(mainPanelEntry(), entry, subScale, mainScale, zOffset)
+
+    private fun mainPanelEntry(): PanelEntry {
+        if (!::mainPanelEntity.isInitialized) return DEFAULT_MAIN_ENTRY
+        return panelByEntity[mainPanelEntity]?.entry ?: DEFAULT_MAIN_ENTRY
+    }
+
+    /** Single source of truth for bound sub-panel layout: scale × pose from the main panel's scale. */
+    internal fun applyBoundPanelLayout(panel: SpatialPanel, mainScale: Float) {
+        val subScale = mainScale * panel.scaleMultiplier
+        val (scale, transform) = PanelLayout.boundPanelLayout(
+            mainEntry = mainPanelEntry(),
+            entry = panel.entry,
+            subScale = subScale,
+            mainScale = mainScale,
+            zOffset = panel.zOffset,
+        )
+        panel.entity.setComponent(scale)
+        panel.entity.setComponent(transform)
     }
 }

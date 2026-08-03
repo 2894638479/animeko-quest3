@@ -61,9 +61,22 @@ fun PlayerDanmakuHost(
 
 
     val panelManager = LocalPanelManager.current ?: return
+    // In stereo mode the danmaku sits at the video plane (BEHIND the main panel,
+    // in front of the SBS video panel), so it overlays the video instead of
+    // floating 0.2 m in front of the whole panel. Reopened when the mode toggles.
+    val stereo3d = me.him188.ani.app.platform.LocalVRHost.current?.stereo3dEnabled == true
     var panel by remember { mutableStateOf<PanelHandle?>(null) }
-    DisposableEffect(Unit) {
-        panel = panelManager.openPanel(PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, PanelManager.PanelPosition.MIDDLE, PanelManager.PanelHittable.FALSE)) {
+    DisposableEffect(stereo3d) {
+        val position =
+            if (stereo3d) PanelManager.PanelPosition.BEHIND
+            else PanelManager.PanelPosition.MIDDLE
+        panel = panelManager.openPanel(
+            PanelManager.PanelEntry(PanelManager.PanelSize.WIDE, position, PanelManager.PanelHittable.FALSE),
+            options = PanelManager.PanelOpenOptions(
+                withControlBar = false, // non-hittable — the control bar is dead UI
+                zOffset = if (stereo3d) 0.04f else null,
+            ),
+        ) {
             DanmakuHost(danmakuHostState, modifier)
         }
         onDispose {
