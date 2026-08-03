@@ -198,6 +198,10 @@ fun EpisodeScreen(
             Scaffold(
                 contentWindowInsets = WindowInsets(0.dp),
                 containerColor = if (stereo3d) Color.Transparent else MaterialTheme.colorScheme.background,
+                // Pin the content color to the theme's text color: with a
+                // transparent container, contentColorFor(transparent) would pick
+                // a wrong color and make text blend into the background.
+                contentColor = MaterialTheme.colorScheme.onBackground,
             ) {
                 EpisodeScreenContent(
                     viewModel,

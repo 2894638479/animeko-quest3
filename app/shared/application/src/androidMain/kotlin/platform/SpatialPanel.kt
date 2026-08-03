@@ -29,8 +29,8 @@ class SpatialPanel internal constructor(
     /** Child scale = main panel scale × [scaleMultiplier] (video panel = 2f). */
     val scaleMultiplier: Float get() = options.scaleMultiplier
 
-    /** Local-Z override, scaled by the child scale; null = position default. */
-    val zOffset: Float? get() = options.zOffset
+    /** Local-Z override, scaled by the child scale; null = position default. Live-adjustable via [setZOffset]. */
+    var zOffsetValue: Float? = options.zOffset
 
     internal var content: (@androidx.compose.runtime.Composable () -> Unit)? = null
 
@@ -99,6 +99,12 @@ class SpatialPanel internal constructor(
     override fun setDistance(distance: Float) {
         val t = try { entity.getComponent<Transform>().transform } catch (_: Exception) { Pose() }
         entity.setComponent(Transform(Pose(t.t.plus(t.forward().times(distance)), t.q)))
+    }
+
+    override fun setZOffset(z: Float) {
+        zOffsetValue = z
+        val mainScale = try { host.mainPanelEntity.getComponent<Scale>().scale.x } catch (_: Exception) { 1f }
+        host.applyBoundPanelLayout(this, mainScale)
     }
 
     override fun toggleBind() {

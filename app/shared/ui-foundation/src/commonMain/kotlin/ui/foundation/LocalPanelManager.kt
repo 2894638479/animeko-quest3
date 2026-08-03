@@ -22,6 +22,8 @@ interface PanelHandle {
     fun setHittable(enabled: Boolean)
     fun setScale(scale: Float)
     fun setDistance(distance: Float)
+    /** Moves the panel forward/back (local Z) relative to its parent. */
+    fun setZOffset(z: Float)
     fun toggleBind()
     val isBound: Boolean
     val scale: Float

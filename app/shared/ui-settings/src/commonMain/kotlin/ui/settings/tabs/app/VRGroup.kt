@@ -21,6 +21,7 @@ fun SettingsScope.VRGroup(
     depthTemporalFilterEnabled: Boolean,
     depthFixedScaleEnabled: Boolean,
     depthStrength: Float,
+    danmakuZOffset: Float,
     onModeChanged: (VRBackgroundMode) -> Unit,
     onSpatialAudioChanged: (Boolean) -> Unit,
     onStereo3dChanged: (Boolean) -> Unit,
@@ -28,6 +29,7 @@ fun SettingsScope.VRGroup(
     onDepthTemporalFilterChanged: (Boolean) -> Unit,
     onDepthFixedScaleChanged: (Boolean) -> Unit,
     onDepthStrengthChanged: (Float) -> Unit,
+    onDanmakuZOffsetChanged: (Float) -> Unit,
 ) {
     var selectedMode by rememberSaveable { mutableStateOf(currentMode) }
 
@@ -89,6 +91,13 @@ fun SettingsScope.VRGroup(
             valueRange = 0f..2f,
             title = { Text("视差强度") },
             description = { Text("立体凸出程度：0 无视差，1 默认，2 双倍。实时生效") },
+        )
+        SliderItem(
+            value = danmakuZOffset,
+            onValueChange = onDanmakuZOffsetChanged,
+            valueRange = -0.2f..0.5f,
+            title = { Text("弹幕前后位置") },
+            description = { Text("弹幕面板相对主面板的前后距离（米）：默认 0.2，调小则靠近面板、负值到面板后方。实时生效") },
         )
     }
 }
