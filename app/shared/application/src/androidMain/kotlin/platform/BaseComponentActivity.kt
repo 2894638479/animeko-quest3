@@ -21,6 +21,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.result.ActivityResultCallback
@@ -150,6 +151,10 @@ abstract class BaseComponentActivity : BaseVRActivity(),
     override fun onCreate(savedInstanceState: Bundle?) {
         _savedStateRegistryController.performRestore(savedInstanceState)
         super.onCreate(savedInstanceState)
+        // Meta Spatial SDK: without FLAG_ALT_FOCUSABLE_IM, tapping a Compose
+        // text field inside a spatial panel does not bring up the Quest system
+        // keyboard (documented StarterSample workaround).
+        window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
         _lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
     }
 
