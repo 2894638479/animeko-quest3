@@ -4,7 +4,7 @@
 
 Animeko 的 Meta Quest 3 VR 适配版 —— 在虚拟空间中沉浸式追番。
 
-基于 [open-ani/animeko](https://github.com/open-ani/animeko) v6.0.0-beta02。
+基于 [open-ani/animeko](https://github.com/open-ani/animeko) v6.0.0。
 
 </div>
 
