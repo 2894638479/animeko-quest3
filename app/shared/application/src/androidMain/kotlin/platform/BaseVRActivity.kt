@@ -232,7 +232,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
         _depthDebugEnabled = vrPrefs.getBoolean("depth_debug", false)
         _depthTemporalFilterEnabled = vrPrefs.getBoolean("depth_temporal_filter", true)
         _depthFixedScaleEnabled = vrPrefs.getBoolean("depth_fixed_scale", false)
-        _depthStrength = vrPrefs.getFloat("depth_strength", 1f)
         _danmakuZOffset = vrPrefs.getFloat("danmaku_z_offset", 0.2f)
         applyBackgroundMode(savedMode)
         // Note: the main panel is always WIDE now. stereo3dEnabled only causes
@@ -319,15 +318,6 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             vrPrefs.edit().putBoolean("depth_fixed_scale", value).apply()
         }
 
-    private var _depthStrength by mutableStateOf(1f)
-
-    override var depthStrength: Float
-        get() = _depthStrength
-        set(value) {
-            _depthStrength = value
-            vrPrefs.edit().putFloat("depth_strength", value).apply()
-        }
-
     private var _danmakuZOffset by mutableStateOf(0.2f)
 
     override var danmakuZOffset: Float
@@ -336,6 +326,49 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
             _danmakuZOffset = value
             vrPrefs.edit().putFloat("danmaku_z_offset", value).apply()
         }
+
+    // ── Parallax direction (方案 A) ──────────────────────────────────────────
+    //
+    // The stereo DIBR shift must act along the viewer's interocular axis
+    // projected onto the video panel plane; otherwise rotating the panel (roll
+    // / yaw / pitch) makes the two eye rays skew → ghosting. Computed each frame
+    // in [onSceneTick] and read by the GL thread via [currentParallaxDir].
+    @Volatile
+    private var currentDispDirX = 1f
+    @Volatile
+    private var currentDispDirY = 0f
+
+    override fun currentParallaxDir(): Pair<Float, Float> = currentDispDirX to currentDispDirY
+
+    /**
+     * Recompute the stereo parallax direction from the current head pose and the
+     * video panel's orientation (the SBS video panel shares the main panel's
+     * orientation via TransformParent with an identity local rotation).
+     */
+    @OptIn(SpatialSDKExperimentalAPI::class)
+    private fun updateParallaxDir() {
+        val panelPose = try { getAbsoluteTransform(mainPanelEntity) } catch (_: Exception) { return }
+        val vp = scene.getViewerPose()
+        // Viewer's interocular axis (head "right" vector).
+        val h = vp.q.times(Vector3(1f, 0f, 0f))
+        // Panel plane normal in world space (its local +Z).
+        val n = panelPose.q.times(Vector3(0f, 0f, 1f))
+        // h projected onto the panel plane.
+        val inPlane = h.minus(n.times(h.dot(n)))
+        val len = inPlane.length()
+        if (len < 1e-4f) {
+            // Panel edge-on to the eye baseline — parallax direction degenerate.
+            currentDispDirX = 1f
+            currentDispDirY = 0f
+            return
+        }
+        val d = inPlane.times(1f / len)
+        // Express in the panel's local UV space: components along local X / Y.
+        val px = panelPose.q.times(Vector3(1f, 0f, 0f))
+        val py = panelPose.q.times(Vector3(0f, 1f, 0f))
+        currentDispDirX = d.dot(px)
+        currentDispDirY = d.dot(py)
+    }
 
     private fun applyBackgroundMode(mode: VRBackgroundMode) {
         _backgroundMode = mode
@@ -431,6 +464,7 @@ abstract class BaseVRActivity : AppSystemActivity(), PanelManager, LifecycleOwne
     override fun onSceneTick() {
         super.onSceneTick()
         if (!::mainPanelEntity.isInitialized) return
+        updateParallaxDir()
         val q = Query.where { has(AvatarBody.id) }.eval()
         val la = q.firstOrNull { it.isLocal() && it.getComponent<AvatarBody>().isPlayerControlled } ?: return
         val avatarBody = la.getComponent<AvatarBody>()

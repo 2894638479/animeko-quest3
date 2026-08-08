@@ -33,10 +33,10 @@ import me.him188.ani.utils.logging.logger
 fun StereoVideoSurface(
     scope: CoroutineScope,
     modifier: Modifier = Modifier,
-    strength: Float = 1f,
     debugShowDepth: Boolean = false,
     temporalFilterEnabled: Boolean = true,
     fixedScaleEnabled: Boolean = false,
+    parallaxDirProvider: (() -> Pair<Float, Float>)? = null,
     onSurfaceTextureReady: (SurfaceTexture) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -52,6 +52,7 @@ fun StereoVideoSurface(
                 debugShowDepth = debugShowDepth,
                 temporalFilterEnabled = temporalFilterEnabled,
                 fixedScaleEnabled = fixedScaleEnabled,
+                parallaxDirProvider = parallaxDirProvider,
                 onSurfaceTextureReady = { st ->
                     logger.info { "Stereo surface texture ready" }
                     onSurfaceTextureReady(st)
@@ -67,7 +68,6 @@ fun StereoVideoSurface(
         modifier = modifier,
         update = { view ->
             rendererRef[0]?.let {
-                it.strength = strength
                 it.debugShowDepth = debugShowDepth
                 it.temporalFilterEnabled = temporalFilterEnabled
                 it.fixedScaleEnabled = fixedScaleEnabled

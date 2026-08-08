@@ -20,7 +20,6 @@ fun SettingsScope.VRGroup(
     depthDebugEnabled: Boolean,
     depthTemporalFilterEnabled: Boolean,
     depthFixedScaleEnabled: Boolean,
-    depthStrength: Float,
     danmakuZOffset: Float,
     onModeChanged: (VRBackgroundMode) -> Unit,
     onSpatialAudioChanged: (Boolean) -> Unit,
@@ -28,7 +27,6 @@ fun SettingsScope.VRGroup(
     onDepthDebugChanged: (Boolean) -> Unit,
     onDepthTemporalFilterChanged: (Boolean) -> Unit,
     onDepthFixedScaleChanged: (Boolean) -> Unit,
-    onDepthStrengthChanged: (Float) -> Unit,
     onDanmakuZOffsetChanged: (Float) -> Unit,
 ) {
     var selectedMode by rememberSaveable { mutableStateOf(currentMode) }
@@ -84,13 +82,6 @@ fun SettingsScope.VRGroup(
             onCheckedChange = onDepthFixedScaleChanged,
             title = { Text("深度固定缩放 (调试)") },
             description = { Text("开启后不做 running min/max 归一化，深度直接乘以固定常数（绝对映射）；关闭为场景自适应归一化") },
-        )
-        SliderItem(
-            value = depthStrength,
-            onValueChange = onDepthStrengthChanged,
-            valueRange = 0f..2f,
-            title = { Text("视差强度") },
-            description = { Text("立体凸出程度：0 无视差，1 默认，2 双倍。实时生效") },
         )
         SliderItem(
             value = danmakuZOffset,

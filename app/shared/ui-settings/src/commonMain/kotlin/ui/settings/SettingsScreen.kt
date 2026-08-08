@@ -391,7 +391,6 @@ fun SettingsScreen(
                                         depthDebugEnabled = vrHost.depthDebugEnabled,
                                         depthTemporalFilterEnabled = vrHost.depthTemporalFilterEnabled,
                                         depthFixedScaleEnabled = vrHost.depthFixedScaleEnabled,
-                                        depthStrength = vrHost.depthStrength,
                                         danmakuZOffset = vrHost.danmakuZOffset,
                                         onModeChanged = { vrHost.backgroundMode = it },
                                         onSpatialAudioChanged = { vrHost.spatialAudioEnabled = it },
@@ -399,7 +398,6 @@ fun SettingsScreen(
                                         onDepthDebugChanged = { vrHost.depthDebugEnabled = it },
                                         onDepthTemporalFilterChanged = { vrHost.depthTemporalFilterEnabled = it },
                                         onDepthFixedScaleChanged = { vrHost.depthFixedScaleEnabled = it },
-                                        onDepthStrengthChanged = { vrHost.depthStrength = it },
                                         onDanmakuZOffsetChanged = { vrHost.danmakuZOffset = it },
                                     )
                                 }

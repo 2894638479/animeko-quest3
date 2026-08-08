@@ -53,10 +53,14 @@ interface VRHost {
     var depthFixedScaleEnabled: Boolean
 
     /**
-     * Parallax strength multiplier for the stereo depth conversion (0 = flat,
-     * 1 = default MAX_DISP, higher = stronger pop-out). Live-adjustable.
+     * The current parallax direction for the stereo video panel: the viewer's
+     * interocular axis (head "right" vector) projected onto the video panel
+     * plane, expressed in the panel's local UV space. Updated by the host each
+     * frame (see [StereoDepthRenderer]); the renderer reads it on the GL thread
+     * so the DIBR shift always acts along the eye-separation direction — panel
+     * rotation then produces no vertical disparity / ghosting.
      */
-    var depthStrength: Float
+    fun currentParallaxDir(): Pair<Float, Float>
 
     /** Front/back offset (local Z, meters) of the danmaku panel relative to the main panel. */
     var danmakuZOffset: Float

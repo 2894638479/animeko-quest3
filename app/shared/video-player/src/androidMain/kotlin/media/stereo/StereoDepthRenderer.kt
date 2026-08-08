@@ -41,13 +41,15 @@ import kotlin.math.abs
  * The video is fed by ExoPlayer through a [android.graphics.SurfaceTexture]
  * (created on the GL thread, exposed via [onSurfaceTextureReady]).
  * Depth is estimated asynchronously by [AnimeDepthEstimator] and uploaded
- * as a texture; the DIBR shader shifts each pixel horizontally by an amount
- * proportional to (depth - 0.5), so closer objects pop out toward the viewer.
+ * as a texture; the DIBR shader shifts each pixel by an amount proportional
+ * to its depth, so the nearest content sits on the panel surface and the
+ * farthest recedes toward infinity. The shift direction tracks the viewer's
+ * interocular axis projected onto the panel plane ([parallaxDirProvider]), so
+ * panel rotation does not introduce ghosting.
  */
 class StereoDepthRenderer(
     private val scope: CoroutineScope,
     private val estimator: AnimeDepthEstimator,
-    var strength: Float = 1f,
     var debugShowDepth: Boolean = false,
     /**
      * When true (default), consecutive raw depth maps are blended with an
@@ -61,6 +63,17 @@ class StereoDepthRenderer(
      * instead it is multiplied by [FIXED_DEPTH_SCALE] (an absolute mapping).
      */
     var fixedScaleEnabled: Boolean = false,
+    /**
+     * Provider of the current parallax direction: the viewer's interocular axis
+     * projected onto the video panel plane, expressed in the panel's local UV
+     * space. Updated by the VR host each frame (see VRHost.currentParallaxDir).
+     *
+     * The DIBR shift is applied ALONG this direction instead of a fixed
+     * horizontal, so rotating the panel (roll / yaw / pitch) never introduces a
+     * vertical disparity component — the two eye rays stay coplanar and the
+     * image fuses instead of ghosting.
+     */
+    var parallaxDirProvider: (() -> Pair<Float, Float>)? = null,
     private val onSurfaceTextureReady: (android.graphics.SurfaceTexture) -> Unit = {},
 ) : GLSurfaceView.Renderer {
 
@@ -253,6 +266,7 @@ class StereoDepthRenderer(
     private var warpVideo = -1
     private var warpDepth = -1
     private var warpDisp = -1
+    private var warpDispDir = -1
     private var warpScaleY = -1
     private var warpOffsetY = -1
     private var warpTexH = -1
@@ -313,6 +327,7 @@ class StereoDepthRenderer(
         warpVideo = GLES20.glGetUniformLocation(warpProgram, "uVideo")
         warpDepth = GLES20.glGetUniformLocation(warpProgram, "uDepth")
         warpDisp = GLES20.glGetUniformLocation(warpProgram, "uDisp")
+        warpDispDir = GLES20.glGetUniformLocation(warpProgram, "uDispDir")
         warpScaleY = GLES20.glGetUniformLocation(warpProgram, "uDepthScaleY")
         warpOffsetY = GLES20.glGetUniformLocation(warpProgram, "uDepthOffsetY")
         warpTexH = GLES20.glGetUniformLocation(warpProgram, "uDepthTexH")
@@ -417,7 +432,11 @@ class StereoDepthRenderer(
 
     /** Forward mapping: vertices shifted by depth so the figure moves as a whole. */
     private fun drawLeft() {
-        drawWarp(DISP_CLIP / 2f * strength) // left eye: foreground shifts right (crossed parallax = pop-out)
+        // Depth mapping: nearest (d=1) stays ON the panel (zero relative shift),
+        // farthest (d=0) is pushed to infinity. Infinity = the two eye rays are
+        // parallel = the far content diverges outward: left eye shifts it left,
+        // right eye shifts it right (uncrossed parallax).
+        drawWarp(-FAR_PUSH_CLIP)
     }
 
     private fun drawRight() {
@@ -434,7 +453,7 @@ class StereoDepthRenderer(
             drawQuadRaw(depthProgram)
             return
         }
-        drawWarp(-DISP_CLIP / 2f * strength) // right eye: foreground shifts left
+        drawWarp(FAR_PUSH_CLIP)
     }
 
     /**
@@ -461,6 +480,9 @@ class StereoDepthRenderer(
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, depthTexId)
         GLES20.glUniform1i(warpDepth, 1)
         GLES20.glUniform1f(warpDisp, uDisp)
+        // 视差方向每帧读取(GL 线程): 观看者两眼连线方向在面板平面上的投影(面板局部 UV)。
+        val dir = parallaxDirProvider?.invoke() ?: (1f to 0f)
+        GLES20.glUniform2f(warpDispDir, dir.first, dir.second)
         GLES20.glUniform1f(warpScaleY, depthScaleY)
         GLES20.glUniform1f(warpOffsetY, depthOffsetY)
         GLES20.glUniform1f(warpTexH, depthTexH)
@@ -687,7 +709,7 @@ class StereoDepthRenderer(
         // doesn't match the picture.
         // Horizontal depth smoothing: spreads hard silhouette depth steps over
         // a few columns so adjacent mesh vertices never cross/fold (the max
-        // displacement ~MAX_DISP is ~2x a mesh cell). See DEPTH_SMOOTH_KERNEL.
+        // displacement ~FAR_PUSH_CLIP is ~2x a mesh cell). See DEPTH_SMOOTH_KERNEL.
         val smoothed = FloatArray(depth.size)
         val half = DEPTH_SMOOTH_KERNEL / 2
         for (row in 0 until h) {
@@ -789,23 +811,24 @@ class StereoDepthRenderer(
     }
 
     companion object {
-        // Forward-only parallax: max UV shift for the nearest (d = 1) pixels.
-        // Lowered 0.08 -> 0.04: the real MiDaS depth map made the pop-out too
-        // strong (foreground visibly offset left vs the source).
-        private const val MAX_DISP = 0.04f
-        // Horizontal depth blur kernel width (odd). In forward mapping the max
-        // vertex displacement (~MAX_DISP = 0.04 clip) is about twice a mesh
-        // cell (2/MESH_COLS ≈ 0.021 clip), so at a hard silhouette step the
-        // adjacent vertices would cross each other and fold the mesh triangles
-        // (torn/seam artifacts). Smoothing spreads each depth step over ~5
-        // texture pixels (~2 mesh cells) so adjacent vertices never cross.
-        // This is NOT the old reverse-mapping fix ("half character + background"
-        // pull-through) — forward mapping already solved that.
-        private const val DEPTH_SMOOTH_KERNEL = 5
+        // 视差常量：最近点(d=1)位于 panel 处(位移 0)，最远点(d=0)推到无穷远。
+        // 无穷远 = 两眼视线平行 = 两视图的远处内容在面板上错开一个 IPD。
+        // SBS 里每眼视口覆盖面板半宽(1 裁剪单位 = 面板宽/4 米)，
+        // 对称双眼合计位移 2×(δ×W/4) = δ×W/2 = IPD → δ = 2·IPD/W。
+        private const val IPD_M = 0.063f
+        // SBS 视频面板物理宽度(米): 1920×1080 默认宽 1.92m × scaleMultiplier 2 = 3.84m。
+        private const val SBS_PANEL_WIDTH_M = 3.84f
+        private const val FAR_PUSH_CLIP = 2f * IPD_M / SBS_PANEL_WIDTH_M // ≈ 0.0328
 
-        // Total clip-space disparity (MAX_DISP uv units = 2x in clip space),
-        // split symmetrically: left eye +half, right eye -half.
-        private const val DISP_CLIP = MAX_DISP * 2f
+        // Horizontal depth blur kernel width (odd). In forward mapping the max
+        // vertex displacement (~FAR_PUSH_CLIP ≈ 0.033 clip) is about twice a
+        // mesh cell (2/MESH_COLS ≈ 0.021 clip), so at a hard silhouette step
+        // the adjacent vertices would cross each other and fold the mesh
+        // triangles (torn/seam artifacts). Smoothing spreads each depth step
+        // over ~5 texture pixels (~2 mesh cells) so adjacent vertices never
+        // cross. This is NOT the old reverse-mapping fix ("half character +
+        // background" pull-through) — forward mapping already solved that.
+        private const val DEPTH_SMOOTH_KERNEL = 5
 
         // Adaptive temporal filter: blend alpha ramps from TEMPORAL_ALPHA_MIN
         // (small per-pixel delta = inference noise, heavy smoothing kills
@@ -844,17 +867,17 @@ class StereoDepthRenderer(
             attribute vec2 aUv;
             uniform sampler2D uDepth;
             uniform float uDisp;
+            uniform vec2 uDispDir;
             uniform float uDepthScaleY;
             uniform float uDepthOffsetY;
             uniform float uDepthTexH;
             varying vec2 vUv;
             void main() {
                 vUv = aUv;
-                // Sample depth at this vertex and displace the vertex
-                // horizontally. GPU interpolation between displaced vertices
-                // deforms the mesh and fills holes naturally — the figure moves
-                // as a whole instead of reverse-mapping pulling background into
-                // the silhouette.
+                // Sample depth at this vertex and displace the vertex. GPU
+                // interpolation between displaced vertices deforms the mesh and
+                // fills holes naturally — the figure moves as a whole instead
+                // of reverse-mapping pulling background into the silhouette.
                 //
                 // Clamp the depth sample a few texels INSIDE the content region:
                 // the panel's top/bottom edge would otherwise sample the exact
@@ -866,7 +889,14 @@ class StereoDepthRenderer(
                 float v = uDepthOffsetY + aUv.y * uDepthScaleY;
                 v = clamp(v, uDepthOffsetY + $CONTENT_EDGE_SKIP / uDepthTexH, uDepthOffsetY + uDepthScaleY - $CONTENT_EDGE_SKIP / uDepthTexH);
                 float d = texture2D(uDepth, vec2(aUv.x, v)).r;
-                gl_Position = vec4(aPos.x + d * uDisp, aPos.y, 0.0, 1.0);
+                // Depth mapping: nearest (d=1) sits ON the panel (shift 0),
+                // farthest (d=0) recedes to infinity (shift uDisp). The shift
+                // is applied along uDispDir — the viewer's interocular axis
+                // projected onto the panel plane (in panel-local UV) — so when
+                // the panel is rotated the two eye rays stay coplanar and the
+                // image fuses instead of ghosting.
+                float shift = (1.0 - d) * uDisp;
+                gl_Position = vec4(aPos.x + shift * uDispDir.x, aPos.y + shift * uDispDir.y, 0.0, 1.0);
             }
         """.trimIndent()
 
