@@ -4,6 +4,7 @@
 package me.him188.ani.app.platform
 
 import com.meta.spatial.core.Entity
+import com.meta.spatial.core.LibraryLoader
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.runtime.Scene
 import com.meta.spatial.spatialaudio.AudioSessionId
@@ -46,6 +47,16 @@ class SpatialAudioManager(
         if (initialized) return
         initialized = true
 
+        // Spatial SDK 0.13.2: AbstractSpatialFeature.onCreate() calls loadLibrary(),
+        // which requires a LibraryLoader injected via onAttach() (the SDK does this
+        // automatically for features it owns through FeatureManager.attach(), but we
+        // create this feature manually, so inject an equivalent loader here). This
+        // matches VrActivity.loadLibrary, which is just System.loadLibrary(name).
+        feature.onAttach(object : LibraryLoader {
+            override fun loadLibrary(name: String) {
+                System.loadLibrary(name)
+            }
+        })
         // Initialize native audio engine — this creates the native audio manager
         // handle and sets it on AudioSessionManagerSystem via setAudioManagerHandle().
         feature.onCreate(null)
@@ -110,7 +121,10 @@ class SpatialAudioManager(
     /** Tear down the native audio engine. */
     fun destroy() {
         try {
-            feature.onDestroy()
+            // Spatial SDK 0.13.2: onSpatialShutdown() calls nativeDestroy() on the
+            // audio session manager handle — onDestroy() is a no-op in
+            // AbstractSpatialFeature, so it would leak the native engine.
+            feature.onSpatialShutdown()
         } catch (_: Exception) {}
     }
 }
